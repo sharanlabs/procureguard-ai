@@ -10,7 +10,7 @@ ProcureGuard AI is an intelligent 3-way procurement matching tool that ingests P
 
 1. **Upload CSVs** — User uploads `purchase_orders.csv`, `invoices.csv`, and `goods_receipts.csv` via drag-and-drop or file picker; the system validates headers and row counts before proceeding.
 2. **System processes with progressive rendering** — The 3-step AI pipeline runs (extraction → classification → drafting); the UI renders each exception card as it arrives rather than waiting for the full batch.
-3. **Review exception cards with AI reasoning** — Each exception shows the matched fields, the discrepancy delta, the severity tier, and a chain-of-thought reasoning panel the user can expand.
+3. **Review exception cards with decision rationale** — Each exception shows matched fields, discrepancy delta, severity tier, confidence, rule triggers, variance calculations, recommended action, and an expandable explainability panel.
 4. **Adjust tolerance sliders** — User moves sliders (e.g., price variance %, quantity shortfall %) and the exception list re-evaluates live, showing which items would be auto-approved under the new thresholds.
 5. **Review drafted emails marked DRAFT** — For Tier 2 and Tier 3 exceptions, the system generates a supplier communication; user reads the draft, edits if needed, and clicks "Approve & Queue" — there is no "Send" button.
 6. **Export audit trail** — User downloads a structured log of every AI decision, severity classification, user action, and timestamp for compliance or ERP upload.
@@ -46,7 +46,7 @@ Each exception is assigned Tier 1 (auto-approve), Tier 2 (review), or Tier 3 (es
 - Classification matches the golden dataset for all 25 rows.
 
 ### 4. Glass-Box Reasoning Cards
-Every exception card includes an expandable AI reasoning panel showing the chain-of-thought that led to the classification.
+Every exception card includes an expandable AI reasoning panel showing the explainable decision rationale that led to the classification.
 
 **Acceptance criteria:**
 - Reasoning panel is collapsed by default and expands on click.
