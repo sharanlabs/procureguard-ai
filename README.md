@@ -1,6 +1,6 @@
 # ProcureGuard AI
 
-ProcureGuard AI is an intelligent 3-way procurement matching tool that ingests Purchase Order, Invoice, and Goods Receipt CSVs, runs them through a multi-step Claude API prompt chain, and surfaces every discrepancy with AI-generated severity classifications, explainable decision rationale reasoning, what-if tolerance simulation, auto-drafted supplier communications, and an exportable audit trail — all in the browser with no backend required.
+ProcureGuard AI is an intelligent 3-way procurement matching tool that ingests Purchase Order, Invoice, and Goods Receipt CSVs, runs them through a multi-step Claude API prompt chain, and surfaces every discrepancy with AI-generated severity classifications, explainable decision rationale, what-if tolerance simulation, auto-drafted supplier communications, and an exportable audit trail. The current Stage 1 foundation establishes the project structure, sample data, and documentation before implementation.
 
 ## Tech Stack
 
