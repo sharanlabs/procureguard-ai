@@ -7,7 +7,9 @@ Stage 3: COMPLETE — April 25, 2026
 Stage 3.1: Project initialization — COMPLETE — April 25, 2026  
 Stage 3.2: Core application shell and prompt-chain orchestration — COMPLETE — April 25, 2026  
 Stage 3.3: API proxy, security, and hardening review — COMPLETE — April 25, 2026  
-Next: Stage 4 — Differentiators
+Stage 4: IN PROGRESS — April 25, 2026
+Stage 4.1: Glass-box reasoning cards — COMPLETE — April 25, 2026
+Next: Stage 4.2 — What-if tolerance simulator
 
 ## Stage log
 
@@ -36,6 +38,13 @@ Next: Stage 4 — Differentiators
   - Stage 4 differentiators intentionally deferred
   - Stage 3.3 API proxy, security, and hardening review complete
   - Claude API dual-mode behavior, proxy guardrails, structured output parsing, CSV parser behavior, HITL controls, and audit safety reviewed
+
+- Stage 4: Differentiators — IN PROGRESS — April 25, 2026
+  - Stage 4.1 glass-box reasoning cards complete
+  - Exception cards now show plain-language summaries before reasoning and confidence
+  - Matched fields, severity labels, financial impact, draft toggles, and HITL review controls added
+  - Tier 2 approvals and Tier 3 action notes remain local UI state only
+  - Stage 4.2 what-if tolerance simulator and Stage 4.3 root-cause analysis intentionally deferred
 
 ## Decisions pending
 

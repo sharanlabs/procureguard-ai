@@ -192,3 +192,56 @@ Stage 4 — Differentiators
 - vite.config.js already proxies local /api/messages traffic to https://api.anthropic.com/v1/messages and does not hard-code an API key
 - Claude remains the runtime AI stack
 - Codex was only used as the repo editing assistant
+
+## Stage 4.1 handoff — April 25, 2026
+
+### Stage completed
+Stage 4.1 — Glass-box reasoning cards
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/lib/format.js
+- app/lib/audit.js
+- data/DATA_DICTIONARY.md
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/lib/format.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-25T21-46-01-092Z.json
+- evals/results/eval_results_2026-04-25T21-47-04-563Z.json
+
+### Commands run
+- git status --short
+- git branch -vv
+- npm run build
+- node evals/run_evals.js
+- grep -R "Send" app
+- git status --short
+
+### Verification results
+- Initial git status was clean before editing
+- git branch -vv showed main aligned with origin/main at d66038f
+- npm run build passed with Vite production output
+- node evals/run_evals.js passed: 25/25 procurement tests, 100% pass rate
+- grep -R "Send" app returned no matches
+- New eval result file: evals/results/eval_results_2026-04-25T21-47-04-563Z.json
+
+### Known issues
+- No live Claude API call was run during this stage
+- None for Stage 4.1
+
+### Next step
+Stage 4.2 — What-if tolerance simulator
+
+### Notes
+- Stage 4.2 and Stage 4.3 are intentionally not implemented yet
+- No Send button or real email sending exists
+- Tier 2 approvals and Tier 3 action notes are stored only in local component state
+- Claude remains the runtime AI stack
+- Codex was only used as the repo editing assistant
