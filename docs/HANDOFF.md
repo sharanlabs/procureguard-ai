@@ -299,3 +299,60 @@ Stage 4.3 — Root cause analysis
 - No Send button or real email sending exists
 - Claude remains the runtime AI stack
 - Codex was only used as the repo editing assistant
+
+## Stage 4.3 handoff — April 25, 2026
+
+### Stage completed
+Stage 4.3 — Root cause analysis
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/lib/format.js
+- data/DATA_DICTIONARY.md
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/lib/rootCause.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-25T22-04-41-927Z.json
+- evals/results/eval_results_2026-04-25T22-05-27-899Z.json
+
+### Commands run
+- git status --short
+- git branch -vv
+- npm run build
+- node evals/run_evals.js
+- grep -R "Send" app
+- grep -R "fraud" app
+- git diff --check
+- git status --short
+
+### Verification results
+- Initial git status was clean before editing
+- git branch -vv showed main aligned with origin/main at 82ffbf9
+- npm run build passed with Vite production output
+- node evals/run_evals.js passed: 25/25 procurement tests, 100% pass rate
+- grep -R "Send" app returned no matches
+- grep -R "fraud" app returned no matches
+- git diff --check passed
+- New eval result file: evals/results/eval_results_2026-04-25T22-05-27-899Z.json
+
+### Known issues
+- No live Claude API call was run during this stage
+- None for Stage 4.3
+
+### Next step
+Stage 5 — Dashboard and polish
+
+### Notes
+- Stage 5 dashboard, charts, ROI calculator, supplier scorecard, and dark mode are intentionally not implemented yet
+- Root cause analysis is client-side only and does not call Claude
+- Root cause wording avoids overclaiming and uses pattern-oriented review language
+- No Send button or real email sending exists
+- Claude remains the runtime AI stack
+- Codex was only used as the repo editing assistant

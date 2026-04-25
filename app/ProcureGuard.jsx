@@ -14,6 +14,7 @@ import {
   tierClass,
   tierLabel
 } from "./lib/format.js";
+import { analyzeRootCauses } from "./lib/rootCause.js";
 import { actionOutputSchema, classificationOutputSchema, matchingOutputSchema } from "./lib/schemas.js";
 
 const LOCAL_API_KEY_STORAGE = "procureguard_anthropic_session_key";
@@ -299,6 +300,67 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
           Simulation only. Actual classifications remain unchanged until policy is approved.
         </p>
       </div>
+    </section>
+  );
+}
+
+function RootCausePatternCard({ pattern }) {
+  return (
+    <article className="rounded-md border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <Badge className="border-indigo-200 bg-indigo-50 text-indigo-800">{pattern.type}</Badge>
+          <p className="mt-3 text-sm font-semibold leading-6 text-slate-950">{pattern.description}</p>
+        </div>
+        {pattern.totalExposure > 0 ? (
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Exposure</p>
+            <p className="mt-1 font-semibold text-slate-950">{formatMoney(pattern.totalExposure)}</p>
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {pattern.affectedInvoices.map((invoiceNumber) => (
+          <Badge className="border-slate-200 bg-slate-50 text-slate-700" key={invoiceNumber}>
+            {invoiceNumber}
+          </Badge>
+        ))}
+      </div>
+      <p className="mt-4 text-sm leading-6 text-slate-700">
+        <span className="font-semibold text-slate-900">Suggested review: </span>
+        {pattern.recommendedAction}
+      </p>
+    </article>
+  );
+}
+
+function RootCauseAnalysisPanel({ analysis }) {
+  if (!analysis.hasData) return null;
+
+  return (
+    <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-5">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">Root Cause Analysis</h2>
+          <p className="mt-1 text-sm text-indigo-900">
+            Browser-only pattern review across {analysis.exceptionRowCount} exception rows. Patterns suggest where to
+            review controls and do not assign blame.
+          </p>
+        </div>
+        <Badge className="border-indigo-300 bg-white text-indigo-800">Client-side only</Badge>
+      </div>
+
+      {analysis.patterns.length ? (
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {analysis.patterns.map((pattern) => (
+            <RootCausePatternCard key={pattern.id} pattern={pattern} />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 rounded-md border border-indigo-200 bg-white p-4 text-sm font-semibold text-slate-800">
+          No systemic patterns detected in this batch. Exceptions appear isolated.
+        </div>
+      )}
     </section>
   );
 }
@@ -899,6 +961,10 @@ export default function App() {
     () => buildToleranceSimulation(matchResults, classificationResults, tolerances),
     [classificationResults, matchResults, tolerances]
   );
+  const rootCauseAnalysis = useMemo(
+    () => analyzeRootCauses({ parsedFiles, matchResults, classificationResults }),
+    [classificationResults, matchResults, parsedFiles]
+  );
   const renderedCards = useMemo(() => {
     return (matchResults?.results ?? [])
       .map((match, index) => ({
@@ -1086,7 +1152,7 @@ export default function App() {
       <section className="mx-auto flex max-w-7xl flex-col gap-6">
         <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Stage 4.2</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Stage 4.3</p>
             <h1 className="mt-2 text-4xl font-semibold">ProcureGuard AI</h1>
             <p className="mt-2 text-lg text-slate-600">Intelligent 3-Way Procurement Matching</p>
           </div>
@@ -1118,6 +1184,7 @@ export default function App() {
           onTolerancesChange={setTolerances}
           simulation={toleranceSimulation}
         />
+        <RootCauseAnalysisPanel analysis={rootCauseAnalysis} />
 
         {renderedCards.length ? (
           <section className="grid gap-4">
