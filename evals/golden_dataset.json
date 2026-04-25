@@ -1,0 +1,464 @@
+{
+  "procurement_tests": [
+    {
+      "test_id": "TC-01",
+      "invoice_number": "INV-0001",
+      "description": "Clean match - all fields align, no exceptions expected.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 570.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-02",
+      "invoice_number": "INV-0002",
+      "description": "Clean match - split GRN, invoice date follows final GRN.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 1425.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-03",
+      "invoice_number": "INV-0003",
+      "description": "Clean match - Safety Goggles, single GRN, all fields align.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 637.50
+        }
+      }
+    },
+    {
+      "test_id": "TC-04",
+      "invoice_number": "INV-0004",
+      "description": "Clean match - Steel Shelving Brackets, split GRN.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 975.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-05",
+      "invoice_number": "INV-0005",
+      "description": "Clean match - first use of invoice number INV-0005.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 1200.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-06",
+      "invoice_number": "INV-0006",
+      "description": "Clean match - Cable Ties, single GRN, all fields align.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 135.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-07",
+      "invoice_number": "INV-0007",
+      "description": "Clean match - Forklift Motor 48V, high-value single GRN.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 7200.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-08",
+      "invoice_number": "INV-0008",
+      "description": "Clean match - Barcode Scanners, split GRN.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 4625.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-09",
+      "invoice_number": "INV-0009",
+      "description": "Clean match - Stretch Wrap, single GRN.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 855.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-10",
+      "invoice_number": "INV-0010",
+      "description": "Clean match - Packing Tape bulk order, single GRN.",
+      "expected": {
+        "match_status": "clean_match",
+        "detected_exceptions": [],
+        "overall_tier": null,
+        "is_clean": true,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 1140.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-11",
+      "invoice_number": "INV-0011",
+      "description": "E02 - Invoice Quantity Exceeds PO: billed 120 boxes vs PO=100.",
+      "expected": {
+        "match_status": "exception_tier_3",
+        "detected_exceptions": ["E02"],
+        "overall_tier": 3,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 170.00,
+          "hold_amount": 1020.00,
+          "approved_amount": 0
+        }
+      }
+    },
+    {
+      "test_id": "TC-12",
+      "invoice_number": "INV-0012",
+      "description": "E14 - Short Delivery: PO=100, invoice=GRN=80.",
+      "expected": {
+        "match_status": "exception_tier_1",
+        "detected_exceptions": ["E14"],
+        "overall_tier": 1,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 340.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-13",
+      "invoice_number": "INV-0013",
+      "description": "E03+E12 - invoiced 100 vs 60 received; invoice predates GRN.",
+      "expected": {
+        "match_status": "exception_tier_2",
+        "detected_exceptions": ["E03", "E12"],
+        "overall_tier": 2,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 78.00,
+          "hold_amount": 78.00,
+          "approved_amount": 117.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-14",
+      "invoice_number": "INV-0014",
+      "description": "E06 - Missing Goods Receipt.",
+      "expected": {
+        "match_status": "exception_tier_3",
+        "detected_exceptions": ["E06"],
+        "overall_tier": 3,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 45.00,
+          "hold_amount": 45.00,
+          "approved_amount": 0
+        }
+      }
+    },
+    {
+      "test_id": "TC-15",
+      "invoice_number": "INV-0015",
+      "description": "E13 - GRN Quantity Exceeds PO.",
+      "expected": {
+        "match_status": "exception_tier_1",
+        "detected_exceptions": ["E13"],
+        "overall_tier": 1,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 2850.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-16",
+      "invoice_number": "INV-0016",
+      "description": "E01 - Unit Price Variance with no tariff note.",
+      "expected": {
+        "match_status": "exception_tier_2",
+        "detected_exceptions": ["E01"],
+        "overall_tier": 2,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 296.00,
+          "hold_amount": 296.00,
+          "approved_amount": 3700.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-17",
+      "invoice_number": "INV-0017",
+      "description": "E04+E15 - freight surcharge and later final GRN.",
+      "expected": {
+        "match_status": "exception_tier_2",
+        "detected_exceptions": ["E04", "E15"],
+        "overall_tier": 2,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 285.00,
+          "hold_amount": 285.00,
+          "approved_amount": 1137.50
+        }
+      }
+    },
+    {
+      "test_id": "TC-18",
+      "invoice_number": "INV-0018",
+      "description": "E05 - UOM Mismatch with reconciling conversion.",
+      "expected": {
+        "match_status": "exception_tier_2",
+        "detected_exceptions": ["E05"],
+        "overall_tier": 2,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 2100.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-19",
+      "invoice_number": "INV-0019",
+      "description": "E16 - Missing Early-Payment Discount.",
+      "expected": {
+        "match_status": "exception_tier_2",
+        "detected_exceptions": ["E16"],
+        "overall_tier": 2,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 12.00,
+          "hold_amount": 12.00,
+          "approved_amount": 588.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-20",
+      "invoice_number": "INV-0020",
+      "description": "E08 - Supplier Name Mismatch with matching supplier_id.",
+      "expected": {
+        "match_status": "exception_tier_1",
+        "detected_exceptions": ["E08"],
+        "overall_tier": 1,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 855.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-21",
+      "invoice_number": "INV-0005",
+      "description": "E07 - Duplicate Invoice Number, second occurrence of INV-0005.",
+      "expected": {
+        "match_status": "exception_tier_3",
+        "detected_exceptions": ["E07"],
+        "overall_tier": 3,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 1140.00,
+          "hold_amount": 1140.00,
+          "approved_amount": 0
+        }
+      }
+    },
+    {
+      "test_id": "TC-22",
+      "invoice_number": "INV-0022",
+      "description": "E09 - Item Description Mismatch with matching item_code.",
+      "expected": {
+        "match_status": "exception_tier_1",
+        "detected_exceptions": ["E09"],
+        "overall_tier": 1,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 0,
+          "hold_amount": 0,
+          "approved_amount": 570.00
+        }
+      }
+    },
+    {
+      "test_id": "TC-23",
+      "invoice_number": "INV-0023",
+      "description": "E10 - Tax Rate Mismatch.",
+      "expected": {
+        "match_status": "exception_tier_2",
+        "detected_exceptions": ["E10"],
+        "overall_tier": 2,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 6.38,
+          "hold_amount": 6.38,
+          "approved_amount": 454.75
+        }
+      }
+    },
+    {
+      "test_id": "TC-24",
+      "invoice_number": "INV-0024",
+      "description": "E11 - Invalid PO Reference.",
+      "expected": {
+        "match_status": "exception_tier_3",
+        "detected_exceptions": ["E11"],
+        "overall_tier": 3,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 568.75,
+          "hold_amount": 568.75,
+          "approved_amount": 0
+        }
+      }
+    },
+    {
+      "test_id": "TC-25",
+      "invoice_number": "INV-0025",
+      "description": "E17 - Tariff-Adjusted Price Variance.",
+      "expected": {
+        "match_status": "exception_tier_2",
+        "detected_exceptions": ["E17"],
+        "overall_tier": 2,
+        "is_clean": false,
+        "financial": {
+          "exposure_amount": 90.00,
+          "hold_amount": 675.00,
+          "approved_amount": 0
+        }
+      }
+    }
+  ],
+  "text_extraction_tests": [
+    {
+      "test_id": "TC-26",
+      "description": "Well-formatted invoice email from the text extraction prompt few-shot example.",
+      "input": "From: accounts@globalpack.com\nSubject: Invoice for PO-018\n\nDear Accounts Payable,\n\nPlease find below our invoice for the recent order:\n\nInvoice Number: INV-0018\nDate: April 18, 2026\nSupplier: GlobalPack Solutions (SUP-002)\n\nItem: Nitrile Gloves Medium (NITR-GLV-MED)\nQuantity: 600 units @ $3.50/unit = $2,100.00\n\nNote: Unit pricing applied; PO issued in cases (1 case = 12 units)\n\nPayment terms: Net 30\nPlease remit payment to our standard account.\n\nBest regards,\nGlobalPack Solutions",
+      "expected": {
+        "extracted_invoices": [
+          {
+            "invoice_number": "INV-0018",
+            "invoice_date": "2026-04-18",
+            "supplier_id": "SUP-002",
+            "supplier_name": "GlobalPack Solutions",
+            "po_reference": "PO-018",
+            "item_code": "NITR-GLV-MED",
+            "item_description": "Nitrile Gloves Medium",
+            "quantity_invoiced": 600,
+            "unit_price": 3.50,
+            "uom": "units",
+            "total_amount": 2100.00,
+            "notes": "Unit pricing applied; PO issued in cases (1 case = 12 units)"
+          }
+        ],
+        "extraction_confidence_min": 0.95,
+        "fields_not_found": []
+      }
+    },
+    {
+      "test_id": "TC-27",
+      "description": "Sparse invoice sentence with missing supplier_id and item_code.",
+      "input": "Invoice #INV-9999 dated March 15, 2026 from Acme Corp. 100 widgets at $5.00 each. Total: $500.00. Ref: PO-050.",
+      "expected": {
+        "extracted_invoices": [
+          {
+            "invoice_number": "INV-9999",
+            "invoice_date": "2026-03-15",
+            "supplier_id": null,
+            "supplier_name": "Acme Corp",
+            "po_reference": "PO-050",
+            "item_code": null,
+            "item_description": null,
+            "quantity_invoiced": 100,
+            "unit_price": 5.00,
+            "uom": null,
+            "total_amount": 500.00,
+            "notes": null
+          }
+        ],
+        "fields_not_found_includes": ["supplier_id", "item_code"]
+      }
+    },
+    {
+      "test_id": "TC-28",
+      "description": "Non-invoice text should not produce extracted invoice rows.",
+      "input": "Hey team, the quarterly meeting is moved to Thursday. Please update your calendars.",
+      "expected": {
+        "extraction_confidence_max": 0.3,
+        "extracted_invoices": []
+      }
+    }
+  ]
+}
