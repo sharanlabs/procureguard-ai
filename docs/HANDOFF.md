@@ -136,3 +136,59 @@ Stage 3.3 — Review and hardening
 - Local development can pass a session-only API key through the Vite proxy
 - Claude remains the runtime AI stack
 - Codex was only used as the repo editing assistant
+
+## Stage 3.3 handoff — April 25, 2026
+
+### Stage completed
+Stage 3.3 — API proxy, security, and hardening review
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/lib/claude.js
+- app/lib/csv.js
+- app/lib/schemas.js
+- app/lib/audit.js
+- api/messages.js
+- vite.config.js
+- package.json
+
+### Files changed
+- app/lib/claude.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-25T21-21-43-423Z.json
+
+### Commands run
+- git status --short
+- grep -R "localStorage" app api
+- grep -R "console.log" app api
+- grep -R "Send" app
+- node --check api/messages.js
+- npm run build
+- node evals/run_evals.js
+
+### Verification results
+- Initial git status was clean before editing
+- grep checks found no localStorage usage, no console.log usage, and no "Send" text in app files
+- node --check api/messages.js passed
+- npm run build passed with Vite production output
+- node evals/run_evals.js passed: 25/25 procurement tests, 100% pass rate
+- New eval result file: evals/results/eval_results_2026-04-25T21-21-43-423Z.json
+
+### Known issues
+- No live Claude API call was run during this hardening pass
+- Stage 4 features are not implemented yet
+
+### Next step
+Stage 4 — Differentiators
+
+### Notes
+- app/lib/claude.js was hardened to treat browser TimeoutError responses as 60-second Claude API timeouts
+- api/messages.js already used process.env.ANTHROPIC_API_KEY only and did not need changes
+- vite.config.js already proxies local /api/messages traffic to https://api.anthropic.com/v1/messages and does not hard-code an API key
+- Claude remains the runtime AI stack
+- Codex was only used as the repo editing assistant

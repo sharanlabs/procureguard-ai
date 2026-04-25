@@ -150,7 +150,9 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
       };
     } catch (error) {
       lastError = error;
-      if (error?.name === "AbortError" || String(error?.message).includes("timeout")) {
+      const errorName = String(error?.name ?? "");
+      const errorMessage = String(error?.message ?? "").toLowerCase();
+      if (errorName === "AbortError" || errorName === "TimeoutError" || errorMessage.includes("timeout")) {
         throw new Error("Claude API request timed out after 60 seconds");
       }
       if (attempt === MAX_ATTEMPTS || !String(error?.message).includes("429")) {
