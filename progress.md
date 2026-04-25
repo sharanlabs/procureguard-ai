@@ -3,7 +3,9 @@
 ## Current state
 
 Stage 2: COMPLETE — April 25, 2026  
-Next: Stage 3 — Core Application
+Stage 3: IN PROGRESS — April 25, 2026  
+Stage 3.1: Project initialization — COMPLETE — April 25, 2026  
+Next: Stage 3.2 — Core application shell and prompt-chain orchestration
 
 ## Stage log
 
@@ -15,6 +17,15 @@ Next: Stage 3 — Core Application
   - 4 prompts in /prompts/
   - golden_dataset.json created with 25 procurement tests and 3 text extraction tests
   - eval harness created at evals/run_evals.js
+  - eval harness passing 25/25 procurement tests
+
+- Stage 3: Core Application — IN PROGRESS — April 25, 2026
+  - Stage 3.1 project initialization complete
+  - React + Vite + Tailwind scaffold created
+  - Claude API proxy created at api/messages.js
+  - React Error Boundary added
+  - Minimal placeholder app added for Stage 3.1 only
+  - npm run build passing
   - eval harness passing 25/25 procurement tests
 
 ## Decisions pending

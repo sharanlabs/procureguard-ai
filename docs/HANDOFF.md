@@ -48,3 +48,48 @@ Stage 3 must preserve:
 - stronger CSV parsing edge cases
 - Vercel proxy improvements
 - no API key logging
+
+## Stage 3.1 handoff — April 25, 2026
+
+### Stage completed
+Stage 3.1 — Project initialization
+
+### Files created or modified
+- package.json
+- package-lock.json
+- vite.config.js
+- index.html
+- .gitignore
+- app/main.jsx
+- app/styles.css
+- app/ErrorBoundary.jsx
+- app/ProcureGuard.jsx
+- api/messages.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-25T21-05-47-133Z.json
+
+### Commands run
+- npm install
+- npm run build
+- node evals/run_evals.js
+- git status --short
+
+### Verification results
+- npm install completed successfully; package-lock.json generated
+- npm run build completed successfully with Vite production output
+- node evals/run_evals.js completed successfully: 25/25 procurement tests passed, 100% pass rate
+- git status --short reviewed before staging Stage 3.1 files
+
+### Known issues
+- None for Stage 3.1
+- app/ProcureGuard.jsx is intentionally a placeholder and will be replaced or expanded in Stage 3.2
+- Stronger CSV parsing edge cases are planned for Stage 3.2, not Stage 3.1
+
+### Next step
+Stage 3.2 — Core application shell and prompt-chain orchestration
+
+### Notes
+- package-lock.json was generated and committed as part of Stage 3.1
+- Claude API remains the application AI stack
+- The production proxy at api/messages.js uses ANTHROPIC_API_KEY and does not log secrets
