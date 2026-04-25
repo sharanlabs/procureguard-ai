@@ -93,3 +93,46 @@ Stage 3.2 — Core application shell and prompt-chain orchestration
 - package-lock.json was generated and committed as part of Stage 3.1
 - Claude API remains the application AI stack
 - The production proxy at api/messages.js uses ANTHROPIC_API_KEY and does not log secrets
+
+## Stage 3.2 handoff — April 25, 2026
+
+### Stage completed
+Stage 3.2 — Core application shell and prompt-chain orchestration
+
+### Files created or modified
+- app/ProcureGuard.jsx
+- app/lib/audit.js
+- app/lib/claude.js
+- app/lib/csv.js
+- app/lib/format.js
+- app/lib/schemas.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-25T21-16-25-091Z.json
+
+### Commands run
+- git status --short
+- npm run build
+- node evals/run_evals.js
+- node --check api/messages.js
+
+### Verification results
+- Initial git status was clean before editing
+- node --check api/messages.js passed
+- npm run build passed with Vite production output
+- node evals/run_evals.js passed: 25/25 procurement tests, 100% pass rate
+- New eval result file: evals/results/eval_results_2026-04-25T21-16-25-091Z.json
+
+### Known issues
+- No live Claude API call was run during this stage
+- Stage 4 features are intentionally not implemented yet: tolerance simulator, root cause analysis, Recharts dashboard, ROI calculator, supplier scorecard, and dark mode polish
+
+### Next step
+Stage 3.3 — Review and hardening
+
+### Notes
+- api/messages.js did not need changes for Stage 3.2
+- The Stage 3.1 production proxy remains the production Claude API path
+- Local development can pass a session-only API key through the Vite proxy
+- Claude remains the runtime AI stack
+- Codex was only used as the repo editing assistant

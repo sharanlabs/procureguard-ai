@@ -5,7 +5,8 @@
 Stage 2: COMPLETE — April 25, 2026  
 Stage 3: IN PROGRESS — April 25, 2026  
 Stage 3.1: Project initialization — COMPLETE — April 25, 2026  
-Next: Stage 3.2 — Core application shell and prompt-chain orchestration
+Stage 3.2: Core application shell and prompt-chain orchestration — COMPLETE — April 25, 2026  
+Next: Stage 3.3 — Review and hardening
 
 ## Stage log
 
@@ -27,6 +28,11 @@ Next: Stage 3.2 — Core application shell and prompt-chain orchestration
   - Minimal placeholder app added for Stage 3.1 only
   - npm run build passing
   - eval harness passing 25/25 procurement tests
+  - Stage 3.2 core shell complete
+  - CSV upload, validation, and robust browser CSV parsing added
+  - Claude prompt-chain orchestration added for matching, classification, and action generation
+  - Progressive exception cards, draft review panels, retry controls, and audit export added
+  - Stage 4 differentiators intentionally deferred
 
 ## Decisions pending
 
