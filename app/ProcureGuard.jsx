@@ -22,6 +22,12 @@ const MODELS = {
   classification: "claude-sonnet-4-6",
   action_generation: "claude-sonnet-4-6"
 };
+const DEFAULT_TOLERANCES = {
+  pricePct: 2,
+  quantityUnits: 1,
+  dateBusinessDays: 2
+};
+const LOCKED_TIER_THREE_CODES = new Set(["E02", "E06", "E07", "E11"]);
 
 function Badge({ children, className = "" }) {
   return (
@@ -187,6 +193,112 @@ function SummaryMetrics({ metrics }) {
       <Metric label="Tier 1" value={metrics.tier1} />
       <Metric label="Tier 2" value={metrics.tier2} />
       <Metric label="Tier 3" value={metrics.tier3} />
+    </section>
+  );
+}
+
+function ToleranceSlider({ id, label, value, min, max, step, unit, affectedCount, onChange }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <label className="text-sm font-semibold text-slate-800" htmlFor={id}>
+          {label}
+        </label>
+        <Badge className="border-blue-200 bg-blue-50 text-blue-800">{affectedCount} affected</Badge>
+      </div>
+      <div className="mt-3 flex items-center gap-4">
+        <input
+          id={id}
+          className="w-full accent-blue-600"
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+        <p className="min-w-20 text-right text-sm font-semibold text-slate-950">
+          {value}{unit}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
+  if (!simulation.hasClassifications) return null;
+
+  const changedCount = simulation.changedInvoiceCount;
+  const summaryText = changedCount
+    ? `Adjusting tolerances would reclassify ${changedCount} invoice(s), changing Tier 2 count from ${simulation.originalCounts.tier2} to ${simulation.simulatedCounts.tier2}.`
+    : "No invoices would change tier under the current tolerance settings.";
+
+  return (
+    <section className="rounded-lg border border-blue-200 bg-blue-50 p-5">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">What-If Tolerance Simulator</h2>
+          <p className="mt-1 text-sm text-blue-900">
+            Adjust policy tolerances locally without changing Claude classifications or audit records.
+          </p>
+        </div>
+        <Badge className="border-blue-300 bg-white text-blue-800">Simulation only</Badge>
+      </div>
+
+      <div className="mt-5 grid gap-3 lg:grid-cols-3">
+        <ToleranceSlider
+          id="price-tolerance"
+          label="Price tolerance"
+          value={tolerances.pricePct}
+          min="0"
+          max="10"
+          step="0.5"
+          unit="%"
+          affectedCount={simulation.affectedByRule.price}
+          onChange={(pricePct) => onTolerancesChange((current) => ({ ...current, pricePct }))}
+        />
+        <ToleranceSlider
+          id="quantity-tolerance"
+          label="Quantity tolerance"
+          value={tolerances.quantityUnits}
+          min="0"
+          max="10"
+          step="1"
+          unit=" units"
+          affectedCount={simulation.affectedByRule.quantity}
+          onChange={(quantityUnits) => onTolerancesChange((current) => ({ ...current, quantityUnits }))}
+        />
+        <ToleranceSlider
+          id="date-tolerance"
+          label="Date tolerance"
+          value={tolerances.dateBusinessDays}
+          min="0"
+          max="10"
+          step="1"
+          unit=" business days"
+          affectedCount={simulation.affectedByRule.date}
+          onChange={(dateBusinessDays) => onTolerancesChange((current) => ({ ...current, dateBusinessDays }))}
+        />
+      </div>
+
+      <div className="mt-5 rounded-md border border-blue-200 bg-white p-4">
+        <p className="text-sm font-semibold text-slate-900">{summaryText}</p>
+        <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+          <p>Original Tier 1: <span className="font-semibold">{simulation.originalCounts.tier1}</span></p>
+          <p>Original Tier 2: <span className="font-semibold">{simulation.originalCounts.tier2}</span></p>
+          <p>Original Tier 3: <span className="font-semibold">{simulation.originalCounts.tier3}</span></p>
+          <p>Simulated Tier 1: <span className="font-semibold">{simulation.simulatedCounts.tier1}</span></p>
+          <p>Simulated Tier 2: <span className="font-semibold">{simulation.simulatedCounts.tier2}</span></p>
+          <p>Simulated Tier 3: <span className="font-semibold">{simulation.simulatedCounts.tier3}</span></p>
+        </div>
+        <p className="mt-4 text-sm font-semibold text-blue-950">
+          Potential auto-review shift: {formatMoney(simulation.potentialAutoReviewShift)} in held exposure would move
+          from review to auto-approve under this simulated policy.
+        </p>
+        <p className="mt-2 text-xs text-blue-800">
+          Simulation only. Actual classifications remain unchanged until policy is approved.
+        </p>
+      </div>
     </section>
   );
 }
@@ -441,6 +553,7 @@ function InvoiceCard({
   classification,
   actionResult,
   invoiceRow,
+  simulation,
   approvedActions,
   tier3Notes,
   reviewedTier3,
@@ -453,9 +566,13 @@ function InvoiceCard({
   const isClean = exceptions.length === 0;
   const confidence = classification?.confidence ?? match.confidence;
   const showDrafts = actionResult?.actions?.length && (tier === 2 || tier === 3);
+  const simulationChanged = simulation?.changed;
+  const cardClass = simulationChanged
+    ? "rounded-lg border border-blue-300 bg-blue-50 p-5 shadow-sm"
+    : "rounded-lg border border-slate-200 bg-white p-5 shadow-sm";
 
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <article className={cardClass}>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h3 className="text-xl font-semibold">{plainLanguageSummary(match)}</h3>
@@ -468,6 +585,18 @@ function InvoiceCard({
           <Badge className="border-slate-200 bg-slate-50 text-slate-700">{statusLabel(match.match_status)}</Badge>
         </div>
       </div>
+
+      {simulationChanged ? (
+        <section className="mt-4 rounded-md border border-blue-300 bg-white p-4 text-sm text-blue-950">
+          <Badge className="border-blue-300 bg-blue-50 text-blue-800">Policy simulation changed this tier</Badge>
+          <p className="mt-3 font-semibold">
+            {tierLabel(simulation.originalTier)} &rarr; {tierLabel(simulation.simulatedTier)}
+          </p>
+          <p className="mt-1 text-blue-800">
+            This is a what-if view only. The original Claude rationale, draft actions, and review controls remain unchanged.
+          </p>
+        </section>
+      ) : null}
 
       <ReasoningPanel match={match} classification={classification} />
       <MatchedFields match={match} invoiceRow={invoiceRow} />
@@ -574,6 +703,165 @@ function computeMetrics(parsedFiles, matchResults, classificationResults) {
   };
 }
 
+function parseUtcDate(value) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function businessDaysBetween(startValue, endValue) {
+  const start = parseUtcDate(startValue);
+  const end = parseUtcDate(endValue);
+  if (!start || !end || start >= end) return null;
+
+  let days = 0;
+  const cursor = new Date(start);
+  cursor.setUTCDate(cursor.getUTCDate() + 1);
+
+  while (cursor <= end) {
+    const day = cursor.getUTCDay();
+    if (day !== 0 && day !== 6) days += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return days;
+}
+
+function getPriceVariancePct(match) {
+  const directVariance = match?.price_match?.variance_pct;
+  if (typeof directVariance === "number" && !Number.isNaN(directVariance)) {
+    return Math.abs(directVariance);
+  }
+
+  const poPrice = match?.price_match?.po_price;
+  const invoicePrice = match?.price_match?.invoice_price;
+  if (typeof poPrice !== "number" || typeof invoicePrice !== "number" || poPrice === 0) return null;
+  return Math.abs(((invoicePrice - poPrice) / poPrice) * 100);
+}
+
+function getOriginalExceptionTier(code, classification) {
+  const detail = (classification?.exception_details ?? []).find((item) => item.exception_code === code);
+  return detail?.individual_tier ?? classification?.overall_tier ?? null;
+}
+
+function shouldDowngradeException(code, match, tolerances) {
+  if (LOCKED_TIER_THREE_CODES.has(code) || code === "E17") return false;
+
+  if (code === "E01") {
+    const variancePct = getPriceVariancePct(match);
+    return typeof variancePct === "number" && variancePct <= tolerances.pricePct;
+  }
+
+  if (code === "E03") {
+    const delta = match?.quantity_match?.delta;
+    return typeof delta === "number" && Math.abs(delta) <= tolerances.quantityUnits;
+  }
+
+  if (code === "E12") {
+    const daysEarly = businessDaysBetween(
+      match?.date_check?.invoice_date,
+      match?.date_check?.earliest_grn_date
+    );
+    return typeof daysEarly === "number" && daysEarly <= tolerances.dateBusinessDays;
+  }
+
+  return false;
+}
+
+function simulateCardTier(match, classification, tolerances) {
+  const originalTier = classification?.overall_tier ?? null;
+  const exceptionCodes = classification?.detected_exceptions ?? match?.detected_exceptions ?? [];
+
+  if (!classification || !exceptionCodes.length) {
+    return {
+      originalTier,
+      simulatedTier: originalTier,
+      changed: false,
+      changedCodes: [],
+      ruleChanges: []
+    };
+  }
+
+  const ruleChanges = exceptionCodes.map((code) => {
+    const originalExceptionTier = getOriginalExceptionTier(code, classification);
+    const simulatedExceptionTier =
+      originalExceptionTier === 2 && shouldDowngradeException(code, match, tolerances)
+        ? 1
+        : originalExceptionTier;
+
+    return {
+      code,
+      originalTier: originalExceptionTier,
+      simulatedTier: simulatedExceptionTier,
+      changed: originalExceptionTier !== simulatedExceptionTier
+    };
+  });
+  const simulatedTier = Math.max(...ruleChanges.map((item) => item.simulatedTier ?? originalTier ?? 1));
+
+  return {
+    originalTier,
+    simulatedTier,
+    changed: Boolean(originalTier && simulatedTier && originalTier !== simulatedTier),
+    changedCodes: ruleChanges.filter((item) => item.changed).map((item) => item.code),
+    ruleChanges
+  };
+}
+
+function emptyTierCounts() {
+  return { tier1: 0, tier2: 0, tier3: 0 };
+}
+
+function countTier(counts, tier) {
+  if (tier === 1) counts.tier1 += 1;
+  if (tier === 2) counts.tier2 += 1;
+  if (tier === 3) counts.tier3 += 1;
+}
+
+function buildToleranceSimulation(matchResults, classificationResults, tolerances) {
+  const matches = matchResults?.results ?? [];
+  const classifications = classificationResults?.classifications ?? [];
+  const originalCounts = emptyTierCounts();
+  const simulatedCounts = emptyTierCounts();
+  const affectedByRule = { price: 0, quantity: 0, date: 0 };
+
+  const cards = matches.map((match, index) => {
+    const classification = classifications[index];
+    const simulation = simulateCardTier(match, classification, tolerances);
+    countTier(originalCounts, simulation.originalTier);
+    countTier(simulatedCounts, simulation.simulatedTier);
+
+    if (simulation.ruleChanges.some((item) => item.code === "E01" && item.changed)) affectedByRule.price += 1;
+    if (simulation.ruleChanges.some((item) => item.code === "E03" && item.changed)) affectedByRule.quantity += 1;
+    if (simulation.ruleChanges.some((item) => item.code === "E12" && item.changed)) affectedByRule.date += 1;
+
+    return simulation;
+  });
+
+  const changedInvoiceCount = cards.filter((item) => item.changed).length;
+  const potentialAutoReviewShift = cards.reduce((sum, simulation, index) => {
+    const match = matches[index];
+    const classification = classifications[index];
+    const hasTariffException = (classification?.detected_exceptions ?? match?.detected_exceptions ?? []).includes("E17");
+
+    if (simulation.originalTier !== 2 || simulation.simulatedTier !== 1 || hasTariffException) return sum;
+
+    const financial = classification?.financial_summary ?? {};
+    const exposureAmount = typeof financial.total_exposure === "number" ? financial.total_exposure : 0;
+    const heldAmount = typeof financial.total_hold === "number" ? financial.total_hold : exposureAmount;
+    return sum + heldAmount;
+  }, 0);
+
+  return {
+    hasClassifications: classifications.length > 0,
+    cards,
+    changedInvoiceCount,
+    originalCounts,
+    simulatedCounts,
+    affectedByRule,
+    potentialAutoReviewShift
+  };
+}
+
 function renderRank(item) {
   const exceptions = item.match?.detected_exceptions ?? [];
   if (item.classification?.overall_tier === 3) return 1;
@@ -601,10 +889,15 @@ export default function App() {
   const [approvedActions, setApprovedActions] = useState(new Set());
   const [tier3Notes, setTier3Notes] = useState({});
   const [reviewedTier3, setReviewedTier3] = useState(new Set());
+  const [tolerances, setTolerances] = useState(DEFAULT_TOLERANCES);
 
   const metrics = useMemo(
     () => computeMetrics(parsedFiles, matchResults, classificationResults),
     [parsedFiles, matchResults, classificationResults]
+  );
+  const toleranceSimulation = useMemo(
+    () => buildToleranceSimulation(matchResults, classificationResults, tolerances),
+    [classificationResults, matchResults, tolerances]
   );
   const renderedCards = useMemo(() => {
     return (matchResults?.results ?? [])
@@ -613,10 +906,11 @@ export default function App() {
         index,
         invoiceRow: parsedFiles?.invoices?.[index],
         classification: classificationResults?.classifications?.[index],
-        actionResult: actionResults?.action_results?.[index]
+        actionResult: actionResults?.action_results?.[index],
+        simulation: toleranceSimulation.cards[index]
       }))
       .sort((left, right) => renderRank(left) - renderRank(right) || left.index - right.index);
-  }, [actionResults, classificationResults, matchResults, parsedFiles]);
+  }, [actionResults, classificationResults, matchResults, parsedFiles, toleranceSimulation]);
 
   function handleApiKeyChange(value) {
     setApiKey(value);
@@ -636,6 +930,7 @@ export default function App() {
       setApprovedActions(new Set());
       setTier3Notes({});
       setReviewedTier3(new Set());
+      setTolerances(DEFAULT_TOLERANCES);
       setStatusMessage("Files validated. Ready to analyze.");
     } catch (fileError) {
       setParsedFiles(null);
@@ -791,7 +1086,7 @@ export default function App() {
       <section className="mx-auto flex max-w-7xl flex-col gap-6">
         <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Stage 3.2</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Stage 4.2</p>
             <h1 className="mt-2 text-4xl font-semibold">ProcureGuard AI</h1>
             <p className="mt-2 text-lg text-slate-600">Intelligent 3-Way Procurement Matching</p>
           </div>
@@ -818,16 +1113,22 @@ export default function App() {
         />
 
         {parsedFiles ? <SummaryMetrics metrics={metrics} /> : null}
+        <ToleranceSimulator
+          tolerances={tolerances}
+          onTolerancesChange={setTolerances}
+          simulation={toleranceSimulation}
+        />
 
         {renderedCards.length ? (
           <section className="grid gap-4">
-            {renderedCards.map(({ match, index, invoiceRow, classification, actionResult }) => (
+            {renderedCards.map(({ match, index, invoiceRow, classification, actionResult, simulation }) => (
               <InvoiceCard
                 key={`${match.invoice_number}-${index}`}
                 match={match}
                 classification={classification}
                 actionResult={actionResult}
                 invoiceRow={invoiceRow}
+                simulation={simulation}
                 approvedActions={approvedActions}
                 tier3Notes={tier3Notes}
                 reviewedTier3={reviewedTier3}

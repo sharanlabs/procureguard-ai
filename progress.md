@@ -9,7 +9,8 @@ Stage 3.2: Core application shell and prompt-chain orchestration — COMPLETE �
 Stage 3.3: API proxy, security, and hardening review — COMPLETE — April 25, 2026  
 Stage 4: IN PROGRESS — April 25, 2026
 Stage 4.1: Glass-box reasoning cards — COMPLETE — April 25, 2026
-Next: Stage 4.2 — What-if tolerance simulator
+Stage 4.2: What-if tolerance simulator — COMPLETE — April 25, 2026
+Next: Stage 4.3 — Root cause analysis
 
 ## Stage log
 
@@ -44,7 +45,9 @@ Next: Stage 4.2 — What-if tolerance simulator
   - Exception cards now show plain-language summaries before reasoning and confidence
   - Matched fields, severity labels, financial impact, draft toggles, and HITL review controls added
   - Tier 2 approvals and Tier 3 action notes remain local UI state only
-  - Stage 4.2 what-if tolerance simulator and Stage 4.3 root-cause analysis intentionally deferred
+  - Stage 4.2 what-if tolerance simulator complete
+  - Client-side price, quantity, and date tolerances simulate tier changes without calling Claude or mutating classifications
+  - Stage 4.3 root-cause analysis intentionally deferred
 
 ## Decisions pending
 

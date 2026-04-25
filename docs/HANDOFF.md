@@ -245,3 +245,57 @@ Stage 4.2 — What-if tolerance simulator
 - Tier 2 approvals and Tier 3 action notes are stored only in local component state
 - Claude remains the runtime AI stack
 - Codex was only used as the repo editing assistant
+
+## Stage 4.2 handoff — April 25, 2026
+
+### Stage completed
+Stage 4.2 — What-if tolerance simulator
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/lib/format.js
+- data/DATA_DICTIONARY.md
+
+### Files changed
+- app/ProcureGuard.jsx
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-25T21-57-01-707Z.json
+
+### Commands run
+- git status --short
+- git branch -vv
+- npm run build
+- node evals/run_evals.js
+- grep -R "Send" app
+- git diff --check
+- git status --short
+
+### Verification results
+- Initial git status was clean before editing
+- git branch -vv showed main aligned with origin/main at 544bccd
+- npm run build passed with Vite production output
+- node evals/run_evals.js passed: 25/25 procurement tests, 100% pass rate
+- grep -R "Send" app returned no matches
+- git diff --check passed
+- New eval result file: evals/results/eval_results_2026-04-25T21-57-01-707Z.json
+
+### Known issues
+- No live Claude API call was run during this stage
+- None for Stage 4.2
+
+### Next step
+Stage 4.3 — Root cause analysis
+
+### Notes
+- Stage 4.3 root cause analysis is intentionally not implemented yet
+- Stage 5 dashboard, charts, ROI calculator, supplier scorecard, and dark mode are intentionally not implemented yet
+- The simulator is client-side only and does not call Claude
+- The simulator does not mutate actual Claude classifications, audit records, drafts, or review controls
+- No Send button or real email sending exists
+- Claude remains the runtime AI stack
+- Codex was only used as the repo editing assistant
