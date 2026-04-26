@@ -4,6 +4,9 @@ const MAX_ATTEMPTS = 3;
 const DIRECT_BROWSER_ACCESS_ERROR = "CORS requests must set 'anthropic-dangerous-direct-browser-access' header";
 const DIRECT_BROWSER_ACCESS_HELP =
   "Anthropic rejected the browser/proxy request because the direct-browser-access header was missing. The app has been patched to send the required header. Restart the dev server and try again.";
+const STRUCTURED_OUTPUT_SHAPE_ERROR = "output_config.type: Extra inputs are not permitted";
+const STRUCTURED_OUTPUT_SHAPE_HELP =
+  "Anthropic rejected the structured-output request shape. The app has been patched to use output_config.format. Restart the dev server and try again.";
 
 function wait(ms) {
   return new Promise((resolve) => {
@@ -21,6 +24,9 @@ function userFacingApiError(message) {
   const text = String(message ?? "");
   if (text.includes(DIRECT_BROWSER_ACCESS_ERROR)) {
     return DIRECT_BROWSER_ACCESS_HELP;
+  }
+  if (text.includes(STRUCTURED_OUTPUT_SHAPE_ERROR)) {
+    return STRUCTURED_OUTPUT_SHAPE_HELP;
   }
   return text;
 }
@@ -100,8 +106,10 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
     output_config: {
-      type: "json_schema",
-      schema
+      format: {
+        type: "json_schema",
+        schema
+      }
     }
   };
 
@@ -178,6 +186,10 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
 
   if (String(lastError?.message).includes(DIRECT_BROWSER_ACCESS_ERROR)) {
     throw new Error(DIRECT_BROWSER_ACCESS_HELP);
+  }
+
+  if (String(lastError?.message).includes(STRUCTURED_OUTPUT_SHAPE_ERROR)) {
+    throw new Error(STRUCTURED_OUTPUT_SHAPE_HELP);
   }
 
   if (lastError instanceof TypeError) {
