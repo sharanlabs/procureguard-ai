@@ -415,3 +415,80 @@ Stage 5.2 — Final hardening and deployment readiness
 - No Send button or real email sending exists
 - Claude remains the runtime AI stack
 - Codex was only used as the repo editing assistant
+
+## Stage 5.2 handoff — April 26, 2026
+
+### Stage completed
+Stage 5.2 — UI polish, responsive layout, dark mode, accessibility
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/lib/dashboard.js
+- app/lib/format.js
+- app/lib/rootCause.js
+- app/styles.css
+- package.json
+- data/DATA_DICTIONARY.md
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-26T00-27-08-900Z.json
+
+### Commands run
+- git status --short
+- git branch -vv
+- wc -l app/ProcureGuard.jsx
+- npm run build
+- node evals/run_evals.js
+- grep -R "Send" app
+- grep -R "localStorage" app
+- grep -R "Guaranteed\\|guaranteed\\|Recovered money\\|automated approval\\|fraud detected\\|AI decided" app
+- grep -R "dark\\|Dark\\|sessionStorage" app
+- grep -R "aria-label\\|focus-visible\\|sr-only" app
+- git diff --check
+- git status --short
+
+### Verification results
+- Initial git status was clean before editing
+- git branch -vv showed main ahead of origin/main by the Stage 5.1 commit; user instructed Codex to continue checking the code
+- app/ProcureGuard.jsx was reduced below the 1200-line maintenance threshold by moving dashboard and root-cause presentation into app/ProcureGuardDashboard.jsx
+- npm run build passed with Vite production output
+- npm run build emitted the existing Vite chunk-size warning from the Recharts dashboard; build exit code was 0
+- node evals/run_evals.js passed: 25/25 procurement tests, 100% pass rate
+- grep checks found no Send button text, no localStorage usage, and no prohibited enterprise claims in app files
+- dark mode and accessibility checks found expected dark/sessionStorage and aria/focus-visible markers
+- git diff --check passed
+- New eval result file: evals/results/eval_results_2026-04-26T00-27-08-900Z.json
+
+### Known issues
+- No live Claude API call was run during this stage
+- The Recharts dashboard continues to trigger a Vite production chunk-size warning
+- Stage 6 documentation and deployment work is intentionally not implemented yet
+
+### Next step
+Stage 6 — Documentation and deployment
+
+### External design suggestions reviewed
+- Suggestion summary: User-provided enterprise SaaS dashboard direction emphasizing clarity, restrained visuals, semantic severity colors, responsive layout, and cautious AI operations language.
+  Decision: adopted.
+  Reason: Fits Stage 5.2 scope and ProcureGuard's enterprise AI procurement direction.
+- Suggestion summary: Deployment documentation and final testing work.
+  Decision: deferred.
+  Reason: Explicitly reserved for Stage 6 and Stage 7.
+
+### Notes
+- Dark mode preference is stored only in sessionStorage
+- Dashboard, tolerance simulator, root-cause analysis, exception cards, draft panels, audit trail, and token governance use responsive light/dark surfaces
+- Stage 4 glass-box order remains summary, reasoning, confidence
+- No Send button or real email sending exists
+- Claude remains the runtime AI stack
+- Codex was only used as the repo editing assistant

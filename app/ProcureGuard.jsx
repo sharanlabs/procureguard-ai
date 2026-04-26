@@ -1,17 +1,8 @@
 import { useMemo, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from "recharts";
 import matchingPrompt from "../prompts/01_matching.md?raw";
 import classificationPrompt from "../prompts/02_classification.md?raw";
 import actionPrompt from "../prompts/03_action_generation.md?raw";
+import ExecutiveDashboard, { RootCauseAnalysisPanel } from "./ProcureGuardDashboard.jsx";
 import { createAuditEntry, exportAuditCsv } from "./lib/audit.js";
 import { callClaudeAPI } from "./lib/claude.js";
 import { normalizeProcurementFiles } from "./lib/csv.js";
@@ -29,6 +20,7 @@ import { analyzeRootCauses } from "./lib/rootCause.js";
 import { actionOutputSchema, classificationOutputSchema, matchingOutputSchema } from "./lib/schemas.js";
 
 const LOCAL_API_KEY_STORAGE = "procureguard_anthropic_session_key";
+const DARK_MODE_STORAGE = "procureguard_dark_mode";
 const MODELS = {
   matching: "claude-haiku-4-5-20251001",
   classification: "claude-sonnet-4-6",
@@ -40,14 +32,6 @@ const DEFAULT_TOLERANCES = {
   dateBusinessDays: 2
 };
 const LOCKED_TIER_THREE_CODES = new Set(["E02", "E06", "E07", "E11"]);
-const CHART_COLORS = {
-  clean: "#22c55e",
-  autoApprove: "#16a34a",
-  review: "#f59e0b",
-  escalate: "#ef4444",
-  neutral: "#3b82f6",
-  slate: "#64748b"
-};
 
 function Badge({ children, className = "" }) {
   return (
@@ -57,24 +41,15 @@ function Badge({ children, className = "" }) {
   );
 }
 
-function Metric({ label, value }) {
-  return (
-    <div className="rounded-md border border-slate-200 bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
-    </div>
-  );
-}
-
 function Alert({ message, onRetry }) {
   if (!message) return null;
   return (
-    <section className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+    <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 shadow-sm dark:border-red-800 dark:bg-red-950/50 dark:text-red-100">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p>{message}</p>
         {onRetry ? (
           <button
-            className="rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+            className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-red-500 dark:border-red-700 dark:bg-slate-900 dark:text-red-200 dark:hover:bg-red-950"
             type="button"
             onClick={onRetry}
           >
@@ -97,7 +72,7 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
 
   return (
     <section
-      className={`rounded-lg border border-dashed p-6 ${isDragging ? "border-blue-400 bg-blue-50" : "border-slate-300 bg-white"}`}
+      className={`rounded-2xl border border-dashed p-6 shadow-sm transition-colors ${isDragging ? "border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40" : "border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"}`}
       onDragOver={(event) => {
         event.preventDefault();
         setIsDragging(true);
@@ -107,12 +82,12 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Upload procurement CSVs</h2>
-          <p className="mt-1 text-sm text-slate-600">
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Upload procurement CSVs</h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             Add purchase_orders.csv, invoices.csv, and goods_receipts.csv before analysis.
           </p>
         </div>
-        <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700">
+        <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white">
           Choose files
           <input
             className="sr-only"
@@ -128,9 +103,9 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
       {parsedFiles?.summaries?.length ? (
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           {parsedFiles.summaries.map((file) => (
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-4" key={file.key}>
-              <p className="text-sm font-semibold text-slate-900">{file.originalName}</p>
-              <p className="mt-1 text-xs text-slate-500">{file.rowCount} rows parsed</p>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800" key={file.key}>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{file.originalName}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{file.rowCount} rows parsed</p>
             </div>
           ))}
         </div>
@@ -142,21 +117,21 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
 function ApiKeyPanel({ apiKey, onApiKeyChange }) {
   if (!import.meta.env.DEV) {
     return (
-      <section className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+      <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-sm dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
         Production uses the server-side Claude API key configured in deployment.
       </section>
     );
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4">
-      <label className="text-sm font-semibold text-slate-800" htmlFor="anthropic-key">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <label className="text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="anthropic-key">
         Local Claude API key
       </label>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <input
           id="anthropic-key"
-          className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-blue-950"
           type="password"
           autoComplete="off"
           value={apiKey}
@@ -164,7 +139,7 @@ function ApiKeyPanel({ apiKey, onApiKeyChange }) {
           placeholder="sk-ant-..."
         />
       </div>
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
         Stored only in this browser session for local development.
       </p>
     </section>
@@ -179,7 +154,7 @@ function ProgressPanel({ runningStep, statusMessage, hasMatchResults, hasClassif
   ];
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap gap-2">
           {steps.map(([key, label, complete]) => (
@@ -190,364 +165,14 @@ function ProgressPanel({ runningStep, statusMessage, hasMatchResults, hasClassif
                   ? "border-green-200 bg-green-50 text-green-800"
                   : runningStep === key
                     ? "border-blue-200 bg-blue-50 text-blue-800"
-                    : "border-slate-200 bg-slate-50 text-slate-600"
+                    : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
               }
             >
               {label}
             </Badge>
           ))}
         </div>
-        <p className="text-sm text-slate-600">{statusMessage || "Ready to analyze validated files."}</p>
-      </div>
-    </section>
-  );
-}
-
-function formatInteger(value) {
-  return new Intl.NumberFormat("en-US").format(value ?? 0);
-}
-
-function formatMilliseconds(value) {
-  if (!value) return "-";
-  return `${formatInteger(value)} ms`;
-}
-
-function exceptionColor(code) {
-  if (LOCKED_TIER_THREE_CODES.has(code)) return CHART_COLORS.escalate;
-  return CHART_COLORS.review;
-}
-
-function heatCellClass(count) {
-  if (count >= 3) return "border-red-200 bg-red-50 text-red-800";
-  if (count === 2) return "border-amber-200 bg-amber-50 text-amber-800";
-  if (count === 1) return "border-blue-200 bg-blue-50 text-blue-800";
-  return "border-slate-200 bg-slate-50 text-slate-400";
-}
-
-function DashboardSection({ title, helper, children, action }) {
-  return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h3 className="text-base font-semibold text-slate-950">{title}</h3>
-          {helper ? <p className="mt-1 text-sm text-slate-600">{helper}</p> : null}
-        </div>
-        {action}
-      </div>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
-function DashboardKpi({ label, value, helper, tone = "neutral" }) {
-  const toneClass = {
-    neutral: "border-slate-200 bg-white text-slate-950",
-    clean: "border-green-200 bg-green-50 text-green-900",
-    review: "border-amber-200 bg-amber-50 text-amber-900",
-    escalate: "border-red-200 bg-red-50 text-red-900",
-    info: "border-blue-200 bg-blue-50 text-blue-900"
-  }[tone];
-
-  return (
-    <article className={`rounded-lg border p-4 shadow-sm ${toneClass}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide opacity-75">{label}</p>
-      <p className="mt-3 font-mono text-3xl font-semibold tabular-nums">{value}</p>
-      {helper ? <p className="mt-2 text-sm leading-5 opacity-80">{helper}</p> : null}
-    </article>
-  );
-}
-
-function ChartTooltip({ active, payload, label, valueFormatter = formatInteger }) {
-  if (!active || !payload?.length) return null;
-
-  return (
-    <div className="rounded-md border border-slate-200 bg-white p-3 text-sm shadow-sm">
-      {label ? <p className="mb-2 font-semibold text-slate-900">{label}</p> : null}
-      <div className="space-y-1">
-        {payload.map((item) => (
-          <p className="flex items-center gap-2 text-slate-700" key={`${item.dataKey}-${item.name}`}>
-            <span className="h-2 w-2 rounded-full bg-slate-500" />
-            <span>{item.name}: </span>
-            <span className="font-mono font-semibold tabular-nums">{valueFormatter(item.value)}</span>
-          </p>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ExecutiveDashboard({ analytics }) {
-  if (!analytics.hasData) return null;
-
-  const governance = analytics.auditGovernance;
-  const riskDriverData = analytics.exceptionDrivers.map((item) => ({
-    ...item,
-    label: `${item.code}`
-  }));
-
-  return (
-    <section className="rounded-xl border border-slate-200 bg-slate-100 p-4 shadow-sm">
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Executive Dashboard</p>
-          <h2 className="mt-1 text-2xl font-semibold text-slate-950">AI-assisted review operations console</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Batch health, exposure, review load, and governance status for AP and procurement leaders.
-          </p>
-        </div>
-        <Badge className="border-slate-300 bg-white text-slate-700">
-          {formatInteger(analytics.totalInvoices)} invoices assessed
-        </Badge>
-      </div>
-
-      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <DashboardKpi
-          label="Batch Health"
-          value={formatPercent(analytics.healthyRate)}
-          helper={`${formatInteger(analytics.healthyCount)} clean or auto-approve rows`}
-          tone="clean"
-        />
-        <DashboardKpi
-          label="Requires Human Review"
-          value={formatInteger(analytics.requiresHumanReview)}
-          helper={`${formatInteger(analytics.reviewCount)} review, ${formatInteger(analytics.escalateCount)} escalate`}
-          tone={analytics.escalateCount ? "escalate" : "review"}
-        />
-        <DashboardKpi
-          label="Exposure Identified"
-          value={formatMoney(analytics.exposureIdentified)}
-          helper="Value requiring validation or policy review"
-          tone="info"
-        />
-        <DashboardKpi
-          label="Held for Review"
-          value={formatMoney(analytics.holdAmount)}
-          helper="Amount withheld pending human review"
-          tone="review"
-        />
-        <DashboardKpi
-          label="Estimated Recovery"
-          value={formatMoney(analytics.estimatedRecovery)}
-          helper="Opportunity estimate, not booked recovery"
-          tone="neutral"
-        />
-      </div>
-
-      <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_1.25fr]">
-        <DashboardSection
-          title="Batch disposition by review path"
-          helper="How much of the batch can proceed, needs review, or needs escalation?"
-        >
-          <div className="h-32">
-            <ResponsiveContainer height="100%" width="100%">
-              <BarChart data={analytics.dispositionData} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                <XAxis type="number" hide domain={[0, analytics.totalInvoices]} />
-                <YAxis type="category" dataKey="name" hide />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="clean" name="Clean" stackId="batch" fill={CHART_COLORS.clean} radius={[6, 0, 0, 6]} />
-                <Bar dataKey="autoApprove" name="Auto-approve" stackId="batch" fill={CHART_COLORS.autoApprove} />
-                <Bar dataKey="review" name="Review" stackId="batch" fill={CHART_COLORS.review} />
-                <Bar dataKey="escalate" name="Escalate" stackId="batch" fill={CHART_COLORS.escalate} radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-4">
-            <p><span className="font-mono font-semibold tabular-nums text-green-700">{analytics.cleanCount}</span> clean</p>
-            <p><span className="font-mono font-semibold tabular-nums text-green-700">{analytics.autoApproveCount}</span> auto-approve</p>
-            <p><span className="font-mono font-semibold tabular-nums text-amber-700">{analytics.reviewCount}</span> review</p>
-            <p><span className="font-mono font-semibold tabular-nums text-red-700">{analytics.escalateCount}</span> escalate</p>
-          </div>
-        </DashboardSection>
-
-        <DashboardSection
-          title="Exception types driving exposure"
-          helper="Which exception classes create the most financial risk?"
-        >
-          {riskDriverData.length ? (
-            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-              <div className="h-64">
-                <ResponsiveContainer height="100%" width="100%">
-                  <BarChart data={riskDriverData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
-                    <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} width={56} />
-                    <Tooltip content={<ChartTooltip valueFormatter={formatMoney} />} />
-                    <Bar dataKey="exposure" name="Exposure" radius={[6, 6, 0, 0]}>
-                      {riskDriverData.map((entry) => (
-                        <Cell fill={exceptionColor(entry.code)} key={entry.code} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="overflow-hidden rounded-md border border-slate-200">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2">Exception</th>
-                      <th className="px-3 py-2 text-right">Rows</th>
-                      <th className="px-3 py-2 text-right">Exposure</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {riskDriverData.map((item) => (
-                      <tr key={item.code}>
-                        <td className="px-3 py-2">
-                          <p className="font-semibold text-slate-900">{item.code}</p>
-                          <p className="text-xs text-slate-500">{item.name}</p>
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono tabular-nums">{item.count}</td>
-                        <td className="px-3 py-2 text-right font-mono tabular-nums">{formatMoney(item.exposure)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <p className="rounded-md border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">
-              No exception exposure identified in this batch.
-            </p>
-          )}
-        </DashboardSection>
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <DashboardSection
-          title="Supplier scorecard"
-          helper="Which suppliers show review load, held value, or recurring signals?"
-        >
-          <div className="overflow-x-auto rounded-md border border-slate-200">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-3 py-2">Supplier</th>
-                  <th className="px-3 py-2 text-right">Rows</th>
-                  <th className="px-3 py-2 text-right">Review</th>
-                  <th className="px-3 py-2 text-right">Escalate</th>
-                  <th className="px-3 py-2 text-right">Exposure</th>
-                  <th className="px-3 py-2 text-right">Held</th>
-                  <th className="px-3 py-2">Signals</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 bg-white">
-                {analytics.supplierScorecard.map((supplier) => (
-                  <tr key={supplier.key}>
-                    <td className="px-3 py-2 font-semibold text-slate-900">{supplier.supplierName}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{supplier.invoiceCount}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-amber-700">{supplier.reviewCount}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-red-700">{supplier.escalateCount}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{formatMoney(supplier.exposure)}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">{formatMoney(supplier.hold)}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {supplier.topExceptionCodes.length ? supplier.topExceptionCodes.map((code) => (
-                          <Badge className="border-slate-200 bg-slate-50 text-slate-700" key={`${supplier.key}-${code}`}>
-                            {code}
-                          </Badge>
-                        )) : <span className="text-slate-400">None</span>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </DashboardSection>
-
-        <DashboardSection
-          title="Warehouse exception heatmap"
-          helper="Where are receiving or GRN-linked signals concentrated?"
-        >
-          {analytics.warehouseHeatmap.length && analytics.heatmapCodes.length ? (
-            <div className="overflow-x-auto rounded-md border border-slate-200">
-              <table className="min-w-full text-center text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Warehouse</th>
-                    {analytics.heatmapCodes.map((code) => (
-                      <th className="px-3 py-2" key={code}>{code}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
-                  {analytics.warehouseHeatmap.map((row) => (
-                    <tr key={row.warehouse}>
-                      <td className="px-3 py-2 text-left font-semibold text-slate-900">{row.warehouse}</td>
-                      {analytics.heatmapCodes.map((code) => {
-                        const count = row.codes[code] ?? 0;
-                        return (
-                          <td className="px-2 py-2" key={`${row.warehouse}-${code}`}>
-                            <span className={`inline-flex min-w-8 justify-center rounded-md border px-2 py-1 font-mono tabular-nums ${heatCellClass(count)}`}>
-                              {count}
-                            </span>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-              No warehouse-linked exception concentration is visible in this batch.
-            </p>
-          )}
-        </DashboardSection>
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <DashboardSection
-          title="Exposure by review path"
-          helper="How much identified exposure sits in review versus escalation?"
-        >
-          <div className="h-56">
-            <ResponsiveContainer height="100%" width="100%">
-              <BarChart data={analytics.exposureByTierData} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
-                <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} width={60} />
-                <Tooltip content={<ChartTooltip valueFormatter={formatMoney} />} />
-                <Bar dataKey="exposure" name="Exposure" radius={[6, 6, 0, 0]}>
-                  <Cell fill={CHART_COLORS.clean} />
-                  <Cell fill={CHART_COLORS.review} />
-                  <Cell fill={CHART_COLORS.escalate} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </DashboardSection>
-
-        <DashboardSection
-          title="Token cost and audit governance"
-          helper="What did the AI-assisted review execute, and what remains auditable?"
-          action={<Badge className="border-slate-300 bg-white text-slate-700">{analytics.patternCount} pattern signals</Badge>}
-        >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Audit entries" value={formatInteger(governance.auditEntryCount)} />
-            <Metric label="Avg latency" value={formatMilliseconds(governance.averageLatencyMs)} />
-            <Metric
-              label="Token usage"
-              value={governance.tokenDataReported ? formatInteger(governance.totalTokens) : "Not reported"}
-            />
-            <Metric label="Draft actions" value={formatInteger(analytics.draftActionCount)} />
-          </div>
-          <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-              <p className="font-semibold text-slate-900">Models used</p>
-              <p className="mt-1 text-slate-600">{governance.models.join(", ") || "Not available"}</p>
-            </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-              <p className="font-semibold text-slate-900">Prompt versions</p>
-              <p className="mt-1 text-slate-600">{governance.promptVersions.join(", ") || "Not available"}</p>
-            </div>
-          </div>
-          <p className="mt-4 text-xs leading-5 text-slate-500">
-            Audit records store hashes, summaries, latency, model, and prompt version. They do not store API keys,
-            raw prompts, or full invoice payloads.
-          </p>
-        </DashboardSection>
+        <p className="text-sm text-slate-600 dark:text-slate-400">{statusMessage || "Ready to analyze validated files."}</p>
       </div>
     </section>
   );
@@ -555,9 +180,9 @@ function ExecutiveDashboard({ analytics }) {
 
 function ToleranceSlider({ id, label, value, min, max, step, unit, affectedCount, onChange }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center justify-between gap-3">
-        <label className="text-sm font-semibold text-slate-800" htmlFor={id}>
+        <label className="text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor={id}>
           {label}
         </label>
         <Badge className="border-blue-200 bg-blue-50 text-blue-800">{affectedCount} affected</Badge>
@@ -573,7 +198,7 @@ function ToleranceSlider({ id, label, value, min, max, step, unit, affectedCount
           value={value}
           onChange={(event) => onChange(Number(event.target.value))}
         />
-        <p className="min-w-20 text-right text-sm font-semibold text-slate-950">
+        <p className="min-w-20 text-right text-sm font-semibold text-slate-950 dark:text-slate-100">
           {value}{unit}
         </p>
       </div>
@@ -590,11 +215,11 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
     : "No invoices would change tier under the current tolerance settings.";
 
   return (
-    <section className="rounded-lg border border-blue-200 bg-blue-50 p-5">
+    <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm dark:border-blue-800 dark:bg-blue-950/40">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950">What-If Tolerance Simulator</h2>
-          <p className="mt-1 text-sm text-blue-900">
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">What-If Tolerance Simulator</h2>
+          <p className="mt-1 text-sm text-blue-900 dark:text-blue-200">
             Adjust policy tolerances locally without changing Claude classifications or audit records.
           </p>
         </div>
@@ -637,8 +262,8 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
         />
       </div>
 
-      <div className="mt-5 rounded-md border border-blue-200 bg-white p-4">
-        <p className="text-sm font-semibold text-slate-900">{summaryText}</p>
+      <div className="mt-5 rounded-xl border border-blue-200 bg-white p-4 dark:border-blue-800 dark:bg-slate-900">
+        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{summaryText}</p>
         <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
           <p>Original Tier 1: <span className="font-semibold">{simulation.originalCounts.tier1}</span></p>
           <p>Original Tier 2: <span className="font-semibold">{simulation.originalCounts.tier2}</span></p>
@@ -647,11 +272,11 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
           <p>Simulated Tier 2: <span className="font-semibold">{simulation.simulatedCounts.tier2}</span></p>
           <p>Simulated Tier 3: <span className="font-semibold">{simulation.simulatedCounts.tier3}</span></p>
         </div>
-        <p className="mt-4 text-sm font-semibold text-blue-950">
+        <p className="mt-4 text-sm font-semibold text-blue-950 dark:text-blue-100">
           Potential auto-review shift: {formatMoney(simulation.potentialAutoReviewShift)} in held exposure would move
           from review to auto-approve under this simulated policy.
         </p>
-        <p className="mt-2 text-xs text-blue-800">
+        <p className="mt-2 text-xs text-blue-800 dark:text-blue-300">
           Simulation only. Actual classifications remain unchanged until policy is approved.
         </p>
       </div>
@@ -659,72 +284,11 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
   );
 }
 
-function RootCausePatternCard({ pattern }) {
-  return (
-    <article className="rounded-md border border-slate-200 bg-white p-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <Badge className="border-indigo-200 bg-indigo-50 text-indigo-800">{pattern.type}</Badge>
-          <p className="mt-3 text-sm font-semibold leading-6 text-slate-950">{pattern.description}</p>
-        </div>
-        {pattern.totalExposure > 0 ? (
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Exposure</p>
-            <p className="mt-1 font-semibold text-slate-950">{formatMoney(pattern.totalExposure)}</p>
-          </div>
-        ) : null}
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {pattern.affectedInvoices.map((invoiceNumber) => (
-          <Badge className="border-slate-200 bg-slate-50 text-slate-700" key={invoiceNumber}>
-            {invoiceNumber}
-          </Badge>
-        ))}
-      </div>
-      <p className="mt-4 text-sm leading-6 text-slate-700">
-        <span className="font-semibold text-slate-900">Suggested review: </span>
-        {pattern.recommendedAction}
-      </p>
-    </article>
-  );
-}
-
-function RootCauseAnalysisPanel({ analysis }) {
-  if (!analysis.hasData) return null;
-
-  return (
-    <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-5">
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-950">Root Cause Analysis</h2>
-          <p className="mt-1 text-sm text-indigo-900">
-            Browser-only pattern review across {analysis.exceptionRowCount} exception rows. Patterns suggest where to
-            review controls and do not assign blame.
-          </p>
-        </div>
-        <Badge className="border-indigo-300 bg-white text-indigo-800">Client-side only</Badge>
-      </div>
-
-      {analysis.patterns.length ? (
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {analysis.patterns.map((pattern) => (
-            <RootCausePatternCard key={pattern.id} pattern={pattern} />
-          ))}
-        </div>
-      ) : (
-        <div className="mt-5 rounded-md border border-indigo-200 bg-white p-4 text-sm font-semibold text-slate-800">
-          No systemic patterns detected in this batch. Exceptions appear isolated.
-        </div>
-      )}
-    </section>
-  );
-}
-
 function FieldRow({ label, value }) {
   return (
-    <div className="grid gap-1 rounded-md bg-white p-3 text-sm sm:grid-cols-[10rem_1fr]">
-      <dt className="font-semibold text-slate-500">{label}</dt>
-      <dd className="text-slate-800">{value}</dd>
+    <div className="grid gap-1 rounded-lg bg-white p-3 text-sm sm:grid-cols-[10rem_1fr] dark:bg-slate-900">
+      <dt className="font-semibold text-slate-500 dark:text-slate-400">{label}</dt>
+      <dd className="text-slate-800 dark:text-slate-200">{value}</dd>
     </div>
   );
 }
@@ -738,10 +302,10 @@ function ConfidencePanel({ confidence }) {
   const isLowConfidence = typeof confidence === "number" && confidence < 0.85;
 
   return (
-    <section className="mt-5 rounded-md border border-slate-200 bg-slate-50 p-4">
+    <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-slate-700">Confidence</p>
-        <p className="text-sm font-semibold text-slate-950">{formatPercent(confidence)}</p>
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Confidence</p>
+        <p className="font-mono text-sm font-semibold tabular-nums text-slate-950 dark:text-slate-100">{formatPercent(confidence)}</p>
       </div>
       <progress
         className={`mt-3 h-2 w-full overflow-hidden rounded-full ${isLowConfidence ? "accent-amber-500" : "accent-blue-600"}`}
@@ -749,7 +313,7 @@ function ConfidencePanel({ confidence }) {
         value={normalized}
       />
       {isLowConfidence ? (
-        <p className="mt-3 text-sm font-semibold text-amber-700">
+        <p className="mt-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
           Low confidence. Human review is recommended before taking action.
         </p>
       ) : null}
@@ -769,20 +333,20 @@ function FinancialImpact({ classification, isClean }) {
 
   if (classification.overall_tier >= 2) {
     return (
-      <section className="mt-4 rounded-md border border-slate-200 bg-white p-4">
-        <p className="text-sm font-semibold text-slate-700">Financial impact</p>
+      <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Financial impact</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
           <div className="rounded-md border border-red-100 bg-red-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Exposure</p>
-            <p className="mt-1 text-lg font-semibold text-red-900">{formatMoney(financial.total_exposure)}</p>
+            <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-red-900">{formatMoney(financial.total_exposure)}</p>
           </div>
           <div className="rounded-md border border-amber-100 bg-amber-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Hold</p>
-            <p className="mt-1 text-lg font-semibold text-amber-900">{formatMoney(financial.total_hold)}</p>
+            <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-amber-900">{formatMoney(financial.total_hold)}</p>
           </div>
           <div className="rounded-md border border-green-100 bg-green-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Approved</p>
-            <p className="mt-1 text-lg font-semibold text-green-900">{formatMoney(financial.total_approved)}</p>
+            <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-green-900">{formatMoney(financial.total_approved)}</p>
           </div>
         </div>
       </section>
@@ -790,7 +354,7 @@ function FinancialImpact({ classification, isClean }) {
   }
 
   return (
-    <section className="mt-4 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+    <section className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900 dark:border-green-800 dark:bg-green-950/50 dark:text-green-100">
       <p className="font-semibold">
         {isClean ? "No hold required. Clean match approved amount:" : "No payment hold required. Approved amount:"}{" "}
         {formatMoney(financial.total_approved)}
@@ -807,8 +371,8 @@ function MatchedFields({ match, invoiceRow }) {
   const supplier = match.supplier_match ?? {};
 
   return (
-    <details className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-slate-800">Matched fields</summary>
+    <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">Matched fields</summary>
       <dl className="mt-4 grid gap-2">
         <FieldRow label="PO number" value={renderValue(match.po_number, "No PO match")} />
         <FieldRow label="GRN numbers" value={renderValue(match.grn_numbers, "No GRN")} />
@@ -843,19 +407,19 @@ function ReasoningPanel({ match, classification }) {
   const date = match.date_check ?? {};
 
   return (
-    <details className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4" open>
-      <summary className="cursor-pointer text-sm font-semibold text-slate-800">Reasoning</summary>
-      <div className="mt-4 space-y-4 text-sm leading-6 text-slate-700">
+    <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800" open>
+      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">Reasoning</summary>
+      <div className="mt-4 space-y-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
         <section>
-          <p className="font-semibold text-slate-900">Step 1 matching reasoning</p>
+          <p className="font-semibold text-slate-900 dark:text-slate-100">Step 1 matching reasoning</p>
           <p className="mt-1">{match.reasoning || "Not available"}</p>
         </section>
         {exceptionDetails.length ? (
           <section>
-            <p className="font-semibold text-slate-900">Step 2 classification rationale</p>
+            <p className="font-semibold text-slate-900 dark:text-slate-100">Step 2 classification rationale</p>
             <div className="mt-2 space-y-3">
               {exceptionDetails.map((detail) => (
-                <div className="rounded-md bg-white p-3" key={`${detail.exception_code}-${detail.exception_name}`}>
+                <div className="rounded-lg bg-white p-3 dark:bg-slate-900" key={`${detail.exception_code}-${detail.exception_name}`}>
                   <p className="font-semibold">{detail.exception_code}: {detail.exception_name}</p>
                   <p className="mt-1">{detail.rationale}</p>
                 </div>
@@ -864,7 +428,7 @@ function ReasoningPanel({ match, classification }) {
           </section>
         ) : null}
         <section>
-          <p className="font-semibold text-slate-900">Matched values compared</p>
+          <p className="font-semibold text-slate-900 dark:text-slate-100">Matched values compared</p>
           <dl className="mt-2 grid gap-2 md:grid-cols-2">
             <FieldRow label="PO quantity" value={renderValue(quantity.po_qty)} />
             <FieldRow label="Invoice quantity" value={renderValue(quantity.invoiced_qty)} />
@@ -878,12 +442,12 @@ function ReasoningPanel({ match, classification }) {
           </dl>
         </section>
         <section>
-          <p className="font-semibold text-slate-900">Rule or exception code triggered</p>
+          <p className="font-semibold text-slate-900 dark:text-slate-100">Rule or exception code triggered</p>
           <p className="mt-1">{(match.detected_exceptions ?? []).length ? match.detected_exceptions.join(", ") : "No exception rule triggered"}</p>
         </section>
         {classification?.tier_rationale ? (
           <section>
-            <p className="font-semibold text-slate-900">Tier rationale</p>
+            <p className="font-semibold text-slate-900 dark:text-slate-100">Tier rationale</p>
             <p className="mt-1">{classification.tier_rationale}</p>
           </section>
         ) : null}
@@ -909,20 +473,20 @@ function DraftAction({
   const actionNote = tier3Notes[actionKey] ?? "";
 
   return (
-    <details className="rounded-md border border-slate-200 bg-slate-50 p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-slate-800">View Draft</summary>
+    <details className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">View Draft</summary>
       <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
           <Badge className="border-blue-200 bg-blue-50 text-blue-800">{action.draft_label}</Badge>
-          <h4 className="mt-3 text-sm font-semibold text-slate-950">{action.subject}</h4>
-          <p className="mt-1 text-xs text-slate-500">
+          <h4 className="mt-3 text-sm font-semibold text-slate-950 dark:text-slate-100">{action.subject}</h4>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {action.recipient_type}
             {action.recipient_name ? `: ${action.recipient_name}` : ""}
           </p>
         </div>
         {tier === 2 ? (
           <button
-            className="rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:bg-green-700"
+            className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-blue-600 disabled:bg-green-700 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white dark:disabled:bg-green-700 dark:disabled:text-white"
             type="button"
             disabled={approved}
             onClick={() => onApprove(actionKey)}
@@ -931,28 +495,28 @@ function DraftAction({
           </button>
         ) : null}
       </div>
-      <pre className="mt-4 whitespace-pre-wrap rounded-md bg-white p-4 text-sm leading-6 text-slate-700">
+      <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-6 text-slate-700 dark:bg-slate-900 dark:text-slate-300">
         {action.body}
       </pre>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
         <span>Deadline: {action.response_deadline_days ?? "None"}</span>
         <span>Exposure: {formatMoney(action.financial_reference?.exposure_amount)}</span>
         <span>Hold: {formatMoney(action.financial_reference?.hold_amount)}</span>
       </div>
       {tier === 3 ? (
-        <div className="mt-4 rounded-md border border-red-200 bg-white p-4">
-          <label className="text-sm font-semibold text-red-900" htmlFor={`${actionKey}-note`}>
+        <div className="mt-4 rounded-xl border border-red-200 bg-white p-4 dark:border-red-800 dark:bg-red-950/30">
+          <label className="text-sm font-semibold text-red-900 dark:text-red-100" htmlFor={`${actionKey}-note`}>
             Action Taken note
           </label>
           <textarea
             id={`${actionKey}-note`}
-            className="mt-2 min-h-24 w-full rounded-md border border-slate-300 p-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+            className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-950 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 dark:border-red-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-red-950"
             value={actionNote}
             onChange={(event) => onTier3NoteChange(actionKey, event.target.value)}
             placeholder="Document supervisor escalation, payment block, or procurement action before marking reviewed."
           />
           <button
-            className="mt-3 rounded-md bg-red-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="mt-3 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-600 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-700"
             type="button"
             disabled={!actionNote.trim() || reviewed}
             onClick={() => onTier3Reviewed(actionKey)}
@@ -985,31 +549,31 @@ function InvoiceCard({
   const showDrafts = actionResult?.actions?.length && (tier === 2 || tier === 3);
   const simulationChanged = simulation?.changed;
   const cardClass = simulationChanged
-    ? "rounded-lg border border-blue-300 bg-blue-50 p-5 shadow-sm"
-    : "rounded-lg border border-slate-200 bg-white p-5 shadow-sm";
+    ? "rounded-2xl border border-blue-300 bg-blue-50 p-5 shadow-sm dark:border-blue-700 dark:bg-blue-950/40"
+    : "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900";
 
   return (
     <article className={cardClass}>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h3 className="text-xl font-semibold">{plainLanguageSummary(match)}</h3>
-          <p className="mt-1 text-sm text-slate-600">
+          <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{plainLanguageSummary(match)}</h3>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             PO: {match.po_number ?? "No PO match"} | GRNs: {match.grn_numbers?.length ? match.grn_numbers.join(", ") : "None"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <SeverityBadge tier={tier} isClean={isClean} />
-          <Badge className="border-slate-200 bg-slate-50 text-slate-700">{statusLabel(match.match_status)}</Badge>
+          <Badge className="border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{statusLabel(match.match_status)}</Badge>
         </div>
       </div>
 
       {simulationChanged ? (
-        <section className="mt-4 rounded-md border border-blue-300 bg-white p-4 text-sm text-blue-950">
+        <section className="mt-4 rounded-xl border border-blue-300 bg-white p-4 text-sm text-blue-950 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100">
           <Badge className="border-blue-300 bg-blue-50 text-blue-800">Policy simulation changed this tier</Badge>
           <p className="mt-3 font-semibold">
             {tierLabel(simulation.originalTier)} &rarr; {tierLabel(simulation.simulatedTier)}
           </p>
-          <p className="mt-1 text-blue-800">
+          <p className="mt-1 text-blue-800 dark:text-blue-300">
             This is a what-if view only. The original Claude rationale, draft actions, and review controls remain unchanged.
           </p>
         </section>
@@ -1045,14 +609,14 @@ function InvoiceCard({
 
 function AuditPanel({ entries, onExport }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Audit Trail</h2>
-          <p className="mt-1 text-sm text-slate-600">{entries.length} entries captured</p>
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Audit Trail</h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{entries.length} entries captured</p>
         </div>
         <button
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           type="button"
           disabled={entries.length === 0}
           onClick={onExport}
@@ -1063,9 +627,9 @@ function AuditPanel({ entries, onExport }) {
       {entries.length ? (
         <div className="mt-4 space-y-2">
           {entries.map((entry) => (
-            <div className="rounded-md bg-slate-50 p-3 text-sm" key={`${entry.step}-${entry.timestamp}`}>
-              <p className="font-semibold">{entry.step} | {entry.model}</p>
-              <p className="mt-1 text-slate-600">
+            <div className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800" key={`${entry.step}-${entry.timestamp}`}>
+              <p className="font-semibold text-slate-950 dark:text-slate-100">{entry.step} | {entry.model}</p>
+              <p className="mt-1 text-slate-600 dark:text-slate-400">
                 {entry.timestamp} | {entry.latency_ms} ms | {entry.output_summary.invoice_count} invoices
               </p>
             </div>
@@ -1277,6 +841,7 @@ export default function App() {
     if (!import.meta.env.DEV) return "";
     return sessionStorage.getItem(LOCAL_API_KEY_STORAGE) ?? "";
   });
+  const [isDarkMode, setIsDarkMode] = useState(() => sessionStorage.getItem(DARK_MODE_STORAGE) === "dark");
   const [runningStep, setRunningStep] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [error, setError] = useState("");
@@ -1325,6 +890,14 @@ export default function App() {
   function handleApiKeyChange(value) {
     setApiKey(value);
     sessionStorage.setItem(LOCAL_API_KEY_STORAGE, value);
+  }
+
+  function toggleDarkMode() {
+    setIsDarkMode((current) => {
+      const next = !current;
+      sessionStorage.setItem(DARK_MODE_STORAGE, next ? "dark" : "light");
+      return next;
+    });
   }
 
   async function handleFilesSelected(files) {
@@ -1492,22 +1065,33 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
+    <main className={`${isDarkMode ? "dark" : ""} min-h-screen bg-slate-50 px-4 py-6 text-slate-950 transition-colors sm:px-6 lg:px-8 dark:bg-slate-950 dark:text-slate-100`}>
       <section className="mx-auto flex max-w-7xl flex-col gap-6">
         <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Stage 4.3</p>
-            <h1 className="mt-2 text-4xl font-semibold">ProcureGuard AI</h1>
-            <p className="mt-2 text-lg text-slate-600">Intelligent 3-Way Procurement Matching</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">Stage 5.2</p>
+            <h1 className="mt-2 text-4xl font-semibold tracking-tight">ProcureGuard AI</h1>
+            <p className="mt-2 text-lg text-slate-600 dark:text-slate-400">Intelligent 3-Way Procurement Matching</p>
           </div>
-          <button
-            className="rounded-md bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-400"
-            type="button"
-            disabled={!parsedFiles || Boolean(runningStep)}
-            onClick={() => runPipeline("matching")}
-          >
-            {runningStep ? "Analyzing..." : "Analyze"}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-blue-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              type="button"
+              aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+              aria-pressed={isDarkMode}
+              onClick={toggleDarkMode}
+            >
+              {isDarkMode ? "Light mode" : "Dark mode"}
+            </button>
+            <button
+              className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-700"
+              type="button"
+              disabled={!parsedFiles || Boolean(runningStep)}
+              onClick={() => runPipeline("matching")}
+            >
+              {runningStep ? "Analyzing..." : "Analyze"}
+            </button>
+          </div>
         </header>
 
         <ApiKeyPanel apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
@@ -1522,7 +1106,7 @@ export default function App() {
           hasActionResults={Boolean(actionResults)}
         />
 
-        <ExecutiveDashboard analytics={dashboardAnalytics} />
+        <ExecutiveDashboard analytics={dashboardAnalytics} isDarkMode={isDarkMode} />
         <ToleranceSimulator
           tolerances={tolerances}
           onTolerancesChange={setTolerances}
