@@ -17,6 +17,7 @@ Stage 5.2: UI polish, responsive layout, dark mode, and accessibility — COMPLE
 Stage 6: IN PROGRESS — April 26, 2026
 Stage 6.1: Architectural decision log — COMPLETE — April 26, 2026
 Local Claude API contract stabilization — COMPLETE — April 26, 2026
+Claude API contract stabilization pass 2 (numeric constraints) — COMPLETE — April 26, 2026
 Next: Stage 6.2 — Documentation package
 
 ## Stage log
@@ -77,6 +78,7 @@ Next: Stage 6.2 — Documentation package
   - DECISIONS.md expanded from the initial prompt-chaining stub into the accepted architecture log through the completed build
   - Local Claude API contract stabilization completed before Stage 6.2
   - Structured output requests now use output_config.format and strict JSON schemas with additionalProperties set to false recursively
+  - Pass 2: normalizeAnthropicSchema now strips minimum/maximum and all other unsupported JSON Schema keywords before sending to Anthropic
   - Stage 6.2 documentation package intentionally deferred
 
 ## Decisions pending

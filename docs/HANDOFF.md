@@ -743,3 +743,108 @@ Local API retest, then Stage 6.2 — Documentation package
 - Claude remains the runtime AI stack
 - Codex is only the repo editing assistant
 - No Send button or real email sending exists
+
+## Claude API contract stabilization pass 2 — April 26, 2026
+
+### Purpose
+Fix the remaining Anthropic API rejection: `output_config.format.schema: For 'number' type, properties maximum, minimum are not supported`. Pass 1 fixed errors 1–3 (CORS header, old output_config shape, additionalProperties). This pass fixes error 4 (unsupported numeric/string JSON Schema keywords).
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/lib/claude.js
+- app/lib/schemas.js
+- api/messages.js
+- vite.config.js
+- package.json
+
+### Files changed
+- app/lib/schemas.js
+- app/lib/claude.js
+- api/messages.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-26T04-05-43-919Z.json
+
+### API errors addressed
+- `output_config.format.schema: For 'number' type, properties maximum, minimum are not supported` — stripped by normalizeAnthropicSchema before the request is built
+
+### Request shape used
+```
+output_config: {
+  format: {
+    type: "json_schema",
+    schema: <normalizeAnthropicSchema result>
+  }
+}
+```
+
+### Schema normalization behavior
+- `normalizeAnthropicSchema` deep-clones the schema, then walks all nodes recursively
+- Strips the full unsupported keyword list: minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, minLength, maxLength, maxItems, uniqueItems, pattern, patternProperties, unevaluatedProperties, propertyNames, minProperties, maxProperties, contains, minContains, maxContains, unevaluatedItems
+- Handles minItems conservatively: keeps only if value is 0 or 1, otherwise strips and adds a description hint
+- Stripped constraint values are preserved as description hints: e.g. `minimum 0, maximum 1` becomes `"Constraint hint: minimum 0, maximum 1."`
+- Every object schema gets additionalProperties: false
+- Walks properties, items, anyOf, oneOf, allOf, $defs, definitions
+- Raw schema definitions retain minimum/maximum as business-intent documentation; they are not sent to Anthropic
+- `enforceNoAdditionalProperties` is now an alias for `normalizeAnthropicSchema` for backward compatibility
+- `buildStructuredOutputConfig` calls `normalizeAnthropicSchema`
+- api/messages.js proxy enforceNoAdditionalProperties updated with the same keyword-stripping logic as a defensive belt-and-suspenders measure
+
+### Proxy and header behavior
+- Unchanged from pass 1
+- Vite proxy sets anthropic-dangerous-direct-browser-access: true
+- api/messages.js proxy uses process.env.ANTHROPIC_API_KEY, does not log secrets
+- No direct app-to-Anthropic browser call
+
+### Schema subset preflight result
+- Command: node --input-type=module schema preflight (Task G validator)
+- Result: Anthropic schema subset preflight passed: 3 schema export(s) checked
+- matchingOutputSchema, classificationOutputSchema, actionOutputSchema all passed
+
+### Proxy contract validation result
+- api/messages.js syntax check: passed
+- POST/OPTIONS handling: present
+- Required headers forwarded: content-type, anthropic-version, anthropic-dangerous-direct-browser-access, x-api-key
+- No API key logging: confirmed
+- Anthropic error body forwarded without leaking secrets: confirmed
+- No direct browser->Anthropic call from app: confirmed (grep returns no matches)
+
+### Verification commands and results
+- node --check api/messages.js: passed
+- node --input-type=module preflight: passed, 3 schema exports checked
+- npm run build: passed (existing Vite chunk-size warning; exit code 0)
+- node evals/run_evals.js: 25/25 passed, 100%
+- grep -R "output_format" app api vite.config.js: no matches
+- grep -R "output_config:.*type" app api vite.config.js: no matches
+- grep -R "additionalProperties: true" app api: no matches
+- grep -R '"additionalProperties": true' app api: no matches
+- grep -R "minimum\|maximum\|..." app/lib/schemas.js: found only in raw schema definitions (expected) and in the UNSUPPORTED_KEYWORDS removal list — normalized schemas strip them, confirmed by preflight
+- grep -R "normalizeAnthropicSchema\|buildStructuredOutputConfig" app/lib/schemas.js app/lib/claude.js: found at expected export and import sites
+- grep -R "https://api.anthropic.com" app: no matches
+- grep -R "anthropic-dangerous-direct-browser-access" app api vite.config.js: found only in proxy/API/error-handling contexts
+- grep -R "Send" app: no matches
+- grep -R "localStorage" app: no matches
+- grep -R "Guaranteed\|..." app: no matches
+- git diff --check: passed
+- git status --short: clean before commit
+
+### New eval result file
+- evals/results/eval_results_2026-04-26T04-05-43-919Z.json
+
+### Known issues
+- No live Claude API call was run during this pass (local API retesting is the next step)
+- The Recharts dashboard continues to trigger a Vite chunk-size warning (not a blocker)
+- integer type is used in schemas (overall_tier, action_count, response_deadline_days); if Anthropic rejects it, change to number
+
+### Next step
+Local API retest, then Stage 6.2 — Documentation package
+
+### Notes
+- No prompts, CSV data, eval harness logic, product architecture, or runtime AI stack changed
+- Claude remains the runtime AI stack
+- Codex is only the repo editing assistant
+- No Send button or real email sending exists

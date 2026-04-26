@@ -11,6 +11,8 @@ const STRUCTURED_OUTPUT_SHAPE_HELP =
   "Anthropic rejected the structured-output request shape. The app now uses output_config.format. Restart the dev server and try again.";
 const STRICT_SCHEMA_ERROR_HELP =
   "Anthropic rejected the structured-output schema because object schemas must disallow extra fields. The app now sends strict schemas with additionalProperties: false.";
+const NUMERIC_CONSTRAINT_ERROR_HELP =
+  "Anthropic rejected the schema because number types do not support minimum/maximum/multipleOf constraints. The app now strips these automatically. Restart the dev server and try again.";
 
 function wait(ms) {
   return new Promise((resolve) => {
@@ -34,6 +36,9 @@ function userFacingApiError(message) {
   }
   if (text.includes("additionalProperties")) {
     return STRICT_SCHEMA_ERROR_HELP;
+  }
+  if ((text.includes("minimum") || text.includes("maximum") || text.includes("multipleOf")) && text.includes("not supported")) {
+    return NUMERIC_CONSTRAINT_ERROR_HELP;
   }
   return text;
 }

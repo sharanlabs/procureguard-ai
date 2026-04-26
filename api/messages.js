@@ -28,11 +28,36 @@ function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+const UNSUPPORTED_SCHEMA_KEYWORDS = [
+  "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
+  "minLength", "maxLength", "maxItems", "uniqueItems", "pattern", "patternProperties",
+  "unevaluatedProperties", "propertyNames", "minProperties", "maxProperties",
+  "contains", "minContains", "maxContains", "unevaluatedItems",
+];
+
 function enforceNoAdditionalProperties(schema) {
   const strictSchema = cloneJson(schema);
 
   function walk(node) {
     if (!node || typeof node !== "object") return;
+
+    const hints = [];
+    for (const key of UNSUPPORTED_SCHEMA_KEYWORDS) {
+      if (Object.prototype.hasOwnProperty.call(node, key)) {
+        hints.push(`${key} ${node[key]}`);
+        delete node[key];
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(node, "minItems")) {
+      if (node.minItems !== 0 && node.minItems !== 1) {
+        hints.push(`minItems ${node.minItems}`);
+        delete node.minItems;
+      }
+    }
+    if (hints.length > 0) {
+      const hint = `Constraint hint: ${hints.join(", ")}.`;
+      node.description = node.description ? `${node.description} ${hint}` : hint;
+    }
 
     if (node.type === "object") {
       node.additionalProperties = false;

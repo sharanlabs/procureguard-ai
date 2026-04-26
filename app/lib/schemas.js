@@ -282,44 +282,86 @@ export const actionOutputSchema = {
   }
 };
 
-function walkSchema(node) {
+const UNSUPPORTED_KEYWORDS = [
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+  "minLength",
+  "maxLength",
+  "maxItems",
+  "uniqueItems",
+  "pattern",
+  "patternProperties",
+  "unevaluatedProperties",
+  "propertyNames",
+  "minProperties",
+  "maxProperties",
+  "contains",
+  "minContains",
+  "maxContains",
+  "unevaluatedItems",
+];
+
+function normalizeNode(node) {
   if (!node || typeof node !== "object") return;
+
+  const hints = [];
+  for (const key of UNSUPPORTED_KEYWORDS) {
+    if (Object.prototype.hasOwnProperty.call(node, key)) {
+      hints.push(`${key} ${node[key]}`);
+      delete node[key];
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(node, "minItems")) {
+    if (node.minItems !== 0 && node.minItems !== 1) {
+      hints.push(`minItems ${node.minItems}`);
+      delete node.minItems;
+    }
+  }
+  if (hints.length > 0) {
+    const hint = `Constraint hint: ${hints.join(", ")}.`;
+    node.description = node.description ? `${node.description} ${hint}` : hint;
+  }
 
   if (node.type === "object") {
     node.additionalProperties = false;
     if (node.properties) {
-      Object.values(node.properties).forEach(walkSchema);
+      Object.values(node.properties).forEach(normalizeNode);
     }
   }
 
   if (node.type === "array" && node.items) {
-    walkSchema(node.items);
+    normalizeNode(node.items);
   }
 
   ["anyOf", "oneOf", "allOf"].forEach((key) => {
     if (Array.isArray(node[key])) {
-      node[key].forEach(walkSchema);
+      node[key].forEach(normalizeNode);
     }
   });
 
   ["$defs", "definitions"].forEach((key) => {
     if (node[key] && typeof node[key] === "object") {
-      Object.values(node[key]).forEach(walkSchema);
+      Object.values(node[key]).forEach(normalizeNode);
     }
   });
 }
 
-export function enforceNoAdditionalProperties(schema) {
-  const strictSchema = JSON.parse(JSON.stringify(schema));
-  walkSchema(strictSchema);
-  return strictSchema;
+export function normalizeAnthropicSchema(schema) {
+  const clone = JSON.parse(JSON.stringify(schema));
+  normalizeNode(clone);
+  return clone;
 }
+
+export const enforceNoAdditionalProperties = normalizeAnthropicSchema;
 
 export function buildStructuredOutputConfig(schema) {
   return {
     format: {
       type: "json_schema",
-      schema: enforceNoAdditionalProperties(schema)
+      schema: normalizeAnthropicSchema(schema)
     }
   };
 }
