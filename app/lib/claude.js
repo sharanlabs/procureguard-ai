@@ -1,6 +1,9 @@
 const API_URL = "/api/messages";
 const REQUEST_TIMEOUT_MS = 60000;
 const MAX_ATTEMPTS = 3;
+const DIRECT_BROWSER_ACCESS_ERROR = "CORS requests must set 'anthropic-dangerous-direct-browser-access' header";
+const DIRECT_BROWSER_ACCESS_HELP =
+  "Anthropic rejected the browser/proxy request because the direct-browser-access header was missing. The app has been patched to send the required header. Restart the dev server and try again.";
 
 function wait(ms) {
   return new Promise((resolve) => {
@@ -12,6 +15,14 @@ function safePreview(value) {
   return String(value ?? "")
     .replace(/\s+/g, " ")
     .slice(0, 220);
+}
+
+function userFacingApiError(message) {
+  const text = String(message ?? "");
+  if (text.includes(DIRECT_BROWSER_ACCESS_ERROR)) {
+    return DIRECT_BROWSER_ACCESS_HELP;
+  }
+  return text;
 }
 
 function timeoutSignal() {
@@ -128,7 +139,7 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
           if (responseText) errorMessage = `${errorMessage}: ${safePreview(responseText)}`;
         }
 
-        throw new Error(errorMessage);
+        throw new Error(userFacingApiError(errorMessage));
       }
 
       let raw;
@@ -163,6 +174,10 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
 
   if (String(lastError?.message).includes("429")) {
     throw new Error("Claude API rate limit persisted after 3 attempts");
+  }
+
+  if (String(lastError?.message).includes(DIRECT_BROWSER_ACCESS_ERROR)) {
+    throw new Error(DIRECT_BROWSER_ACCESS_HELP);
   }
 
   if (lastError instanceof TypeError) {

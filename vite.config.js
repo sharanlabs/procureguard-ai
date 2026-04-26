@@ -23,6 +23,7 @@ export default defineConfig({
               "anthropic-version",
               anthropicVersion || "2023-06-01"
             );
+            proxyReq.setHeader("anthropic-dangerous-direct-browser-access", "true");
           });
         }
       }
