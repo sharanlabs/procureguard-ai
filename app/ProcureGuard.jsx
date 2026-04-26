@@ -31,6 +31,18 @@ const DEFAULT_TOLERANCES = {
   quantityUnits: 1,
   dateBusinessDays: 2
 };
+const WORKSPACE_TABS = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "review", label: "Review Queue" },
+  { id: "settings", label: "Settings & Audit" }
+];
+const DEFAULT_QUEUE_FILTERS = {
+  search: "",
+  tier: "all",
+  supplier: "all",
+  exception: "all",
+  sort: "severity"
+};
 const LOCKED_TIER_THREE_CODES = new Set(["E02", "E06", "E07", "E11"]);
 
 function Badge({ children, className = "" }) {
@@ -640,6 +652,154 @@ function AuditPanel({ entries, onExport }) {
   );
 }
 
+function WorkspaceTabs({ activeWorkspace, onChange, dashboardReady, reviewCount }) {
+  return (
+    <nav
+      aria-label="Workspace navigation"
+      className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+    >
+      <div className="grid gap-2 sm:grid-cols-3">
+        {WORKSPACE_TABS.map((tab) => {
+          const isActive = activeWorkspace === tab.id;
+          const helper = {
+            dashboard: dashboardReady ? "Batch intelligence" : "Appears after analysis",
+            review: `${reviewCount} invoice cards`,
+            settings: "Setup, progress, audit"
+          }[tab.id];
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              className={`rounded-xl px-3 py-3 text-left transition focus-visible:outline-blue-600 ${
+                isActive
+                  ? "bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-950"
+                  : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+              }`}
+              aria-pressed={isActive}
+              onClick={() => onChange(tab.id)}
+            >
+              <span className="block text-sm font-semibold">{tab.label}</span>
+              <span className={`mt-1 block text-xs ${isActive ? "opacity-80" : "text-slate-500 dark:text-slate-400"}`}>
+                {helper}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function ReviewQueueControls({
+  filters,
+  onFiltersChange,
+  supplierOptions,
+  exceptionOptions,
+  visibleCount,
+  totalCount
+}) {
+  function updateFilter(key, value) {
+    onFiltersChange((current) => ({ ...current, [key]: value }));
+  }
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Review Queue</h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {visibleCount} of {totalCount} invoice cards shown. Filters are local and do not change classifications.
+          </p>
+        </div>
+        <Badge className="border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200">
+          Requires human review
+        </Badge>
+      </div>
+
+      <div className="mt-5 grid gap-3 lg:grid-cols-[1.4fr_0.8fr_1fr_1fr_1fr]">
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" htmlFor="queue-search">
+            Search
+          </label>
+          <input
+            id="queue-search"
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-blue-950"
+            type="search"
+            value={filters.search}
+            onChange={(event) => updateFilter("search", event.target.value)}
+            placeholder="Invoice, PO, supplier, exception"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" htmlFor="tier-filter">
+            Tier
+          </label>
+          <select
+            id="tier-filter"
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950"
+            value={filters.tier}
+            onChange={(event) => updateFilter("tier", event.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="tier3">Tier 3</option>
+            <option value="tier2">Tier 2</option>
+            <option value="tier1">Tier 1</option>
+            <option value="clean">Clean</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" htmlFor="supplier-filter">
+            Supplier
+          </label>
+          <select
+            id="supplier-filter"
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950"
+            value={filters.supplier}
+            onChange={(event) => updateFilter("supplier", event.target.value)}
+          >
+            <option value="all">All suppliers</option>
+            {supplierOptions.map((supplier) => (
+              <option key={supplier} value={supplier}>{supplier}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" htmlFor="exception-filter">
+            Exception
+          </label>
+          <select
+            id="exception-filter"
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950"
+            value={filters.exception}
+            onChange={(event) => updateFilter("exception", event.target.value)}
+          >
+            <option value="all">All exceptions</option>
+            {exceptionOptions.map((code) => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" htmlFor="queue-sort">
+            Sort
+          </label>
+          <select
+            id="queue-sort"
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950"
+            value={filters.sort}
+            onChange={(event) => updateFilter("sort", event.target.value)}
+          >
+            <option value="severity">Severity first</option>
+            <option value="exposure">Exposure high to low</option>
+            <option value="invoice">Invoice number</option>
+          </select>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function buildActionBatch(parsedFiles, matchResults, classificationResults) {
   const classifications = classificationResults?.classifications ?? [];
   return (matchResults?.results ?? []).map((match, index) => {
@@ -834,6 +994,72 @@ function renderRank(item) {
   return 5;
 }
 
+function getCardSupplierName(item) {
+  return item.invoiceRow?.supplier_name || item.match?.supplier_match?.invoice_name || "Unknown supplier";
+}
+
+function getCardExceptionCodes(item) {
+  return item.classification?.detected_exceptions ?? item.match?.detected_exceptions ?? [];
+}
+
+function getCardTier(item) {
+  const exceptions = getCardExceptionCodes(item);
+  if (exceptions.length === 0) return "clean";
+  return item.classification?.overall_tier ?? "unknown";
+}
+
+function getCardExposure(item) {
+  const financial = item.classification?.financial_summary ?? {};
+  const summaryExposure = typeof financial.total_exposure === "number" ? financial.total_exposure : 0;
+  if (summaryExposure) return summaryExposure;
+
+  return (item.classification?.exception_details ?? []).reduce((sum, detail) => (
+    typeof detail.exposure_amount === "number" ? sum + detail.exposure_amount : sum
+  ), 0);
+}
+
+function matchesTierFilter(item, tierFilter) {
+  if (tierFilter === "all") return true;
+  const tier = getCardTier(item);
+  if (tierFilter === "clean") return tier === "clean";
+  if (tierFilter === "tier1") return tier === 1;
+  if (tierFilter === "tier2") return tier === 2;
+  if (tierFilter === "tier3") return tier === 3;
+  return true;
+}
+
+function filterAndSortReviewCards(cards, filters) {
+  const query = filters.search.trim().toLowerCase();
+  return cards
+    .filter((item) => {
+      const supplierName = getCardSupplierName(item);
+      const exceptions = getCardExceptionCodes(item);
+      const searchable = [
+        item.match?.invoice_number,
+        item.match?.po_number,
+        supplierName,
+        item.invoiceRow?.po_reference,
+        ...exceptions
+      ].filter(Boolean).join(" ").toLowerCase();
+
+      return (
+        (!query || searchable.includes(query)) &&
+        matchesTierFilter(item, filters.tier) &&
+        (filters.supplier === "all" || supplierName === filters.supplier) &&
+        (filters.exception === "all" || exceptions.includes(filters.exception))
+      );
+    })
+    .sort((left, right) => {
+      if (filters.sort === "exposure") {
+        return getCardExposure(right) - getCardExposure(left) || renderRank(left) - renderRank(right) || left.index - right.index;
+      }
+      if (filters.sort === "invoice") {
+        return String(left.match?.invoice_number ?? "").localeCompare(String(right.match?.invoice_number ?? ""));
+      }
+      return renderRank(left) - renderRank(right) || left.index - right.index;
+    });
+}
+
 export default function App() {
   const [parsedFiles, setParsedFiles] = useState(null);
   const [uploadError, setUploadError] = useState("");
@@ -854,6 +1080,8 @@ export default function App() {
   const [tier3Notes, setTier3Notes] = useState({});
   const [reviewedTier3, setReviewedTier3] = useState(new Set());
   const [tolerances, setTolerances] = useState(DEFAULT_TOLERANCES);
+  const [activeWorkspace, setActiveWorkspace] = useState("settings");
+  const [queueFilters, setQueueFilters] = useState(DEFAULT_QUEUE_FILTERS);
 
   const toleranceSimulation = useMemo(
     () => buildToleranceSimulation(matchResults, classificationResults, tolerances),
@@ -886,6 +1114,15 @@ export default function App() {
       }))
       .sort((left, right) => renderRank(left) - renderRank(right) || left.index - right.index);
   }, [actionResults, classificationResults, matchResults, parsedFiles, toleranceSimulation]);
+  const supplierFilterOptions = useMemo(() => (
+    [...new Set(renderedCards.map((item) => getCardSupplierName(item)))].sort((left, right) => left.localeCompare(right))
+  ), [renderedCards]);
+  const exceptionFilterOptions = useMemo(() => (
+    [...new Set(renderedCards.flatMap((item) => getCardExceptionCodes(item)))].sort()
+  ), [renderedCards]);
+  const reviewQueueCards = useMemo(() => (
+    filterAndSortReviewCards(renderedCards, queueFilters)
+  ), [queueFilters, renderedCards]);
 
   function handleApiKeyChange(value) {
     setApiKey(value);
@@ -914,6 +1151,8 @@ export default function App() {
       setTier3Notes({});
       setReviewedTier3(new Set());
       setTolerances(DEFAULT_TOLERANCES);
+      setQueueFilters(DEFAULT_QUEUE_FILTERS);
+      setActiveWorkspace("settings");
       setStatusMessage("Files validated. Ready to analyze.");
     } catch (fileError) {
       setParsedFiles(null);
@@ -966,6 +1205,7 @@ export default function App() {
       onRetry: ({ attempt }) => setStatusMessage(`Rate limited during classification. Retry ${attempt + 1} of 3...`)
     });
     setClassificationResults(response.data);
+    setActiveWorkspace("dashboard");
     const auditEntry = await createAuditEntry({
       step: "classification",
       model: MODELS.classification,
@@ -1094,61 +1334,89 @@ export default function App() {
           </div>
         </header>
 
-        <ApiKeyPanel apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
-        <UploadPanel parsedFiles={parsedFiles} onFilesSelected={handleFilesSelected} isBusy={Boolean(runningStep)} />
         <Alert message={uploadError} />
         <Alert message={error} onRetry={failedStep ? retryFailedStep : null} />
-        <ProgressPanel
-          runningStep={runningStep}
-          statusMessage={statusMessage}
-          hasMatchResults={Boolean(matchResults)}
-          hasClassificationResults={Boolean(classificationResults)}
-          hasActionResults={Boolean(actionResults)}
+        <WorkspaceTabs
+          activeWorkspace={activeWorkspace}
+          onChange={setActiveWorkspace}
+          dashboardReady={Boolean(classificationResults)}
+          reviewCount={renderedCards.length}
         />
 
-        <ExecutiveDashboard analytics={dashboardAnalytics} isDarkMode={isDarkMode} />
-        <ToleranceSimulator
-          tolerances={tolerances}
-          onTolerancesChange={setTolerances}
-          simulation={toleranceSimulation}
-        />
-        <RootCauseAnalysisPanel analysis={rootCauseAnalysis} />
-
-        {renderedCards.length ? (
-          <section className="grid gap-4">
-            {renderedCards.map(({ match, index, invoiceRow, classification, actionResult, simulation }) => (
-              <InvoiceCard
-                key={`${match.invoice_number}-${index}`}
-                match={match}
-                classification={classification}
-                actionResult={actionResult}
-                invoiceRow={invoiceRow}
-                simulation={simulation}
-                approvedActions={approvedActions}
-                tier3Notes={tier3Notes}
-                reviewedTier3={reviewedTier3}
-                onApprove={(actionKey) => {
-                  setApprovedActions((current) => new Set([...current, actionKey]));
-                }}
-                onTier3NoteChange={(actionKey, value) => {
-                  setTier3Notes((current) => ({ ...current, [actionKey]: value }));
-                  if (!value.trim()) {
-                    setReviewedTier3((current) => {
-                      const next = new Set(current);
-                      next.delete(actionKey);
-                      return next;
-                    });
-                  }
-                }}
-                onTier3Reviewed={(actionKey) => {
-                  setReviewedTier3((current) => new Set([...current, actionKey]));
-                }}
-              />
-            ))}
+        {activeWorkspace === "dashboard" ? (
+          <section className="grid gap-6">
+            <ExecutiveDashboard analytics={dashboardAnalytics} isDarkMode={isDarkMode} />
+            <ToleranceSimulator
+              tolerances={tolerances}
+              onTolerancesChange={setTolerances}
+              simulation={toleranceSimulation}
+            />
+            <RootCauseAnalysisPanel analysis={rootCauseAnalysis} />
           </section>
         ) : null}
 
-        <AuditPanel entries={auditEntries} onExport={exportAuditTrail} />
+        {activeWorkspace === "review" ? (
+          <section className="grid gap-4">
+            <ReviewQueueControls
+              filters={queueFilters}
+              onFiltersChange={setQueueFilters}
+              supplierOptions={supplierFilterOptions}
+              exceptionOptions={exceptionFilterOptions}
+              visibleCount={reviewQueueCards.length}
+              totalCount={renderedCards.length}
+            />
+            {reviewQueueCards.length ? (
+              reviewQueueCards.map(({ match, index, invoiceRow, classification, actionResult, simulation }) => (
+                <InvoiceCard
+                  key={`${match.invoice_number}-${index}`}
+                  match={match}
+                  classification={classification}
+                  actionResult={actionResult}
+                  invoiceRow={invoiceRow}
+                  simulation={simulation}
+                  approvedActions={approvedActions}
+                  tier3Notes={tier3Notes}
+                  reviewedTier3={reviewedTier3}
+                  onApprove={(actionKey) => {
+                    setApprovedActions((current) => new Set([...current, actionKey]));
+                  }}
+                  onTier3NoteChange={(actionKey, value) => {
+                    setTier3Notes((current) => ({ ...current, [actionKey]: value }));
+                    if (!value.trim()) {
+                      setReviewedTier3((current) => {
+                        const next = new Set(current);
+                        next.delete(actionKey);
+                        return next;
+                      });
+                    }
+                  }}
+                  onTier3Reviewed={(actionKey) => {
+                    setReviewedTier3((current) => new Set([...current, actionKey]));
+                  }}
+                />
+              ))
+            ) : (
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                No invoice cards match the current review queue filters.
+              </section>
+            )}
+          </section>
+        ) : null}
+
+        {activeWorkspace === "settings" ? (
+          <section className="grid gap-4">
+            <ApiKeyPanel apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
+            <UploadPanel parsedFiles={parsedFiles} onFilesSelected={handleFilesSelected} isBusy={Boolean(runningStep)} />
+            <ProgressPanel
+              runningStep={runningStep}
+              statusMessage={statusMessage}
+              hasMatchResults={Boolean(matchResults)}
+              hasClassificationResults={Boolean(classificationResults)}
+              hasActionResults={Boolean(actionResults)}
+            />
+            <AuditPanel entries={auditEntries} onExport={exportAuditTrail} />
+          </section>
+        ) : null}
       </section>
     </main>
   );

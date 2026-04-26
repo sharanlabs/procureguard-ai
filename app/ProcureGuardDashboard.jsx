@@ -3,6 +3,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,9 +15,10 @@ const CHART_COLORS = {
   clean: "#22c55e",
   autoApprove: "#16a34a",
   review: "#f59e0b",
-  escalate: "#ef4444"
+  escalate: "#ef4444",
+  info: "#3b82f6",
+  slate: "#64748b"
 };
-const LOCKED_TIER_THREE_CODES = new Set(["E02", "E06", "E07", "E11"]);
 
 function Badge({ children, className = "" }) {
   return (
@@ -41,14 +43,50 @@ function formatInteger(value) {
   return new Intl.NumberFormat("en-US").format(value ?? 0);
 }
 
+function formatPercentOneDecimal(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "-";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
 function formatMilliseconds(value) {
   if (!value) return "-";
   return `${formatInteger(value)} ms`;
 }
 
-function exceptionColor(code) {
-  if (LOCKED_TIER_THREE_CODES.has(code)) return CHART_COLORS.escalate;
-  return CHART_COLORS.review;
+function formatReviewTime(minutes) {
+  if (!minutes) return "0 min";
+  if (minutes < 60) return `${formatInteger(minutes)} min`;
+  const hours = minutes / 60;
+  return `${hours.toFixed(hours >= 10 ? 0 : 1)} hr`;
+}
+
+function formatLatencyTime(milliseconds) {
+  if (!milliseconds) return "Captured after processing";
+  if (milliseconds < 1000) return `${formatInteger(milliseconds)} ms`;
+  return `${(milliseconds / 1000).toFixed(1)} sec`;
+}
+
+function formatCost(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "-";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: value < 1 ? 4 : 2,
+    maximumFractionDigits: value < 1 ? 4 : 2
+  }).format(value);
+}
+
+function tierColor(tier) {
+  if (tier === 3) return CHART_COLORS.escalate;
+  if (tier === 2) return CHART_COLORS.review;
+  if (tier === 1) return CHART_COLORS.clean;
+  return CHART_COLORS.slate;
+}
+
+function riskBadgeClass(riskLevel) {
+  if (riskLevel === "High") return "border-red-200 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200";
+  if (riskLevel === "Medium") return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200";
+  return "border-green-200 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-950 dark:text-green-200";
 }
 
 function heatCellClass(count) {
@@ -68,7 +106,7 @@ function gridColor(isDarkMode) {
 
 function DashboardSection({ title, helper, children, action }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="border-t border-slate-200 pt-5 dark:border-slate-700">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-base font-semibold text-slate-950 dark:text-slate-100">{title}</h3>
@@ -101,10 +139,12 @@ function DashboardKpi({ label, value, helper, tone = "neutral" }) {
 
 function ChartTooltip({ active, payload, label, valueFormatter = formatInteger }) {
   if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload ?? {};
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-950">
       {label ? <p className="mb-2 font-semibold text-slate-900 dark:text-slate-100">{label}</p> : null}
+      {row.name ? <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">{row.name}</p> : null}
       <div className="space-y-1">
         {payload.map((item) => (
           <p className="flex items-center gap-2 text-slate-700 dark:text-slate-300" key={`${item.dataKey}-${item.name}`}>
@@ -135,14 +175,19 @@ export default function ExecutiveDashboard({ analytics, isDarkMode }) {
   }
 
   const governance = analytics.auditGovernance;
-  const riskDriverData = analytics.exceptionDrivers.map((item) => ({
+  const exceptionBreakdownData = analytics.exceptionBreakdown.map((item) => ({
     ...item,
-    label: `${item.code}`
+    label: item.code
+  }));
+  const exposureByExceptionData = analytics.dollarExposureByException.map((item) => ({
+    ...item,
+    label: item.code
   }));
   const tick = { fill: axisColor(isDarkMode), fontSize: 12 };
+  const chartHeightClass = "min-h-[280px]";
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-100 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Executive Dashboard</p>
@@ -160,15 +205,15 @@ export default function ExecutiveDashboard({ analytics, isDarkMode }) {
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <DashboardKpi
-          label="Batch Health"
-          value={formatPercent(analytics.healthyRate)}
-          helper={`${formatInteger(analytics.healthyCount)} clean or auto-approve rows`}
+          label="Match Rate"
+          value={formatPercentOneDecimal(analytics.matchRate)}
+          helper={`${analytics.matchRateLabel} - ${formatInteger(analytics.cleanCount)} clean of ${formatInteger(analytics.totalInvoices)}`}
           tone="clean"
         />
         <DashboardKpi
-          label="Requires Human Review"
-          value={formatInteger(analytics.requiresHumanReview)}
-          helper={`${formatInteger(analytics.reviewCount)} review, ${formatInteger(analytics.escalateCount)} escalate`}
+          label="Exceptions Found"
+          value={formatInteger(analytics.exceptionRows)}
+          helper={`Tier 1: ${analytics.tierCounts.tier1} | Tier 2: ${analytics.tierCounts.tier2} | Tier 3: ${analytics.tierCounts.tier3}`}
           tone={analytics.escalateCount ? "escalate" : "review"}
         />
         <DashboardKpi
@@ -178,89 +223,62 @@ export default function ExecutiveDashboard({ analytics, isDarkMode }) {
           tone="info"
         />
         <DashboardKpi
-          label="Held for Review"
-          value={formatMoney(analytics.holdAmount)}
-          helper="Amount withheld pending human review"
-          tone="review"
-        />
-        <DashboardKpi
           label="Estimated Recovery"
           value={formatMoney(analytics.estimatedRecovery)}
-          helper="Opportunity estimate, not booked recovery"
+          helper="Estimate based on identified exposure"
           tone="neutral"
         />
       </div>
 
-      <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_1.25fr]">
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <DashboardSection
-          title="Batch disposition by review path"
-          helper="How much of the batch can proceed, needs review, or needs escalation?"
+          title="Exception Breakdown"
+          helper="Which exception types are most frequent?"
         >
-          <div className="h-32">
-            <ResponsiveContainer height="100%" width="100%">
-              <BarChart data={analytics.dispositionData} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                <XAxis type="number" hide domain={[0, analytics.totalInvoices]} />
-                <YAxis type="category" dataKey="name" hide />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="clean" name="Clean" stackId="batch" fill={CHART_COLORS.clean} radius={[6, 0, 0, 6]} isAnimationActive={false} />
-                <Bar dataKey="autoApprove" name="Auto-approve" stackId="batch" fill={CHART_COLORS.autoApprove} isAnimationActive={false} />
-                <Bar dataKey="review" name="Review" stackId="batch" fill={CHART_COLORS.review} isAnimationActive={false} />
-                <Bar dataKey="escalate" name="Escalate" stackId="batch" fill={CHART_COLORS.escalate} radius={[0, 6, 6, 0]} isAnimationActive={false} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-4">
-            <p className="dark:text-slate-300"><span className="font-mono font-semibold tabular-nums text-green-700 dark:text-green-300">{analytics.cleanCount}</span> clean</p>
-            <p className="dark:text-slate-300"><span className="font-mono font-semibold tabular-nums text-green-700 dark:text-green-300">{analytics.autoApproveCount}</span> auto-approve</p>
-            <p className="dark:text-slate-300"><span className="font-mono font-semibold tabular-nums text-amber-700 dark:text-amber-300">{analytics.reviewCount}</span> review</p>
-            <p className="dark:text-slate-300"><span className="font-mono font-semibold tabular-nums text-red-700 dark:text-red-300">{analytics.escalateCount}</span> escalate</p>
-          </div>
+          {exceptionBreakdownData.length ? (
+            <div className={chartHeightClass}>
+              <ResponsiveContainer height="100%" width="100%">
+                <BarChart data={exceptionBreakdownData} layout="vertical" margin={{ top: 8, right: 36, bottom: 8, left: 8 }}>
+                  <CartesianGrid stroke={gridColor(isDarkMode)} horizontal={false} />
+                  <XAxis type="number" tickLine={false} axisLine={false} allowDecimals={false} tick={tick} />
+                  <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={44} tick={tick} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="count" name="Rows" radius={[0, 6, 6, 0]} isAnimationActive={false}>
+                    {exceptionBreakdownData.map((entry) => (
+                      <Cell fill={tierColor(entry.tier)} key={entry.code} />
+                    ))}
+                    <LabelList dataKey="count" position="right" fill={axisColor(isDarkMode)} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800 dark:border-green-700 dark:bg-green-950 dark:text-green-200">
+              No exception rows detected in this batch.
+            </p>
+          )}
         </DashboardSection>
 
         <DashboardSection
-          title="Exception types driving exposure"
-          helper="Which exception classes create the most financial risk?"
+          title="Dollar Exposure by Exception"
+          helper="Which exception types drive dollar risk?"
         >
-          {riskDriverData.length ? (
-            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-              <div className="h-64">
-                <ResponsiveContainer height="100%" width="100%">
-                  <BarChart data={riskDriverData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
-                    <CartesianGrid stroke={gridColor(isDarkMode)} vertical={false} />
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} tick={tick} />
-                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} width={56} tick={tick} />
-                    <Tooltip content={<ChartTooltip valueFormatter={formatMoney} />} />
-                    <Bar dataKey="exposure" name="Exposure" radius={[6, 6, 0, 0]} isAnimationActive={false}>
-                      {riskDriverData.map((entry) => (
-                        <Cell fill={exceptionColor(entry.code)} key={entry.code} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                    <tr>
-                      <th className="px-3 py-2" scope="col">Exception</th>
-                      <th className="px-3 py-2 text-right" scope="col">Rows</th>
-                      <th className="px-3 py-2 text-right" scope="col">Exposure</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
-                    {riskDriverData.map((item) => (
-                      <tr className="hover:bg-slate-50 dark:hover:bg-slate-800" key={item.code}>
-                        <td className="px-3 py-2">
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">{item.code}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{item.name}</p>
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono tabular-nums dark:text-slate-300">{item.count}</td>
-                        <td className="px-3 py-2 text-right font-mono tabular-nums dark:text-slate-300">{formatMoney(item.exposure)}</td>
-                      </tr>
+          {exposureByExceptionData.length ? (
+            <div className={chartHeightClass}>
+              <ResponsiveContainer height="100%" width="100%">
+                <BarChart data={exposureByExceptionData} layout="vertical" margin={{ top: 8, right: 76, bottom: 8, left: 8 }}>
+                  <CartesianGrid stroke={gridColor(isDarkMode)} horizontal={false} />
+                  <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} tick={tick} />
+                  <YAxis type="category" dataKey="label" tickLine={false} axisLine={false} width={44} tick={tick} />
+                  <Tooltip content={<ChartTooltip valueFormatter={formatMoney} />} />
+                  <Bar dataKey="exposure" name="Exposure" radius={[0, 6, 6, 0]} isAnimationActive={false}>
+                    {exposureByExceptionData.map((entry) => (
+                      <Cell fill={tierColor(entry.tier)} key={entry.code} />
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                    <LabelList dataKey="exposure" position="right" fill={axisColor(isDarkMode)} formatter={formatMoney} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           ) : (
             <p className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800 dark:border-green-700 dark:bg-green-950 dark:text-green-200">
@@ -270,78 +288,32 @@ export default function ExecutiveDashboard({ analytics, isDarkMode }) {
         </DashboardSection>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="mt-6 grid gap-6">
         <DashboardSection
-          title="Supplier scorecard"
-          helper="Which suppliers show review load, held value, or recurring signals?"
+          title="Supplier Exception Heatmap"
+          helper="Which suppliers are connected to which exception types?"
         >
-          {analytics.supplierScorecard.length ? (
-            <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                  <tr>
-                    <th className="px-3 py-2" scope="col">Supplier</th>
-                    <th className="px-3 py-2 text-right" scope="col">Rows</th>
-                    <th className="px-3 py-2 text-right" scope="col">Review</th>
-                    <th className="px-3 py-2 text-right" scope="col">Escalate</th>
-                    <th className="px-3 py-2 text-right" scope="col">Exposure</th>
-                    <th className="px-3 py-2 text-right" scope="col">Held</th>
-                    <th className="px-3 py-2" scope="col">Signals</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
-                  {analytics.supplierScorecard.map((supplier) => (
-                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800" key={supplier.key}>
-                      <td className="px-3 py-3 font-semibold text-slate-900 dark:text-slate-100">{supplier.supplierName}</td>
-                      <td className="px-3 py-3 text-right font-mono tabular-nums dark:text-slate-300">{supplier.invoiceCount}</td>
-                      <td className="px-3 py-3 text-right font-mono tabular-nums text-amber-700 dark:text-amber-300">{supplier.reviewCount}</td>
-                      <td className="px-3 py-3 text-right font-mono tabular-nums text-red-700 dark:text-red-300">{supplier.escalateCount}</td>
-                      <td className="px-3 py-3 text-right font-mono tabular-nums dark:text-slate-300">{formatMoney(supplier.exposure)}</td>
-                      <td className="px-3 py-3 text-right font-mono tabular-nums dark:text-slate-300">{formatMoney(supplier.hold)}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {supplier.topExceptionCodes.length ? supplier.topExceptionCodes.map((code) => (
-                            <Badge className="border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" key={`${supplier.key}-${code}`}>
-                              {code}
-                            </Badge>
-                          )) : <span className="text-slate-400 dark:text-slate-500">None</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-              Supplier scorecard appears after AI-assisted review completes.
-            </p>
-          )}
-        </DashboardSection>
-
-        <DashboardSection
-          title="Warehouse exception heatmap"
-          helper="Where are receiving or GRN-linked signals concentrated?"
-        >
-          {analytics.warehouseHeatmap.length && analytics.heatmapCodes.length ? (
+          {analytics.supplierExceptionHeatmap.length && analytics.heatmapCodes.length ? (
             <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
               <table className="min-w-full text-center text-sm">
                 <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                   <tr>
-                    <th className="px-3 py-2 text-left" scope="col">Warehouse</th>
+                    <th className="px-3 py-2 text-left" scope="col">Supplier</th>
+                    <th className="px-3 py-2 text-right" scope="col">Exposure</th>
                     {analytics.heatmapCodes.map((code) => (
                       <th className="px-3 py-2" key={code} scope="col">{code}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
-                  {analytics.warehouseHeatmap.map((row) => (
-                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800" key={row.warehouse}>
-                      <td className="px-3 py-3 text-left font-semibold text-slate-900 dark:text-slate-100">{row.warehouse}</td>
+                  {analytics.supplierExceptionHeatmap.map((row) => (
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800" key={row.key}>
+                      <td className="px-3 py-3 text-left font-semibold text-slate-900 dark:text-slate-100">{row.supplierName}</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatMoney(row.exposure)}</td>
                       {analytics.heatmapCodes.map((code) => {
                         const count = row.codes[code] ?? 0;
                         return (
-                          <td className="px-2 py-3" key={`${row.warehouse}-${code}`}>
+                          <td className="px-2 py-3" key={`${row.key}-${code}`}>
                             <span className={`inline-flex min-w-8 justify-center rounded-md border px-2 py-1 font-mono tabular-nums ${heatCellClass(count)}`}>
                               {count}
                             </span>
@@ -355,56 +327,113 @@ export default function ExecutiveDashboard({ analytics, isDarkMode }) {
             </div>
           ) : (
             <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-              No warehouse-linked exception concentration is visible in this batch.
+              No supplier exception concentration is visible in this batch.
+            </p>
+          )}
+        </DashboardSection>
+
+        <DashboardSection
+          title="Supplier Scorecard"
+          helper="Which suppliers show review load, match quality, diversity status, and exposure?"
+        >
+          {analytics.supplierScorecard.length ? (
+            <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                  <tr>
+                    <th className="px-3 py-2" scope="col">Supplier Name</th>
+                    <th className="px-3 py-2 text-right" scope="col">Total Invoices</th>
+                    <th className="px-3 py-2 text-right" scope="col">Clean Matches</th>
+                    <th className="px-3 py-2 text-right" scope="col">Exceptions</th>
+                    <th className="px-3 py-2 text-right" scope="col">Match Rate</th>
+                    <th className="px-3 py-2 text-right" scope="col">Total Exposure</th>
+                    <th className="px-3 py-2" scope="col">Diversity Certification</th>
+                    <th className="px-3 py-2" scope="col">Risk Level</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                  {analytics.supplierScorecard.map((supplier) => (
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800" key={supplier.key}>
+                      <td className="px-3 py-3 font-semibold text-slate-900 dark:text-slate-100">{supplier.supplierName}</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums dark:text-slate-300">{supplier.invoiceCount}</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums text-green-700 dark:text-green-300">{supplier.cleanCount}</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums text-amber-700 dark:text-amber-300">{supplier.exceptionRows}</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums dark:text-slate-300">{formatPercentOneDecimal(supplier.matchRate)}</td>
+                      <td className="px-3 py-3 text-right font-mono tabular-nums dark:text-slate-300">{formatMoney(supplier.exposure)}</td>
+                      <td className="px-3 py-3 text-slate-700 dark:text-slate-300">{supplier.diversityCertification}</td>
+                      <td className="px-3 py-3">
+                        <Badge className={riskBadgeClass(supplier.riskLevel)}>{supplier.riskLevel}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+              Supplier scorecard appears after AI-assisted review completes.
             </p>
           )}
         </DashboardSection>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <DashboardSection
-          title="Exposure by review path"
-          helper="How much identified exposure sits in review versus escalation?"
+          title="ROI Estimate"
+          helper="What review effort and recoverable exposure does this batch suggest?"
         >
-          <div className="h-56">
-            <ResponsiveContainer height="100%" width="100%">
-              <BarChart data={analytics.exposureByTierData} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
-                <CartesianGrid stroke={gridColor(isDarkMode)} vertical={false} />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} tick={tick} />
-                <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} width={60} tick={tick} />
-                <Tooltip content={<ChartTooltip valueFormatter={formatMoney} />} />
-                <Bar dataKey="exposure" name="Exposure" radius={[6, 6, 0, 0]} isAnimationActive={false}>
-                  <Cell fill={CHART_COLORS.clean} />
-                  <Cell fill={CHART_COLORS.review} />
-                  <Cell fill={CHART_COLORS.escalate} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </DashboardSection>
-
-        <DashboardSection
-          title="Token cost and audit governance"
-          helper="What did the AI-assisted review execute, and what remains auditable?"
-          action={<Badge className="border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{analytics.patternCount} pattern signals</Badge>}
-        >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Metric label="Audit entries" value={formatInteger(governance.auditEntryCount)} />
-            <Metric label="Avg latency" value={formatMilliseconds(governance.averageLatencyMs)} />
-            <Metric
-              label="Token usage"
-              value={governance.tokenDataReported ? formatInteger(governance.totalTokens) : "Not reported"}
-            />
-            <Metric label="Draft actions" value={formatInteger(analytics.draftActionCount)} />
+          <div className="grid gap-3 md:grid-cols-3">
+            <Metric label="Manual review time" value={formatReviewTime(analytics.roiEstimate.manualReviewMinutes)} />
+            <Metric label="Potential unrecovered exposure" value={formatMoney(analytics.roiEstimate.potentialUnrecoveredExposure)} />
+            <Metric label="AI-assisted review time" value={formatLatencyTime(analytics.roiEstimate.totalLatencyMs)} />
           </div>
           <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
-              <p className="font-semibold text-slate-900 dark:text-slate-100">Models used</p>
-              <p className="mt-1 text-slate-600 dark:text-slate-400">{governance.models.join(", ") || "Not available"}</p>
+              <p className="font-semibold text-slate-900 dark:text-slate-100">Without ProcureGuard AI</p>
+              <p className="mt-1 text-slate-600 dark:text-slate-400">
+                Estimated miss rate {formatPercent(analytics.roiEstimate.baselineMissRate)} with {formatReviewTime(analytics.roiEstimate.manualReviewMinutes)} of manual review.
+              </p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
-              <p className="font-semibold text-slate-900 dark:text-slate-100">Prompt versions</p>
-              <p className="mt-1 text-slate-600 dark:text-slate-400">{governance.promptVersions.join(", ") || "Not available"}</p>
+              <p className="font-semibold text-slate-900 dark:text-slate-100">With ProcureGuard AI</p>
+              <p className="mt-1 text-slate-600 dark:text-slate-400">
+                Estimated miss rate {formatPercent(analytics.roiEstimate.aiAssistedMissRate)} with review time captured from audit latency.
+              </p>
+            </div>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
+            ProcureGuard AI identified {formatMoney(analytics.exposureIdentified)} in discrepancies and estimates{" "}
+            {formatMoney(analytics.roiEstimate.estimatedRecoveredAmount)} recoverable through AI-assisted review.
+          </p>
+        </DashboardSection>
+
+        <DashboardSection
+          title="Session Token Cost"
+          helper="What token usage and prompt-cache estimate are visible from this session?"
+          action={<Badge className="border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">{analytics.patternCount} pattern signals</Badge>}
+        >
+          {governance.tokenDataReported ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Metric label="Input tokens" value={formatInteger(governance.inputTokens)} />
+              <Metric label="Output tokens" value={formatInteger(governance.outputTokens)} />
+              <Metric label="Full-price estimate" value={formatCost(governance.estimatedFullPriceCost)} />
+              <Metric label="Prompt-cache estimate" value={formatCost(governance.estimatedPromptCacheCost)} />
+            </div>
+          ) : (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+              Token usage will appear after API responses include usage metadata.
+            </p>
+          )}
+          <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+              <p className="font-semibold text-slate-900 dark:text-slate-100">Audit entries</p>
+              <p className="mt-1 font-mono tabular-nums text-slate-600 dark:text-slate-400">
+                {formatInteger(governance.auditEntryCount)} entries | {formatMilliseconds(governance.averageLatencyMs)} avg latency
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
+              <p className="font-semibold text-slate-900 dark:text-slate-100">Models used</p>
+              <p className="mt-1 text-slate-600 dark:text-slate-400">{governance.models.join(", ") || "Not available"}</p>
             </div>
           </div>
           <p className="mt-4 text-xs leading-5 text-slate-500 dark:text-slate-400">

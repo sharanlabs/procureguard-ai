@@ -492,3 +492,103 @@ Stage 6 — Documentation and deployment
 - No Send button or real email sending exists
 - Claude remains the runtime AI stack
 - Codex was only used as the repo editing assistant
+
+## Stage 5 corrective handoff — April 26, 2026
+
+### Reason for corrective patch
+Initial local Stage 5 commits built successfully but only partially matched the updated enterprise dashboard acceptance target.
+
+### Files reviewed
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/lib/dashboard.js
+- app/lib/format.js
+- app/styles.css
+- progress.md
+- docs/HANDOFF.md
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/lib/dashboard.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-26T01-25-39-837Z.json
+- evals/results/eval_results_2026-04-26T01-25-40-268Z.json
+- evals/results/eval_results_2026-04-26T02-39-26-971Z.json
+
+### Commands run
+- git status --short
+- git branch -vv
+- git log --oneline origin/main..HEAD
+- npm run build
+- wc -l app/ProcureGuard.jsx
+- node evals/run_evals.js
+- grep -R "Send" app
+- grep -R "localStorage" app
+- grep -R "Guaranteed\\|guaranteed\\|Recovered money\\|automated approval\\|fraud detected\\|AI decided" app
+- grep -R "Match Rate\\|Exceptions Found\\|Exposure Identified\\|Estimated Recovery" app
+- grep -R "Exception Breakdown\\|Dollar Exposure by Exception\\|Supplier Exception Heatmap\\|Supplier Scorecard\\|ROI Estimate\\|Session Token Cost" app
+- grep -R "Dashboard\\|Review Queue\\|Settings & Audit" app
+- grep -R "h-32" app
+- git diff --check
+- git status --short
+
+### Verification results
+- Preflight git status had only the two expected untracked audit eval result files
+- npm run build passed with Vite production output
+- npm run build emitted the existing Recharts chunk-size warning; build exit code was 0
+- node evals/run_evals.js passed: 25/25 procurement tests, 100% pass rate
+- grep checks found no Send button text, no localStorage usage, and no prohibited enterprise claims in app files
+- Required Stage 5 dashboard and workspace labels were present
+- grep -R "h-32" app returned no matches after chart container fixes
+- git diff --check passed
+- New eval result file: evals/results/eval_results_2026-04-26T02-39-26-971Z.json
+
+### Existing untracked audit eval files included
+- evals/results/eval_results_2026-04-26T01-25-39-837Z.json
+- evals/results/eval_results_2026-04-26T01-25-40-268Z.json
+
+### Stage 5.1 fixes made
+- KPI cards now match the updated acceptance target: Match Rate, Exceptions Found, Exposure Identified, and Estimated Recovery
+- Estimated Recovery now uses total exposure multiplied by 0.85
+- Added Exception Breakdown frequency chart
+- Added Dollar Exposure by Exception chart
+- Replaced warehouse heatmap with Supplier Exception Heatmap
+- Supplier Scorecard now includes total invoices, clean matches, exceptions, match rate, total exposure, diversity certification, and risk level
+- Added ROI Estimate panel
+- Added Session Token Cost panel using audit token usage when available and a safe placeholder otherwise
+- Dashboard calculations remain client-side only and do not call Claude
+
+### Stage 5.2 fixes made
+- Added segmented workspace navigation for Dashboard, Review Queue, and Settings & Audit
+- Added Review Queue search, tier filter, supplier filter, exception filter, and sort controls
+- Review queue filtering and sorting are client-side only and do not mutate original results
+- Glass-box card order remains plain summary, reasoning, confidence
+- HITL controls remain unchanged: Tier 2 can Approve & Queue, Tier 3 requires Action Taken notes
+
+### Design suggestions adopted
+- Exact enterprise dashboard KPI structure
+- Horizontal exception charts with larger readable containers
+- Supplier-centered exception heatmap
+- More explicit ROI and token-cost governance
+- Workspace navigation and review queue controls
+
+### Design suggestions deferred
+- Persistent sidebar
+- Command palette
+- Keyboard shortcuts
+- Batch actions
+- Stage 6 deployment documentation
+
+### Known issues
+- No live Claude API call was run during this corrective patch
+- The Recharts dashboard continues to trigger a Vite production chunk-size warning
+
+### Next step
+Stage 6 — Documentation and deployment
+
+### Notes
+- Claude API remains the runtime AI stack
+- Codex is only the repo editing assistant
+- No Send button or real email sending exists

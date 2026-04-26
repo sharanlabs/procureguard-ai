@@ -2,6 +2,17 @@ import { EXCEPTION_NAMES } from "./rootCause.js";
 
 const FALLBACK_SUPPLIER = "Unknown supplier";
 const FALLBACK_WAREHOUSE = "No GRN";
+const ESTIMATED_RECOVERY_RATE = 0.85;
+const MANUAL_REVIEW_MINUTES_PER_EXCEPTION = 15;
+const BASELINE_MISS_RATE = 0.3;
+const AI_ASSISTED_MISS_RATE = 0.02;
+const PROMPT_CACHE_INPUT_DISCOUNT = 0.9;
+const RISK_RANK = { High: 0, Medium: 1, Low: 2 };
+const MODEL_TOKEN_PRICING = [
+  { match: "haiku", inputPerMillion: 1, outputPerMillion: 5 },
+  { match: "sonnet", inputPerMillion: 3, outputPerMillion: 15 },
+  { match: "opus", inputPerMillion: 5, outputPerMillion: 25 }
+];
 
 function addUnique(list, value) {
   if (value && !list.includes(value)) list.push(value);
@@ -10,6 +21,23 @@ function addUnique(list, value) {
 function getFinancialValue(classification, key) {
   const value = classification?.financial_summary?.[key];
   return typeof value === "number" && !Number.isNaN(value) ? value : 0;
+}
+
+function sumExceptionFinancials(classification, key) {
+  return (classification?.exception_details ?? []).reduce((sum, detail) => {
+    const value = detail?.[key];
+    return typeof value === "number" && !Number.isNaN(value) ? sum + value : sum;
+  }, 0);
+}
+
+function getRowExposure(classification) {
+  const summaryExposure = getFinancialValue(classification, "total_exposure");
+  return summaryExposure || sumExceptionFinancials(classification, "exposure_amount");
+}
+
+function getRowHold(classification, fallbackExposure) {
+  const summaryHold = getFinancialValue(classification, "total_hold");
+  return summaryHold || sumExceptionFinancials(classification, "hold_amount") || fallbackExposure || 0;
 }
 
 function getInvoiceSupplier(invoice, po) {
@@ -49,7 +77,9 @@ function ensureSupplier(groups, supplier) {
       exceptionRows: 0,
       exposure: 0,
       hold: 0,
-      topCodes: {}
+      topCodes: {},
+      codeCounts: {},
+      diversityCerts: []
     });
   }
 
@@ -57,6 +87,7 @@ function ensureSupplier(groups, supplier) {
 }
 
 function addExceptionStat(stats, code, invoiceNumber, detail, classification) {
+  const tier = detail?.individual_tier ?? classification?.overall_tier ?? null;
   if (!stats.has(code)) {
     stats.set(code, {
       code,
@@ -64,18 +95,20 @@ function addExceptionStat(stats, code, invoiceNumber, detail, classification) {
       count: 0,
       exposure: 0,
       hold: 0,
+      tier: tier ?? 1,
       invoiceNumbers: []
     });
   }
 
   const row = stats.get(code);
   row.count += 1;
+  row.tier = Math.max(row.tier ?? 1, tier ?? 1);
   row.exposure += typeof detail?.exposure_amount === "number"
     ? detail.exposure_amount
-    : getFinancialValue(classification, "total_exposure");
+    : getRowExposure(classification);
   row.hold += typeof detail?.hold_amount === "number"
     ? detail.hold_amount
-    : getFinancialValue(classification, "total_hold");
+    : getRowHold(classification);
   addUnique(row.invoiceNumbers, invoiceNumber);
 }
 
@@ -88,6 +121,11 @@ function getTokenValue(tokenUsage, keys) {
   return 0;
 }
 
+function getTokenPricing(model = "") {
+  const normalized = String(model).toLowerCase();
+  return MODEL_TOKEN_PRICING.find((pricing) => normalized.includes(pricing.match)) ?? MODEL_TOKEN_PRICING[1];
+}
+
 function buildAuditGovernance(auditEntries) {
   const inputTokens = auditEntries.reduce((sum, entry) => (
     sum + getTokenValue(entry.token_usage, ["input_tokens", "prompt_tokens"])
@@ -97,6 +135,18 @@ function buildAuditGovernance(auditEntries) {
   ), 0);
   const totalLatency = auditEntries.reduce((sum, entry) => sum + (entry.latency_ms ?? 0), 0);
   const tokenDataReported = auditEntries.some((entry) => entry.token_usage);
+  const cost = auditEntries.reduce((sum, entry) => {
+    const input = getTokenValue(entry.token_usage, ["input_tokens", "prompt_tokens"]);
+    const output = getTokenValue(entry.token_usage, ["output_tokens", "completion_tokens"]);
+    const pricing = getTokenPricing(entry.model);
+    const inputCost = (input / 1_000_000) * pricing.inputPerMillion;
+    const outputCost = (output / 1_000_000) * pricing.outputPerMillion;
+
+    return {
+      fullPrice: sum.fullPrice + inputCost + outputCost,
+      withPromptCache: sum.withPromptCache + (inputCost * (1 - PROMPT_CACHE_INPUT_DISCOUNT)) + outputCost
+    };
+  }, { fullPrice: 0, withPromptCache: 0 });
 
   return {
     auditEntryCount: auditEntries.length,
@@ -107,8 +157,23 @@ function buildAuditGovernance(auditEntries) {
     outputTokens,
     totalTokens: inputTokens + outputTokens,
     tokenDataReported,
+    totalLatencyMs: totalLatency,
+    estimatedFullPriceCost: cost.fullPrice,
+    estimatedPromptCacheCost: cost.withPromptCache,
     averageLatencyMs: auditEntries.length ? Math.round(totalLatency / auditEntries.length) : 0
   };
+}
+
+function getMatchRateLabel(rate) {
+  if (rate > 0.8) return "Strong";
+  if (rate >= 0.6) return "Watch";
+  return "Needs attention";
+}
+
+function getSupplierRisk(exceptionRate, reviewCount, escalateCount) {
+  if (exceptionRate >= 0.5 || escalateCount > 0) return "High";
+  if (exceptionRate >= 0.25 || reviewCount > 0) return "Medium";
+  return "Low";
 }
 
 export function buildDashboardAnalytics({
@@ -148,12 +213,13 @@ export function buildDashboardAnalytics({
     const tier = classification?.overall_tier;
     const supplier = ensureSupplier(supplierGroups, getInvoiceSupplier(invoice, po));
     const invoiceNumber = invoice.invoice_number || match?.invoice_number || "Unknown invoice";
-    const rowExposure = getFinancialValue(classification, "total_exposure");
-    const rowHold = getFinancialValue(classification, "total_hold");
+    const rowExposure = getRowExposure(classification);
+    const rowHold = getRowHold(classification, rowExposure);
 
     supplier.invoiceCount += 1;
     supplier.exposure += rowExposure;
     supplier.hold += rowHold;
+    addUnique(supplier.diversityCerts, po.supplier_diversity_cert);
 
     if (!hasExceptions) {
       cleanCount += 1;
@@ -195,6 +261,7 @@ export function buildDashboardAnalytics({
     exceptions.forEach((code) => {
       addExceptionStat(exceptionStats, code, invoiceNumber, detailByCode.get(code), classification);
       supplier.topCodes[code] = (supplier.topCodes[code] ?? 0) + 1;
+      supplier.codeCounts[code] = (supplier.codeCounts[code] ?? 0) + 1;
     });
 
     if (hasExceptions) {
@@ -218,20 +285,43 @@ export function buildDashboardAnalytics({
     }
   });
 
-  const exceptionDrivers = [...exceptionStats.values()]
-    .sort((left, right) => right.exposure - left.exposure || right.count - left.count)
-    .slice(0, 8);
+  const exceptionBreakdown = [...exceptionStats.values()]
+    .sort((left, right) => right.count - left.count || right.exposure - left.exposure);
+  const dollarExposureByException = [...exceptionStats.values()]
+    .sort((left, right) => right.exposure - left.exposure || right.count - left.count);
   const supplierScorecard = [...supplierGroups.values()]
-    .sort((left, right) => right.exposure - left.exposure || right.exceptionRows - left.exceptionRows)
-    .slice(0, 8)
-    .map((supplier) => ({
-      ...supplier,
-      topExceptionCodes: Object.entries(supplier.topCodes)
+    .map((supplier) => {
+      const exceptionRate = supplier.invoiceCount ? supplier.exceptionRows / supplier.invoiceCount : 0;
+      const riskLevel = getSupplierRisk(exceptionRate, supplier.reviewCount, supplier.escalateCount);
+
+      return {
+        ...supplier,
+        exceptionRate,
+        matchRate: supplier.invoiceCount ? supplier.cleanCount / supplier.invoiceCount : 0,
+        riskLevel,
+        riskRank: RISK_RANK[riskLevel],
+        diversityCertification: supplier.diversityCerts.join(", ") || "Not provided",
+        topExceptionCodes: Object.entries(supplier.topCodes)
         .sort((left, right) => right[1] - left[1])
         .slice(0, 3)
         .map(([code]) => code)
+      };
+    })
+    .sort((left, right) => (
+      left.riskRank - right.riskRank ||
+      right.exposure - left.exposure ||
+      right.exceptionRows - left.exceptionRows ||
+      left.supplierName.localeCompare(right.supplierName)
+    ));
+  const heatmapCodes = exceptionBreakdown.map((item) => item.code);
+  const supplierExceptionHeatmap = supplierScorecard
+    .filter((supplier) => supplier.exceptionRows > 0)
+    .map((supplier) => ({
+      key: supplier.key,
+      supplierName: supplier.supplierName,
+      exposure: supplier.exposure,
+      codes: supplier.codeCounts
     }));
-  const heatmapCodes = exceptionDrivers.slice(0, 6).map((item) => item.code);
   const warehouseHeatmap = [...warehouseMap.values()]
     .sort((left, right) => right.total - left.total || right.exposure - left.exposure)
     .slice(0, 6);
@@ -239,6 +329,8 @@ export function buildDashboardAnalytics({
     .reduce((sum, item) => sum + (item.actions ?? []).length, 0);
   const requiresHumanReview = reviewCount + escalateCount;
   const healthyCount = cleanCount + autoApproveCount;
+  const matchRate = totalInvoices ? cleanCount / totalInvoices : 0;
+  const auditGovernance = buildAuditGovernance(auditEntries);
 
   return {
     hasData: Boolean(totalInvoices && classifications.length),
@@ -251,14 +343,24 @@ export function buildDashboardAnalytics({
     requiresHumanReview,
     healthyCount,
     healthyRate: totalInvoices ? healthyCount / totalInvoices : 0,
+    matchRate,
+    matchRateLabel: getMatchRateLabel(matchRate),
+    tierCounts: {
+      tier1: autoApproveCount,
+      tier2: reviewCount,
+      tier3: escalateCount
+    },
     exposureIdentified,
     holdAmount,
     approvedAmount,
-    estimatedRecovery: exposureIdentified,
+    estimatedRecovery: exposureIdentified * ESTIMATED_RECOVERY_RATE,
     lowConfidenceCount,
     draftActionCount,
-    exceptionDrivers,
+    exceptionBreakdown,
+    dollarExposureByException,
+    exceptionDrivers: dollarExposureByException.slice(0, 8),
     supplierScorecard,
+    supplierExceptionHeatmap,
     warehouseHeatmap,
     heatmapCodes,
     dispositionData: [{
@@ -274,6 +376,14 @@ export function buildDashboardAnalytics({
       { name: "Escalate", exposure: tierExposure.escalate, count: escalateCount }
     ],
     patternCount: rootCauseAnalysis?.patterns?.length ?? 0,
-    auditGovernance: buildAuditGovernance(auditEntries)
+    roiEstimate: {
+      manualReviewMinutes: exceptionRows * MANUAL_REVIEW_MINUTES_PER_EXCEPTION,
+      baselineMissRate: BASELINE_MISS_RATE,
+      aiAssistedMissRate: AI_ASSISTED_MISS_RATE,
+      potentialUnrecoveredExposure: exposureIdentified * BASELINE_MISS_RATE,
+      estimatedRecoveredAmount: exposureIdentified * ESTIMATED_RECOVERY_RATE,
+      totalLatencyMs: auditGovernance.totalLatencyMs
+    },
+    auditGovernance
   };
 }

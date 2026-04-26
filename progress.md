@@ -63,6 +63,10 @@ Next: Stage 6 — Documentation and deployment
   - Dashboard and root-cause presentation split into app/ProcureGuardDashboard.jsx to keep ProcureGuard.jsx maintainable
   - Dark mode uses sessionStorage only and covers dashboard, cards, forms, tables, draft panels, and audit governance
   - HITL controls preserved: no Send button, no real email sending, Tier 2 queueing and Tier 3 notes remain local UI state only
+  - Corrective Stage 5 acceptance patch complete
+  - Dashboard now includes exact Match Rate, Exceptions Found, Exposure Identified, Estimated Recovery, Exception Breakdown, Dollar Exposure, Supplier Exception Heatmap, Supplier Scorecard, ROI Estimate, and Session Token Cost views
+  - Workspace tabs added for Dashboard, Review Queue, and Settings & Audit
+  - Review Queue controls added for search, tier, supplier, exception, and sort without mutating source results
   - Deployment docs intentionally deferred to Stage 6
 
 ## Decisions pending
