@@ -652,3 +652,94 @@ Stage 6.2 — Documentation package
 - Claude remains the runtime AI stack
 - Codex is only the repo editing assistant
 - No prompts, eval harness logic, CSV data, package files, or application code were changed
+
+## API contract stabilization handoff — April 26, 2026
+
+### Purpose
+Fix local Anthropic API request and schema contract issues before documentation and deployment work.
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/lib/claude.js
+- app/lib/schemas.js
+- app/lib/csv.js
+- app/lib/audit.js
+- app/lib/format.js
+- api/messages.js
+- vite.config.js
+- package.json
+
+### Files changed
+- app/lib/claude.js
+- app/lib/schemas.js
+- api/messages.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-26T03-46-10-978Z.json
+
+### API issues addressed
+- Anthropic direct-browser-access header requirement
+- Rejected legacy structured-output shape using top-level output_config.type
+- Rejected object schemas that allowed additionalProperties
+
+### Structured output shape now used
+- Frontend request construction is centralized in app/lib/claude.js
+- Requests now use output_config.format.type = json_schema
+- Requests no longer build the legacy top-level output_config type/schema shape
+
+### Schema strictness fix
+- app/lib/schemas.js now exports enforceNoAdditionalProperties
+- app/lib/schemas.js now exports buildStructuredOutputConfig
+- Matching, classification, and action schemas now recursively set additionalProperties: false for object schemas
+- Vercel proxy defensively normalizes stale structured-output shapes before forwarding
+
+### Proxy and header behavior
+- Vite proxy continues to forward x-api-key only from the local browser session
+- Vite proxy sets anthropic-version and anthropic-dangerous-direct-browser-access
+- Production proxy continues to use process.env.ANTHROPIC_API_KEY and does not log secrets
+- Production proxy forwards the normalized output_config body to Anthropic
+
+### Preflight validator result
+- Claude API contract preflight passed: 3 schema export(s) checked
+
+### Verification commands and results
+- git status --short: clean before editing
+- git branch -vv: main ahead of origin/main by two recent local API-fix commits; continued per instruction
+- git log --oneline -5: confirmed recent API-fix commits
+- node --check api/messages.js: passed
+- node --input-type=module schema preflight: passed, 3 schema exports checked
+- npm run build: passed with the existing Vite chunk-size warning
+- node evals/run_evals.js: passed 25/25 procurement tests, 100% pass rate
+- grep -R "output_format" app api vite.config.js: no matches
+- grep -R "output_config:.*type" app api vite.config.js: no matches
+- grep -R "output_config" app api vite.config.js: found nested format usage and safe error-handling/proxy validation references
+- grep -R "additionalProperties: true" app api: no matches
+- grep -R '"additionalProperties": true' app api: no matches
+- grep -R "enforceNoAdditionalProperties\\|buildStructuredOutputConfig\\|additionalProperties" app/lib/schemas.js app/lib/claude.js: found expected strict-schema helper usage
+- grep -R "https://api.anthropic.com" app: no matches
+- grep -R "anthropic-dangerous-direct-browser-access" app api vite.config.js: found only proxy/API/error-handling contexts
+- grep -R "Send" app: no matches
+- grep -R "localStorage" app: no matches
+- grep -R "Guaranteed\\|guaranteed\\|Recovered money\\|automated approval\\|fraud detected\\|AI decided" app: no matches
+- git diff --check: passed
+- git status --short: only intended files and new eval result before commit
+
+### New eval result file
+- evals/results/eval_results_2026-04-26T03-46-10-978Z.json
+
+### Known issues
+- No live Claude API call was run during this stabilization pass
+- The Recharts dashboard continues to trigger a Vite production chunk-size warning
+
+### Next step
+Local API retest, then Stage 6.2 — Documentation package
+
+### Notes
+- No prompts, eval harness logic, CSV data, product architecture, or runtime AI stack changed
+- Claude remains the runtime AI stack
+- Codex is only the repo editing assistant
+- No Send button or real email sending exists

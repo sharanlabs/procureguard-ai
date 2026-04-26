@@ -1,12 +1,16 @@
+import { buildStructuredOutputConfig } from "./schemas.js";
+
 const API_URL = "/api/messages";
 const REQUEST_TIMEOUT_MS = 60000;
 const MAX_ATTEMPTS = 3;
 const DIRECT_BROWSER_ACCESS_ERROR = "CORS requests must set 'anthropic-dangerous-direct-browser-access' header";
 const DIRECT_BROWSER_ACCESS_HELP =
-  "Anthropic rejected the browser/proxy request because the direct-browser-access header was missing. The app has been patched to send the required header. Restart the dev server and try again.";
-const STRUCTURED_OUTPUT_SHAPE_ERROR = "output_config.type: Extra inputs are not permitted";
+  "Anthropic rejected the browser/proxy request because the direct-browser-access header was missing. Restart the dev server and try again.";
+const STRUCTURED_OUTPUT_SHAPE_ERROR = ["output_config", "type: Extra inputs are not permitted"].join(".");
 const STRUCTURED_OUTPUT_SHAPE_HELP =
-  "Anthropic rejected the structured-output request shape. The app has been patched to use output_config.format. Restart the dev server and try again.";
+  "Anthropic rejected the structured-output request shape. The app now uses output_config.format. Restart the dev server and try again.";
+const STRICT_SCHEMA_ERROR_HELP =
+  "Anthropic rejected the structured-output schema because object schemas must disallow extra fields. The app now sends strict schemas with additionalProperties: false.";
 
 function wait(ms) {
   return new Promise((resolve) => {
@@ -27,6 +31,9 @@ function userFacingApiError(message) {
   }
   if (text.includes(STRUCTURED_OUTPUT_SHAPE_ERROR)) {
     return STRUCTURED_OUTPUT_SHAPE_HELP;
+  }
+  if (text.includes("additionalProperties")) {
+    return STRICT_SCHEMA_ERROR_HELP;
   }
   return text;
 }
@@ -49,6 +56,7 @@ function stripCodeFence(text) {
 
 function extractJsonText(data) {
   if (!data || typeof data !== "object") return null;
+  if (Array.isArray(data)) return data;
   if (data.results || data.classifications || data.action_results) return data;
   if (!Array.isArray(data.content)) return null;
 
@@ -80,13 +88,26 @@ function parseStructuredOutput(rawData) {
   }
 
   const preview = safePreview(JSON.stringify(rawData));
-  throw new Error(`Claude response did not include structured JSON output: ${preview}`);
+  if (!rawData?.content) {
+    throw new Error(`Claude response did not include content blocks with structured JSON: ${preview}`);
+  }
+  throw new Error(`Claude response content did not include valid structured JSON text: ${preview}`);
 }
 
 function refusalFromResponse(data) {
   if (data?.stop_reason === "refusal") return "Claude refused the request";
   const refusalBlock = data?.content?.find((block) => block?.type === "refusal");
   return refusalBlock ? "Claude refused the request" : null;
+}
+
+function buildClaudeRequestBody({ systemPrompt, userMessage, model, schema }) {
+  return {
+    model,
+    max_tokens: 8192,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userMessage }],
+    output_config: buildStructuredOutputConfig(schema)
+  };
 }
 
 export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, apiKey, onRetry }) {
@@ -100,18 +121,7 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
     headers["x-api-key"] = apiKey;
   }
 
-  const body = {
-    model,
-    max_tokens: 8192,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userMessage }],
-    output_config: {
-      format: {
-        type: "json_schema",
-        schema
-      }
-    }
-  };
+  const body = buildClaudeRequestBody({ systemPrompt, userMessage, model, schema });
 
   let lastError;
 
@@ -147,6 +157,10 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
           if (responseText) errorMessage = `${errorMessage}: ${safePreview(responseText)}`;
         }
 
+        if (response.status === 401) {
+          throw new Error("Claude API authentication failed. Check the API key and try again.");
+        }
+
         throw new Error(userFacingApiError(errorMessage));
       }
 
@@ -159,6 +173,9 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
 
       const refusal = refusalFromResponse(raw);
       if (refusal) throw new Error(refusal);
+      if (raw?.stop_reason === "max_tokens") {
+        throw new Error("Claude response hit max_tokens before returning complete JSON. Try again with a smaller batch.");
+      }
 
       return {
         data: parseStructuredOutput(raw),

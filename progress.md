@@ -16,6 +16,7 @@ Stage 5.1: Executive dashboard and analytics polish — COMPLETE — April 26, 2
 Stage 5.2: UI polish, responsive layout, dark mode, and accessibility — COMPLETE — April 26, 2026
 Stage 6: IN PROGRESS — April 26, 2026
 Stage 6.1: Architectural decision log — COMPLETE — April 26, 2026
+Local Claude API contract stabilization — COMPLETE — April 26, 2026
 Next: Stage 6.2 — Documentation package
 
 ## Stage log
@@ -74,6 +75,8 @@ Next: Stage 6.2 — Documentation package
 - Stage 6: Documentation and Deployment — IN PROGRESS — April 26, 2026
   - Stage 6.1 architectural decision log complete
   - DECISIONS.md expanded from the initial prompt-chaining stub into the accepted architecture log through the completed build
+  - Local Claude API contract stabilization completed before Stage 6.2
+  - Structured output requests now use output_config.format and strict JSON schemas with additionalProperties set to false recursively
   - Stage 6.2 documentation package intentionally deferred
 
 ## Decisions pending

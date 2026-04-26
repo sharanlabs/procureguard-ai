@@ -16,9 +16,86 @@ async function readRequestBody(req) {
   return rawBody ? JSON.parse(rawBody) : {};
 }
 
+const LEGACY_OUTPUT_FORMAT_KEY = ["output", "format"].join("_");
+
 function sendJson(res, status, payload) {
   res.status(status).setHeader("content-type", "application/json");
   res.end(JSON.stringify(payload));
+}
+
+function cloneJson(value) {
+  if (value === undefined) return undefined;
+  return JSON.parse(JSON.stringify(value));
+}
+
+function enforceNoAdditionalProperties(schema) {
+  const strictSchema = cloneJson(schema);
+
+  function walk(node) {
+    if (!node || typeof node !== "object") return;
+
+    if (node.type === "object") {
+      node.additionalProperties = false;
+      if (node.properties) {
+        Object.values(node.properties).forEach(walk);
+      }
+    }
+
+    if (node.type === "array" && node.items) {
+      walk(node.items);
+    }
+
+    ["anyOf", "oneOf", "allOf"].forEach((key) => {
+      if (Array.isArray(node[key])) {
+        node[key].forEach(walk);
+      }
+    });
+
+    ["$defs", "definitions"].forEach((key) => {
+      if (node[key] && typeof node[key] === "object") {
+        Object.values(node[key]).forEach(walk);
+      }
+    });
+  }
+
+  walk(strictSchema);
+  return strictSchema;
+}
+
+function normalizeStructuredOutputBody(body) {
+  const normalized = { ...body };
+  const outputConfig =
+    normalized.output_config && typeof normalized.output_config === "object"
+      ? normalized.output_config
+      : null;
+
+  if (outputConfig?.format) {
+    normalized.output_config = { format: cloneJson(outputConfig.format) };
+  } else if (outputConfig?.type && outputConfig?.schema) {
+    normalized.output_config = {
+      format: {
+        type: outputConfig.type,
+        schema: outputConfig.schema
+      }
+    };
+  } else if (normalized[LEGACY_OUTPUT_FORMAT_KEY]) {
+    normalized.output_config = {
+      format: cloneJson(normalized[LEGACY_OUTPUT_FORMAT_KEY])
+    };
+  }
+
+  delete normalized[LEGACY_OUTPUT_FORMAT_KEY];
+
+  if (normalized.output_config?.format?.schema) {
+    normalized.output_config = {
+      format: {
+        ...normalized.output_config.format,
+        schema: enforceNoAdditionalProperties(normalized.output_config.format.schema)
+      }
+    };
+  }
+
+  return normalized;
 }
 
 function validateBody(body) {
@@ -26,12 +103,23 @@ function validateBody(body) {
   if (!body.model || typeof body.model !== "string") return "Request body must include model";
   if (!Array.isArray(body.messages)) return "Request body must include messages array";
   if (typeof body.max_tokens !== "number") return "Request body must include numeric max_tokens";
+  if (body.output_config) {
+    if (body.output_config?.format?.type !== "json_schema") {
+      return "Request body output_config.format.type must be json_schema";
+    }
+    if (!body.output_config?.format?.schema || typeof body.output_config.format.schema !== "object") {
+      return "Request body output_config.format.schema must be an object";
+    }
+  }
   return null;
 }
 
 export default async function handler(req, res) {
   res.setHeader("access-control-allow-methods", "POST, OPTIONS");
-  res.setHeader("access-control-allow-headers", "content-type, anthropic-version");
+  res.setHeader(
+    "access-control-allow-headers",
+    "content-type, anthropic-version, x-api-key, anthropic-dangerous-direct-browser-access"
+  );
 
   if (req.method === "OPTIONS") {
     res.status(204).end();
@@ -55,6 +143,8 @@ export default async function handler(req, res) {
     sendJson(res, 400, { error: "Request body must be valid JSON" });
     return;
   }
+
+  body = normalizeStructuredOutputBody(body);
 
   const validationError = validateBody(body);
   if (validationError) {
