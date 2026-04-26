@@ -1,10 +1,21 @@
 import { useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from "recharts";
 import matchingPrompt from "../prompts/01_matching.md?raw";
 import classificationPrompt from "../prompts/02_classification.md?raw";
 import actionPrompt from "../prompts/03_action_generation.md?raw";
 import { createAuditEntry, exportAuditCsv } from "./lib/audit.js";
 import { callClaudeAPI } from "./lib/claude.js";
 import { normalizeProcurementFiles } from "./lib/csv.js";
+import { buildDashboardAnalytics } from "./lib/dashboard.js";
 import {
   formatMoney,
   formatPercent,
@@ -29,6 +40,14 @@ const DEFAULT_TOLERANCES = {
   dateBusinessDays: 2
 };
 const LOCKED_TIER_THREE_CODES = new Set(["E02", "E06", "E07", "E11"]);
+const CHART_COLORS = {
+  clean: "#22c55e",
+  autoApprove: "#16a34a",
+  review: "#f59e0b",
+  escalate: "#ef4444",
+  neutral: "#3b82f6",
+  slate: "#64748b"
+};
 
 function Badge({ children, className = "" }) {
   return (
@@ -184,16 +203,352 @@ function ProgressPanel({ runningStep, statusMessage, hasMatchResults, hasClassif
   );
 }
 
-function SummaryMetrics({ metrics }) {
+function formatInteger(value) {
+  return new Intl.NumberFormat("en-US").format(value ?? 0);
+}
+
+function formatMilliseconds(value) {
+  if (!value) return "-";
+  return `${formatInteger(value)} ms`;
+}
+
+function exceptionColor(code) {
+  if (LOCKED_TIER_THREE_CODES.has(code)) return CHART_COLORS.escalate;
+  return CHART_COLORS.review;
+}
+
+function heatCellClass(count) {
+  if (count >= 3) return "border-red-200 bg-red-50 text-red-800";
+  if (count === 2) return "border-amber-200 bg-amber-50 text-amber-800";
+  if (count === 1) return "border-blue-200 bg-blue-50 text-blue-800";
+  return "border-slate-200 bg-slate-50 text-slate-400";
+}
+
+function DashboardSection({ title, helper, children, action }) {
   return (
-    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <Metric label="Total invoices" value={metrics.totalInvoices} />
-      <Metric label="Clean matches" value={metrics.cleanMatches} />
-      <Metric label="Exception rows" value={metrics.exceptionRows} />
-      <Metric label="Total exposure" value={formatMoney(metrics.totalExposure)} />
-      <Metric label="Tier 1" value={metrics.tier1} />
-      <Metric label="Tier 2" value={metrics.tier2} />
-      <Metric label="Tier 3" value={metrics.tier3} />
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-slate-950">{title}</h3>
+          {helper ? <p className="mt-1 text-sm text-slate-600">{helper}</p> : null}
+        </div>
+        {action}
+      </div>
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+function DashboardKpi({ label, value, helper, tone = "neutral" }) {
+  const toneClass = {
+    neutral: "border-slate-200 bg-white text-slate-950",
+    clean: "border-green-200 bg-green-50 text-green-900",
+    review: "border-amber-200 bg-amber-50 text-amber-900",
+    escalate: "border-red-200 bg-red-50 text-red-900",
+    info: "border-blue-200 bg-blue-50 text-blue-900"
+  }[tone];
+
+  return (
+    <article className={`rounded-lg border p-4 shadow-sm ${toneClass}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide opacity-75">{label}</p>
+      <p className="mt-3 font-mono text-3xl font-semibold tabular-nums">{value}</p>
+      {helper ? <p className="mt-2 text-sm leading-5 opacity-80">{helper}</p> : null}
+    </article>
+  );
+}
+
+function ChartTooltip({ active, payload, label, valueFormatter = formatInteger }) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3 text-sm shadow-sm">
+      {label ? <p className="mb-2 font-semibold text-slate-900">{label}</p> : null}
+      <div className="space-y-1">
+        {payload.map((item) => (
+          <p className="flex items-center gap-2 text-slate-700" key={`${item.dataKey}-${item.name}`}>
+            <span className="h-2 w-2 rounded-full bg-slate-500" />
+            <span>{item.name}: </span>
+            <span className="font-mono font-semibold tabular-nums">{valueFormatter(item.value)}</span>
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ExecutiveDashboard({ analytics }) {
+  if (!analytics.hasData) return null;
+
+  const governance = analytics.auditGovernance;
+  const riskDriverData = analytics.exceptionDrivers.map((item) => ({
+    ...item,
+    label: `${item.code}`
+  }));
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-slate-100 p-4 shadow-sm">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">Executive Dashboard</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-950">AI-assisted review operations console</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            Batch health, exposure, review load, and governance status for AP and procurement leaders.
+          </p>
+        </div>
+        <Badge className="border-slate-300 bg-white text-slate-700">
+          {formatInteger(analytics.totalInvoices)} invoices assessed
+        </Badge>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <DashboardKpi
+          label="Batch Health"
+          value={formatPercent(analytics.healthyRate)}
+          helper={`${formatInteger(analytics.healthyCount)} clean or auto-approve rows`}
+          tone="clean"
+        />
+        <DashboardKpi
+          label="Requires Human Review"
+          value={formatInteger(analytics.requiresHumanReview)}
+          helper={`${formatInteger(analytics.reviewCount)} review, ${formatInteger(analytics.escalateCount)} escalate`}
+          tone={analytics.escalateCount ? "escalate" : "review"}
+        />
+        <DashboardKpi
+          label="Exposure Identified"
+          value={formatMoney(analytics.exposureIdentified)}
+          helper="Value requiring validation or policy review"
+          tone="info"
+        />
+        <DashboardKpi
+          label="Held for Review"
+          value={formatMoney(analytics.holdAmount)}
+          helper="Amount withheld pending human review"
+          tone="review"
+        />
+        <DashboardKpi
+          label="Estimated Recovery"
+          value={formatMoney(analytics.estimatedRecovery)}
+          helper="Opportunity estimate, not booked recovery"
+          tone="neutral"
+        />
+      </div>
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_1.25fr]">
+        <DashboardSection
+          title="Batch disposition by review path"
+          helper="How much of the batch can proceed, needs review, or needs escalation?"
+        >
+          <div className="h-32">
+            <ResponsiveContainer height="100%" width="100%">
+              <BarChart data={analytics.dispositionData} layout="vertical" margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                <XAxis type="number" hide domain={[0, analytics.totalInvoices]} />
+                <YAxis type="category" dataKey="name" hide />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="clean" name="Clean" stackId="batch" fill={CHART_COLORS.clean} radius={[6, 0, 0, 6]} />
+                <Bar dataKey="autoApprove" name="Auto-approve" stackId="batch" fill={CHART_COLORS.autoApprove} />
+                <Bar dataKey="review" name="Review" stackId="batch" fill={CHART_COLORS.review} />
+                <Bar dataKey="escalate" name="Escalate" stackId="batch" fill={CHART_COLORS.escalate} radius={[0, 6, 6, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-4">
+            <p><span className="font-mono font-semibold tabular-nums text-green-700">{analytics.cleanCount}</span> clean</p>
+            <p><span className="font-mono font-semibold tabular-nums text-green-700">{analytics.autoApproveCount}</span> auto-approve</p>
+            <p><span className="font-mono font-semibold tabular-nums text-amber-700">{analytics.reviewCount}</span> review</p>
+            <p><span className="font-mono font-semibold tabular-nums text-red-700">{analytics.escalateCount}</span> escalate</p>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          title="Exception types driving exposure"
+          helper="Which exception classes create the most financial risk?"
+        >
+          {riskDriverData.length ? (
+            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+              <div className="h-64">
+                <ResponsiveContainer height="100%" width="100%">
+                  <BarChart data={riskDriverData} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+                    <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                    <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} width={56} />
+                    <Tooltip content={<ChartTooltip valueFormatter={formatMoney} />} />
+                    <Bar dataKey="exposure" name="Exposure" radius={[6, 6, 0, 0]}>
+                      {riskDriverData.map((entry) => (
+                        <Cell fill={exceptionColor(entry.code)} key={entry.code} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="overflow-hidden rounded-md border border-slate-200">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Exception</th>
+                      <th className="px-3 py-2 text-right">Rows</th>
+                      <th className="px-3 py-2 text-right">Exposure</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {riskDriverData.map((item) => (
+                      <tr key={item.code}>
+                        <td className="px-3 py-2">
+                          <p className="font-semibold text-slate-900">{item.code}</p>
+                          <p className="text-xs text-slate-500">{item.name}</p>
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">{item.count}</td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">{formatMoney(item.exposure)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-md border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">
+              No exception exposure identified in this batch.
+            </p>
+          )}
+        </DashboardSection>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <DashboardSection
+          title="Supplier scorecard"
+          helper="Which suppliers show review load, held value, or recurring signals?"
+        >
+          <div className="overflow-x-auto rounded-md border border-slate-200">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Supplier</th>
+                  <th className="px-3 py-2 text-right">Rows</th>
+                  <th className="px-3 py-2 text-right">Review</th>
+                  <th className="px-3 py-2 text-right">Escalate</th>
+                  <th className="px-3 py-2 text-right">Exposure</th>
+                  <th className="px-3 py-2 text-right">Held</th>
+                  <th className="px-3 py-2">Signals</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 bg-white">
+                {analytics.supplierScorecard.map((supplier) => (
+                  <tr key={supplier.key}>
+                    <td className="px-3 py-2 font-semibold text-slate-900">{supplier.supplierName}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{supplier.invoiceCount}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-amber-700">{supplier.reviewCount}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-red-700">{supplier.escalateCount}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{formatMoney(supplier.exposure)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">{formatMoney(supplier.hold)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1">
+                        {supplier.topExceptionCodes.length ? supplier.topExceptionCodes.map((code) => (
+                          <Badge className="border-slate-200 bg-slate-50 text-slate-700" key={`${supplier.key}-${code}`}>
+                            {code}
+                          </Badge>
+                        )) : <span className="text-slate-400">None</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          title="Warehouse exception heatmap"
+          helper="Where are receiving or GRN-linked signals concentrated?"
+        >
+          {analytics.warehouseHeatmap.length && analytics.heatmapCodes.length ? (
+            <div className="overflow-x-auto rounded-md border border-slate-200">
+              <table className="min-w-full text-center text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Warehouse</th>
+                    {analytics.heatmapCodes.map((code) => (
+                      <th className="px-3 py-2" key={code}>{code}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {analytics.warehouseHeatmap.map((row) => (
+                    <tr key={row.warehouse}>
+                      <td className="px-3 py-2 text-left font-semibold text-slate-900">{row.warehouse}</td>
+                      {analytics.heatmapCodes.map((code) => {
+                        const count = row.codes[code] ?? 0;
+                        return (
+                          <td className="px-2 py-2" key={`${row.warehouse}-${code}`}>
+                            <span className={`inline-flex min-w-8 justify-center rounded-md border px-2 py-1 font-mono tabular-nums ${heatCellClass(count)}`}>
+                              {count}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              No warehouse-linked exception concentration is visible in this batch.
+            </p>
+          )}
+        </DashboardSection>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <DashboardSection
+          title="Exposure by review path"
+          helper="How much identified exposure sits in review versus escalation?"
+        >
+          <div className="h-56">
+            <ResponsiveContainer height="100%" width="100%">
+              <BarChart data={analytics.exposureByTierData} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
+                <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} width={60} />
+                <Tooltip content={<ChartTooltip valueFormatter={formatMoney} />} />
+                <Bar dataKey="exposure" name="Exposure" radius={[6, 6, 0, 0]}>
+                  <Cell fill={CHART_COLORS.clean} />
+                  <Cell fill={CHART_COLORS.review} />
+                  <Cell fill={CHART_COLORS.escalate} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </DashboardSection>
+
+        <DashboardSection
+          title="Token cost and audit governance"
+          helper="What did the AI-assisted review execute, and what remains auditable?"
+          action={<Badge className="border-slate-300 bg-white text-slate-700">{analytics.patternCount} pattern signals</Badge>}
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="Audit entries" value={formatInteger(governance.auditEntryCount)} />
+            <Metric label="Avg latency" value={formatMilliseconds(governance.averageLatencyMs)} />
+            <Metric
+              label="Token usage"
+              value={governance.tokenDataReported ? formatInteger(governance.totalTokens) : "Not reported"}
+            />
+            <Metric label="Draft actions" value={formatInteger(analytics.draftActionCount)} />
+          </div>
+          <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="font-semibold text-slate-900">Models used</p>
+              <p className="mt-1 text-slate-600">{governance.models.join(", ") || "Not available"}</p>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="font-semibold text-slate-900">Prompt versions</p>
+              <p className="mt-1 text-slate-600">{governance.promptVersions.join(", ") || "Not available"}</p>
+            </div>
+          </div>
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            Audit records store hashes, summaries, latency, model, and prompt version. They do not store API keys,
+            raw prompts, or full invoice payloads.
+          </p>
+        </DashboardSection>
+      </div>
     </section>
   );
 }
@@ -747,24 +1102,6 @@ function buildActionBatch(parsedFiles, matchResults, classificationResults) {
   });
 }
 
-function computeMetrics(parsedFiles, matchResults, classificationResults) {
-  const matches = matchResults?.results ?? [];
-  const classifications = classificationResults?.classifications ?? [];
-  const totalInvoices = parsedFiles?.invoices?.length ?? matches.length;
-  const cleanMatches = matches.filter((item) => (item.detected_exceptions ?? []).length === 0).length;
-  const exceptionRows = matches.filter((item) => (item.detected_exceptions ?? []).length > 0).length;
-
-  return {
-    totalInvoices,
-    cleanMatches,
-    exceptionRows,
-    tier1: classifications.filter((item) => item.overall_tier === 1).length,
-    tier2: classifications.filter((item) => item.overall_tier === 2).length,
-    tier3: classifications.filter((item) => item.overall_tier === 3).length,
-    totalExposure: classifications.reduce((sum, item) => sum + (item.financial_summary?.total_exposure ?? 0), 0)
-  };
-}
-
 function parseUtcDate(value) {
   if (!value) return null;
   const date = new Date(`${value}T00:00:00Z`);
@@ -953,10 +1290,6 @@ export default function App() {
   const [reviewedTier3, setReviewedTier3] = useState(new Set());
   const [tolerances, setTolerances] = useState(DEFAULT_TOLERANCES);
 
-  const metrics = useMemo(
-    () => computeMetrics(parsedFiles, matchResults, classificationResults),
-    [parsedFiles, matchResults, classificationResults]
-  );
   const toleranceSimulation = useMemo(
     () => buildToleranceSimulation(matchResults, classificationResults, tolerances),
     [classificationResults, matchResults, tolerances]
@@ -964,6 +1297,17 @@ export default function App() {
   const rootCauseAnalysis = useMemo(
     () => analyzeRootCauses({ parsedFiles, matchResults, classificationResults }),
     [classificationResults, matchResults, parsedFiles]
+  );
+  const dashboardAnalytics = useMemo(
+    () => buildDashboardAnalytics({
+      parsedFiles,
+      matchResults,
+      classificationResults,
+      actionResults,
+      auditEntries,
+      rootCauseAnalysis
+    }),
+    [actionResults, auditEntries, classificationResults, matchResults, parsedFiles, rootCauseAnalysis]
   );
   const renderedCards = useMemo(() => {
     return (matchResults?.results ?? [])
@@ -1178,7 +1522,7 @@ export default function App() {
           hasActionResults={Boolean(actionResults)}
         />
 
-        {parsedFiles ? <SummaryMetrics metrics={metrics} /> : null}
+        <ExecutiveDashboard analytics={dashboardAnalytics} />
         <ToleranceSimulator
           tolerances={tolerances}
           onTolerancesChange={setTolerances}

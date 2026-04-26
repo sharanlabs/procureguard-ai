@@ -356,3 +356,62 @@ Stage 5 — Dashboard and polish
 - No Send button or real email sending exists
 - Claude remains the runtime AI stack
 - Codex was only used as the repo editing assistant
+
+## Stage 5.1 handoff — April 26, 2026
+
+### Stage completed
+Stage 5.1 — Executive dashboard and analytics polish
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- progress.md
+- docs/HANDOFF.md
+- package.json
+- app/ProcureGuard.jsx
+- app/lib/audit.js
+- app/lib/rootCause.js
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/lib/dashboard.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-26T00-12-35-689Z.json
+
+### Commands run
+- git status --short
+- git branch -vv
+- npm run build
+- node evals/run_evals.js
+- grep -R "Send" app
+- grep -R "fraud" app
+- grep -R "Guaranteed savings\\|Recovered money\\|Fraud detected\\|Automated approval\\|AI decided" app
+- git diff --check
+- git status --short
+
+### Verification results
+- Initial git status was clean before editing
+- git branch -vv showed main aligned with origin/main at 66067ae
+- npm run build passed with Vite production output
+- npm run build emitted a Vite chunk-size warning after adding Recharts; build exit code was 0
+- node evals/run_evals.js passed: 25/25 procurement tests, 100% pass rate
+- grep checks found no Send text, no fraud text, and no avoided dashboard claims in app files
+- git diff --check passed
+- New eval result file: evals/results/eval_results_2026-04-26T00-12-35-689Z.json
+
+### Known issues
+- No live Claude API call was run during this stage
+- The Recharts dashboard increases the production JS chunk enough for Vite to warn about bundle size
+- ROI calculator, dark mode, and deployment docs remain intentionally out of scope
+
+### Next step
+Stage 5.2 — Final hardening and deployment readiness
+
+### Notes
+- Dashboard uses enterprise AP/procurement language: Exposure Identified, Estimated Recovery, AI-assisted review, Policy simulation, Requires human review
+- Existing Stage 4 panels remain visible and ordered after the dashboard
+- Charts are limited to batch disposition, exposure risk drivers, and exposure by review path; supplier and warehouse details use dense tables
+- No Send button or real email sending exists
+- Claude remains the runtime AI stack
+- Codex was only used as the repo editing assistant

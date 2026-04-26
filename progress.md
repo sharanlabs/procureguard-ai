@@ -11,7 +11,9 @@ Stage 4: COMPLETE — April 25, 2026
 Stage 4.1: Glass-box reasoning cards — COMPLETE — April 25, 2026
 Stage 4.2: What-if tolerance simulator — COMPLETE — April 25, 2026
 Stage 4.3: Root cause analysis — COMPLETE — April 25, 2026
-Next: Stage 5 — Dashboard and polish
+Stage 5: IN PROGRESS — April 26, 2026
+Stage 5.1: Executive dashboard and analytics polish — COMPLETE — April 26, 2026
+Next: Stage 5.2 — Final hardening and deployment readiness
 
 ## Stage log
 
@@ -50,6 +52,13 @@ Next: Stage 5 — Dashboard and polish
   - Client-side price, quantity, and date tolerances simulate tier changes without calling Claude or mutating classifications
   - Stage 4.3 root cause analysis complete
   - Client-side supplier, exception type, warehouse, pricing, and timing patterns added with cautious review-oriented wording
+
+- Stage 5: Dashboard and Polish — IN PROGRESS — April 26, 2026
+  - Stage 5.1 executive dashboard and analytics polish complete
+  - Enterprise KPI cards added for batch health, human review load, exposure, hold, and estimated recovery
+  - Exception risk drivers, exposure by review path, supplier scorecard, warehouse heatmap, and audit governance panels added
+  - Stage 4 panels remain ordered after the dashboard: tolerance simulator, root cause analysis, exception cards
+  - ROI calculator, dark mode, and deployment docs intentionally deferred
 
 ## Decisions pending
 
