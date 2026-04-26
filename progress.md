@@ -14,7 +14,9 @@ Stage 4.3: Root cause analysis — COMPLETE — April 25, 2026
 Stage 5: COMPLETE — April 26, 2026
 Stage 5.1: Executive dashboard and analytics polish — COMPLETE — April 26, 2026
 Stage 5.2: UI polish, responsive layout, dark mode, and accessibility — COMPLETE — April 26, 2026
-Next: Stage 6 — Documentation and deployment
+Stage 6: IN PROGRESS — April 26, 2026
+Stage 6.1: Architectural decision log — COMPLETE — April 26, 2026
+Next: Stage 6.2 — Documentation package
 
 ## Stage log
 
@@ -68,6 +70,11 @@ Next: Stage 6 — Documentation and deployment
   - Workspace tabs added for Dashboard, Review Queue, and Settings & Audit
   - Review Queue controls added for search, tier, supplier, exception, and sort without mutating source results
   - Deployment docs intentionally deferred to Stage 6
+
+- Stage 6: Documentation and Deployment — IN PROGRESS — April 26, 2026
+  - Stage 6.1 architectural decision log complete
+  - DECISIONS.md expanded from the initial prompt-chaining stub into the accepted architecture log through the completed build
+  - Stage 6.2 documentation package intentionally deferred
 
 ## Decisions pending
 

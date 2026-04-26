@@ -592,3 +592,63 @@ Stage 6 — Documentation and deployment
 - Claude API remains the runtime AI stack
 - Codex is only the repo editing assistant
 - No Send button or real email sending exists
+
+## Stage 6.1 handoff — April 26, 2026
+
+### Stage completed
+Stage 6.1 — Architectural decision log
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- README.md
+- PRD.md
+- DECISIONS.md
+- progress.md
+- docs/HANDOFF.md
+- package.json
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/lib/dashboard.js
+- app/lib/claude.js
+- api/messages.js
+- prompts/01_matching.md
+- prompts/02_classification.md
+- prompts/03_action_generation.md
+- prompts/04_text_extraction.md
+
+### Files changed
+- DECISIONS.md
+- progress.md
+- docs/HANDOFF.md
+
+### Commands run
+- git status --short
+- git branch -vv
+- grep -c "DECISION-" DECISIONS.md
+- wc -l DECISIONS.md
+- git diff --check
+- git status --short
+
+### Verification results
+- Initial git status was clean before editing
+- git branch -vv showed main aligned with origin/main at f98972a
+- DECISIONS.md contains 20 decision entries
+- git diff --check passed
+- Final git status showed only the intended Stage 6.1 documentation files before commit
+
+### Decision count
+20
+
+### Known issues
+- No application code was changed
+- No live Claude API call was run during this documentation stage
+- Stage 6.2 documentation package is intentionally not created yet
+
+### Next step
+Stage 6.2 — Documentation package
+
+### Notes
+- Claude remains the runtime AI stack
+- Codex is only the repo editing assistant
+- No prompts, eval harness logic, CSV data, package files, or application code were changed
