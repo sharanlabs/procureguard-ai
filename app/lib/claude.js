@@ -3,6 +3,9 @@ import { buildStructuredOutputConfig } from "./schemas.js";
 const API_URL = "/api/messages";
 const REQUEST_TIMEOUT_MS = 60000;
 const MAX_ATTEMPTS = 3;
+export const DEFAULT_MAX_TOKENS = 8192;
+const MIN_SAFE_MAX_TOKENS = 256;
+const MAX_SAFE_MAX_TOKENS = 8192;
 const DIRECT_BROWSER_ACCESS_ERROR = "CORS requests must set 'anthropic-dangerous-direct-browser-access' header";
 const DIRECT_BROWSER_ACCESS_HELP =
   "Anthropic rejected the browser/proxy request because the direct-browser-access header was missing. Restart the dev server and try again.";
@@ -13,6 +16,8 @@ const STRICT_SCHEMA_ERROR_HELP =
   "Anthropic rejected the structured-output schema because object schemas must disallow extra fields. The app now sends strict schemas with additionalProperties: false.";
 const NUMERIC_CONSTRAINT_ERROR_HELP =
   "Anthropic rejected the schema because number types do not support minimum/maximum/multipleOf constraints. The app now strips these automatically. Restart the dev server and try again.";
+const MAX_TOKENS_HELP =
+  "Claude reached the output token limit before completing structured JSON. The app analyzes invoices in smaller chunks to reduce output size. Retry the analysis.";
 
 function wait(ms) {
   return new Promise((resolve) => {
@@ -105,17 +110,35 @@ function refusalFromResponse(data) {
   return refusalBlock ? "Claude refused the request" : null;
 }
 
-function buildClaudeRequestBody({ systemPrompt, userMessage, model, schema }) {
+function normalizeMaxTokens(maxTokens = DEFAULT_MAX_TOKENS) {
+  if (!Number.isInteger(maxTokens)) {
+    throw new Error("maxTokens must be an integer");
+  }
+  if (maxTokens < MIN_SAFE_MAX_TOKENS || maxTokens > MAX_SAFE_MAX_TOKENS) {
+    throw new Error(`maxTokens must be between ${MIN_SAFE_MAX_TOKENS} and ${MAX_SAFE_MAX_TOKENS}`);
+  }
+  return maxTokens;
+}
+
+export function buildClaudeRequestBody({ systemPrompt, userMessage, model, schema, maxTokens = DEFAULT_MAX_TOKENS }) {
   return {
     model,
-    max_tokens: 8192,
+    max_tokens: normalizeMaxTokens(maxTokens),
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
     output_config: buildStructuredOutputConfig(schema)
   };
 }
 
-export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, apiKey, onRetry }) {
+export async function callClaudeAPI({
+  systemPrompt,
+  userMessage,
+  model,
+  schema,
+  apiKey,
+  maxTokens = DEFAULT_MAX_TOKENS,
+  onRetry
+}) {
   const startedAt = performance.now();
   const headers = {
     "content-type": "application/json",
@@ -126,7 +149,7 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
     headers["x-api-key"] = apiKey;
   }
 
-  const body = buildClaudeRequestBody({ systemPrompt, userMessage, model, schema });
+  const body = buildClaudeRequestBody({ systemPrompt, userMessage, model, schema, maxTokens });
 
   let lastError;
 
@@ -179,7 +202,7 @@ export async function callClaudeAPI({ systemPrompt, userMessage, model, schema, 
       const refusal = refusalFromResponse(raw);
       if (refusal) throw new Error(refusal);
       if (raw?.stop_reason === "max_tokens") {
-        throw new Error("Claude response hit max_tokens before returning complete JSON. Try again with a smaller batch.");
+        throw new Error(MAX_TOKENS_HELP);
       }
 
       return {

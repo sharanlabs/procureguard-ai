@@ -848,3 +848,142 @@ Local API retest, then Stage 6.2 — Documentation package
 - Claude remains the runtime AI stack
 - Codex is only the repo editing assistant
 - No Send button or real email sending exists
+
+## Chunk 1 backend Analyze reliability handoff — April 26, 2026
+
+### Purpose
+Stabilize the Analyze flow before Stage 6.2 by reducing oversized Claude responses, validating result alignment, and making retry/failure behavior safer for the sample dataset and larger controlled review batches.
+
+### Files reviewed
+- AGENTS.md
+- CLAUDE.md
+- progress.md
+- docs/HANDOFF.md
+- .gitignore
+- app/ProcureGuard.jsx
+- app/lib/claude.js
+- app/lib/schemas.js
+- app/lib/audit.js
+- app/lib/dashboard.js
+- app/lib/format.js
+- api/messages.js
+- vite.config.js
+- package.json
+
+### Files changed
+- .gitignore
+- app/ProcureGuard.jsx
+- app/lib/claude.js
+- app/lib/schemas.js
+- app/lib/audit.js
+- app/lib/pipeline.js
+- api/messages.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-26T17-01-02-087Z.json
+- evals/results/eval_results_2026-04-26T17-02-43-117Z.json
+
+### Root cause confirmed
+- Analyze previously sent all 25 invoices through one Claude call per stage.
+- Matching included all POs, invoices, and GRNs in one request.
+- Classification and action generation each processed one full batch.
+- max_tokens was hardcoded in the Claude wrapper.
+- No post-response validation confirmed result count, order, missing rows, or duplicated rows before UI state was updated.
+
+### Reliability fixes made
+- Added a chunked pipeline helper module for pure chunking, context building, merge validation, action-result normalization, API-key leak assertions, and dry-run validation.
+- Analyze now clears stale downstream state at the start of every run and retry.
+- Matching, classification, and action generation run per chunk, then merge back into the existing UI shapes.
+- Result counts and invoice-number order are validated after each chunk and after final merge.
+- If Claude returns rows out of order and invoice numbers are unique, rows are safely reordered; missing or duplicated rows fail the chunk.
+- Failed chunks show `Analysis failed on invoices X-Y: ...` and do not publish partial dashboard results as final state.
+
+### Chunking strategy
+- Default chunk size: 5 invoices.
+- Each chunk sends only the invoice rows in that chunk.
+- Each chunk includes relevant POs and GRNs for those invoice PO references and item codes.
+- Global duplicate invoice metadata and full PO-number metadata are included so duplicate invoice and invalid PO checks remain aware of the full uploaded file.
+- Deterministic matching guards preserve global E07 duplicate detection and E11 invalid PO detection after response alignment.
+- A small delay between chunks reduces rate-limit pressure while preserving the existing 429 retry behavior.
+
+### max_tokens handling
+- app/lib/claude.js now exposes a named default max token constant.
+- buildClaudeRequestBody and callClaudeAPI accept maxTokens.
+- Stage callers pass configurable per-stage max token values.
+- The max-token stop reason now tells the user that chunking reduces output size and suggests retrying analysis.
+
+### Merge validation result
+- Dry-run validation passed with no live Claude call:
+  - 25 invoices
+  - 5 chunks
+  - chunk sizes: 5, 5, 5, 5, 5
+  - merged matching count: 25
+  - merged classification count: 25
+  - merged action count: 25
+
+### API contract preservation
+- No direct app-to-Anthropic browser call was introduced.
+- output_config.format remains the structured-output request shape.
+- output_format and the old output_config.type shape remain absent.
+- additionalProperties: true remains absent.
+- Schema normalization now also converts integer-like schema types to number with a constraint hint before Anthropic receives the schema.
+- Vite/API proxy direct-browser-access header behavior remains unchanged.
+
+### Security and audit behavior
+- .gitignore now ignores only `.claude/settings.local.json`; tracked `.claude/skills` files remain preserved.
+- `.claude/settings.local.json` was not staged.
+- Audit entries now include chunk index, chunk total, invoice range, invoice count, status, and safe error text.
+- Audit export continues to store input hashes rather than raw full prompts or raw invoice payloads.
+- No API keys are logged, stored in audit entries, or written to localStorage.
+
+### Runtime hardening
+- Retry starts a clean Analyze run instead of retrying against stale partial state.
+- Partial chunk results are kept out of completed dashboard state on failure.
+- Action generation can normalize intentionally omitted clean invoice rows into safe empty action records.
+- Audit UI tolerates failed chunk entries and missing output summaries.
+- Dashboard and review state continue using empty arrays and existing safe fallbacks when results are unavailable.
+
+### Verification commands and results
+- wc -l app/ProcureGuard.jsx app/lib/*.js api/messages.js: completed
+- node --check api/messages.js: passed
+- node --input-type=module dry-run chunk validator: passed, 25 invoices across 5 chunks
+- npm run build: passed with existing Vite chunk-size warning
+- node evals/run_evals.js: 25/25 passed, 100%
+- grep -R "console.log" app api: no matches
+- grep -R "localStorage" app api: no matches
+- grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api: no matches
+- grep -R "max_tokens: 8192" app api: no matches
+- grep -R "output_format" app api vite.config.js: no matches
+- grep -R "output_config:.*type" app api vite.config.js: no matches
+- grep -R "additionalProperties: true" app api: no matches
+- grep -R '"additionalProperties": true' app api: no matches
+- grep -R "https://api.anthropic.com" app: no matches
+- grep -R "Send" app: no matches
+- grep -R "Guaranteed\|guaranteed\|Recovered money\|automated approval\|fraud detected\|AI decided\|payment released\|email sent" app: no matches
+- grep -R ".claude/settings.local.json" .gitignore: passed
+
+### New eval result files
+- evals/results/eval_results_2026-04-26T17-01-02-087Z.json
+- evals/results/eval_results_2026-04-26T17-02-43-117Z.json
+
+### Known issues
+- No live Claude API call was run during this pass.
+- The Recharts dashboard still triggers the existing Vite production chunk-size warning.
+
+### Manual retest steps
+1. Restart the Vite dev server so the latest proxy and app code are loaded.
+2. Open the app locally.
+3. In local development only, enter the Anthropic API key in the session-only API key field.
+4. Upload `data/purchase_orders.csv`, `data/invoices.csv`, and `data/goods_receipts.csv`.
+5. Click Analyze.
+6. Confirm progress advances through Matching, Classification, and Drafting chunks 1/5 through 5/5.
+7. Confirm dashboard and review queue render after the completed run.
+8. Export the audit CSV and confirm chunk metadata is present without raw invoice payloads or API keys.
+
+### Next step
+Local API retest, then Chunk 2 planning.
+
+### Notes
+- No prompts, CSV data, golden dataset, eval harness logic, product architecture, runtime AI stack, Send button, or real email sending changed.
+- Claude remains the runtime AI stack.
+- Codex is only the repo editing assistant.

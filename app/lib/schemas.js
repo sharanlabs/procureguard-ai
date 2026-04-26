@@ -308,6 +308,14 @@ function normalizeNode(node) {
   if (!node || typeof node !== "object") return;
 
   const hints = [];
+  if (node.type === "integer") {
+    node.type = "number";
+    hints.push("integer-like value expected");
+  } else if (Array.isArray(node.type) && node.type.includes("integer")) {
+    node.type = [...new Set(node.type.map((type) => (type === "integer" ? "number" : type)))];
+    hints.push("integer-like value expected");
+  }
+
   for (const key of UNSUPPORTED_KEYWORDS) {
     if (Object.prototype.hasOwnProperty.call(node, key)) {
       hints.push(`${key} ${node[key]}`);

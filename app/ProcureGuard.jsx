@@ -16,6 +16,20 @@ import {
   tierClass,
   tierLabel
 } from "./lib/format.js";
+import {
+  DEFAULT_ANALYSIS_CHUNK_SIZE,
+  applyGlobalMatchingGuards,
+  assertNoApiKeyLeak,
+  buildChunkContext,
+  chunkInvoices,
+  getInvoiceRangeLabel,
+  mergeActionChunks,
+  mergeClassificationChunks,
+  mergeMatchingChunks,
+  normalizeActionChunkResults,
+  validateAndAlignResults,
+  validateMergedResults
+} from "./lib/pipeline.js";
 import { analyzeRootCauses } from "./lib/rootCause.js";
 import { actionOutputSchema, classificationOutputSchema, matchingOutputSchema } from "./lib/schemas.js";
 
@@ -25,6 +39,13 @@ const MODELS = {
   matching: "claude-haiku-4-5-20251001",
   classification: "claude-sonnet-4-6",
   action_generation: "claude-sonnet-4-6"
+};
+const ANALYSIS_CHUNK_SIZE = DEFAULT_ANALYSIS_CHUNK_SIZE;
+const CHUNK_DELAY_MS = 250;
+const STAGE_MAX_TOKENS = {
+  matching: 8192,
+  classification: 8192,
+  action_generation: 8192
 };
 const DEFAULT_TOLERANCES = {
   pricePct: 2,
@@ -640,9 +661,12 @@ function AuditPanel({ entries, onExport }) {
         <div className="mt-4 space-y-2">
           {entries.map((entry) => (
             <div className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800" key={`${entry.step}-${entry.timestamp}`}>
-              <p className="font-semibold text-slate-950 dark:text-slate-100">{entry.step} | {entry.model}</p>
+              <p className="font-semibold text-slate-950 dark:text-slate-100">
+                {entry.step} | {entry.model} | {entry.status ?? "success"}
+              </p>
               <p className="mt-1 text-slate-600 dark:text-slate-400">
-                {entry.timestamp} | {entry.latency_ms} ms | {entry.output_summary.invoice_count} invoices
+                {entry.timestamp} | {entry.latency_ms} ms | {entry.output_summary?.invoice_count ?? 0} invoices
+                {entry.chunk ? ` | chunk ${entry.chunk.index}/${entry.chunk.total} | invoices ${entry.chunk.invoice_range}` : ""}
               </p>
             </div>
           ))}
@@ -823,6 +847,12 @@ function buildActionBatch(parsedFiles, matchResults, classificationResults) {
       },
       classification: classifications[index] ?? classifications.find((item) => item.invoice_number === match.invoice_number)
     };
+  });
+}
+
+function waitForChunkWindow() {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, CHUNK_DELAY_MS);
   });
 }
 
@@ -1160,130 +1190,277 @@ export default function App() {
     }
   }
 
-  async function runMatching() {
-    if (!parsedFiles) throw new Error("Upload and validate all three CSV files first");
+  function createChunkMeta(chunk, chunkIndex, totalChunks) {
+    return {
+      index: chunkIndex + 1,
+      total: totalChunks,
+      invoice_range: getInvoiceRangeLabel(chunk, chunkIndex),
+      invoice_count: chunk.length
+    };
+  }
+
+  async function recordAuditEntry({
+    step,
+    model,
+    input,
+    output,
+    response,
+    promptVersion,
+    chunk,
+    status = "success",
+    errorMessage = "",
+    latencyMs = response?.latency_ms ?? 0
+  }) {
+    const auditEntry = await createAuditEntry({
+      step,
+      model,
+      input,
+      output,
+      tokenUsage: response?.token_usage ?? null,
+      latencyMs,
+      promptVersion,
+      chunk,
+      status,
+      errorMessage
+    });
+    assertNoApiKeyLeak(auditEntry);
+    setAuditEntries((current) => [...current, auditEntry]);
+    return auditEntry;
+  }
+
+  function matchingPayloadForContext(context) {
+    return {
+      purchase_orders: context.purchase_orders,
+      invoices: context.invoices,
+      goods_receipts: context.goods_receipts,
+      duplicate_invoice_numbers: context.duplicate_invoice_numbers,
+      invoice_number_occurrences: context.invoice_number_occurrences,
+      all_purchase_order_numbers: context.all_purchase_order_numbers
+    };
+  }
+
+  async function runMatchingChunks(chunks) {
+    const chunkResults = [];
     setRunningStep("matching");
-    setStatusMessage("Matching invoices against POs and GRNs...");
-    const userMessage = JSON.stringify({
-      purchase_orders: parsedFiles.purchase_orders,
-      invoices: parsedFiles.invoices,
-      goods_receipts: parsedFiles.goods_receipts
-    });
-    const response = await callClaudeAPI({
-      systemPrompt: matchingPrompt,
-      userMessage,
-      model: MODELS.matching,
-      schema: matchingOutputSchema,
-      apiKey,
-      onRetry: ({ attempt }) => setStatusMessage(`Rate limited during matching. Retry ${attempt + 1} of 3...`)
-    });
-    setMatchResults(response.data);
-    const auditEntry = await createAuditEntry({
-      step: "matching",
-      model: MODELS.matching,
-      input: userMessage,
-      output: response.data,
-      tokenUsage: response.token_usage,
-      latencyMs: response.latency_ms,
-      promptVersion: "01_matching_v1"
-    });
-    setAuditEntries((current) => [...current, auditEntry]);
-    return response.data;
-  }
 
-  async function runClassification(existingMatchResults = matchResults) {
-    if (!existingMatchResults?.results) throw new Error("Matching must complete before classification");
-    setRunningStep("classification");
-    setStatusMessage("Classifying exceptions by severity...");
-    const userMessage = JSON.stringify({ results: existingMatchResults.results });
-    const response = await callClaudeAPI({
-      systemPrompt: classificationPrompt,
-      userMessage,
-      model: MODELS.classification,
-      schema: classificationOutputSchema,
-      apiKey,
-      onRetry: ({ attempt }) => setStatusMessage(`Rate limited during classification. Retry ${attempt + 1} of 3...`)
-    });
-    setClassificationResults(response.data);
-    setActiveWorkspace("dashboard");
-    const auditEntry = await createAuditEntry({
-      step: "classification",
-      model: MODELS.classification,
-      input: userMessage,
-      output: response.data,
-      tokenUsage: response.token_usage,
-      latencyMs: response.latency_ms,
-      promptVersion: "02_classification_v1"
-    });
-    setAuditEntries((current) => [...current, auditEntry]);
-    return response.data;
-  }
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index];
+      const chunkMeta = createChunkMeta(chunk, index, chunks.length);
+      const context = buildChunkContext(parsedFiles, chunk, parsedFiles.invoices);
+      const userMessage = JSON.stringify(matchingPayloadForContext(context));
+      const startedAt = performance.now();
 
-  async function runActionGeneration(existingMatchResults = matchResults, existingClassificationResults = classificationResults) {
-    if (!existingMatchResults?.results || !existingClassificationResults?.classifications) {
-      throw new Error("Matching and classification must complete before action generation");
-    }
-    setRunningStep("action_generation");
-    setStatusMessage("Drafting communications...");
-    const userMessage = JSON.stringify({
-      batch: buildActionBatch(parsedFiles, existingMatchResults, existingClassificationResults)
-    });
-    const response = await callClaudeAPI({
-      systemPrompt: actionPrompt,
-      userMessage,
-      model: MODELS.action_generation,
-      schema: actionOutputSchema,
-      apiKey,
-      onRetry: ({ attempt }) => setStatusMessage(`Rate limited during drafting. Retry ${attempt + 1} of 3...`)
-    });
-    setActionResults(response.data);
-    const auditEntry = await createAuditEntry({
-      step: "action_generation",
-      model: MODELS.action_generation,
-      input: userMessage,
-      output: response.data,
-      tokenUsage: response.token_usage,
-      latencyMs: response.latency_ms,
-      promptVersion: "03_action_generation_v1"
-    });
-    setAuditEntries((current) => [...current, auditEntry]);
-    return response.data;
-  }
+      setStatusMessage(`Matching chunk ${chunkMeta.index}/${chunkMeta.total} (invoices ${chunkMeta.invoice_range})...`);
 
-  async function runPipeline(startAt = "matching") {
-    setError("");
-    setFailedStep("");
-    let activeStep = startAt;
-    try {
-      let nextMatchResults = matchResults;
-      let nextClassificationResults = classificationResults;
-
-      if (startAt === "matching") {
-        setMatchResults(null);
-        setClassificationResults(null);
-        setActionResults(null);
-        activeStep = "matching";
-        nextMatchResults = await runMatching();
-        activeStep = "classification";
-        nextClassificationResults = await runClassification(nextMatchResults);
-        activeStep = "action_generation";
-        await runActionGeneration(nextMatchResults, nextClassificationResults);
-      } else if (startAt === "classification") {
-        setClassificationResults(null);
-        setActionResults(null);
-        activeStep = "classification";
-        nextClassificationResults = await runClassification(nextMatchResults);
-        activeStep = "action_generation";
-        await runActionGeneration(nextMatchResults, nextClassificationResults);
-      } else {
-        setActionResults(null);
-        activeStep = "action_generation";
-        await runActionGeneration(nextMatchResults, nextClassificationResults);
+      try {
+        const response = await callClaudeAPI({
+          systemPrompt: matchingPrompt,
+          userMessage,
+          model: MODELS.matching,
+          schema: matchingOutputSchema,
+          maxTokens: STAGE_MAX_TOKENS.matching,
+          apiKey,
+          onRetry: ({ attempt }) => setStatusMessage(`Rate limited during matching chunk ${chunkMeta.index}/${chunkMeta.total}. Retry ${attempt + 1} of 3...`)
+        });
+        const alignedResponse = validateAndAlignResults("matching", context.invoices, response.data, chunkMeta.invoice_range);
+        const guarded = applyGlobalMatchingGuards(context, alignedResponse);
+        const aligned = validateAndAlignResults("matching", context.invoices, guarded, chunkMeta.invoice_range);
+        assertNoApiKeyLeak(aligned);
+        await recordAuditEntry({
+          step: "matching",
+          model: MODELS.matching,
+          input: userMessage,
+          output: aligned,
+          response,
+          promptVersion: "01_matching_v1",
+          chunk: chunkMeta
+        });
+        chunkResults.push(aligned);
+      } catch (chunkError) {
+        await recordAuditEntry({
+          step: "matching",
+          model: MODELS.matching,
+          input: `matching:${chunkMeta.invoice_range}:${chunkMeta.invoice_count}`,
+          output: null,
+          promptVersion: "01_matching_v1",
+          chunk: chunkMeta,
+          status: "failed",
+          errorMessage: chunkError.message,
+          latencyMs: Math.round(performance.now() - startedAt)
+        });
+        throw new Error(`Analysis failed on invoices ${chunkMeta.invoice_range}: ${chunkError.message}`);
       }
 
+      if (index < chunks.length - 1) await waitForChunkWindow();
+    }
+
+    const merged = validateMergedResults(parsedFiles.invoices, mergeMatchingChunks(chunkResults), "matching");
+    assertNoApiKeyLeak(merged);
+    setMatchResults(merged);
+    return { merged, chunks: chunkResults };
+  }
+
+  async function runClassificationChunks(chunks, matchingChunks) {
+    const chunkResults = [];
+    setRunningStep("classification");
+
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index];
+      const chunkMeta = createChunkMeta(chunk, index, chunks.length);
+      const context = buildChunkContext(parsedFiles, chunk, parsedFiles.invoices);
+      const userMessage = JSON.stringify({ results: matchingChunks[index].results });
+      const startedAt = performance.now();
+
+      setStatusMessage(`Classification chunk ${chunkMeta.index}/${chunkMeta.total} (invoices ${chunkMeta.invoice_range})...`);
+
+      try {
+        const response = await callClaudeAPI({
+          systemPrompt: classificationPrompt,
+          userMessage,
+          model: MODELS.classification,
+          schema: classificationOutputSchema,
+          maxTokens: STAGE_MAX_TOKENS.classification,
+          apiKey,
+          onRetry: ({ attempt }) => setStatusMessage(`Rate limited during classification chunk ${chunkMeta.index}/${chunkMeta.total}. Retry ${attempt + 1} of 3...`)
+        });
+        const aligned = validateAndAlignResults("classification", context.invoices, response.data, chunkMeta.invoice_range);
+        assertNoApiKeyLeak(aligned);
+        await recordAuditEntry({
+          step: "classification",
+          model: MODELS.classification,
+          input: userMessage,
+          output: aligned,
+          response,
+          promptVersion: "02_classification_v1",
+          chunk: chunkMeta
+        });
+        chunkResults.push(aligned);
+      } catch (chunkError) {
+        await recordAuditEntry({
+          step: "classification",
+          model: MODELS.classification,
+          input: `classification:${chunkMeta.invoice_range}:${chunkMeta.invoice_count}`,
+          output: null,
+          promptVersion: "02_classification_v1",
+          chunk: chunkMeta,
+          status: "failed",
+          errorMessage: chunkError.message,
+          latencyMs: Math.round(performance.now() - startedAt)
+        });
+        throw new Error(`Analysis failed on invoices ${chunkMeta.invoice_range}: ${chunkError.message}`);
+      }
+
+      if (index < chunks.length - 1) await waitForChunkWindow();
+    }
+
+    const merged = validateMergedResults(parsedFiles.invoices, mergeClassificationChunks(chunkResults), "classification");
+    assertNoApiKeyLeak(merged);
+    setClassificationResults(merged);
+    setActiveWorkspace("dashboard");
+    return { merged, chunks: chunkResults };
+  }
+
+  async function runActionGenerationChunks(chunks, matchingChunks, classificationChunks) {
+    const chunkResults = [];
+    setRunningStep("action_generation");
+
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index];
+      const chunkMeta = createChunkMeta(chunk, index, chunks.length);
+      const context = buildChunkContext(parsedFiles, chunk, parsedFiles.invoices);
+      const userMessage = JSON.stringify({
+        batch: buildActionBatch(context, matchingChunks[index], classificationChunks[index])
+      });
+      const startedAt = performance.now();
+
+      setStatusMessage(`Drafting chunk ${chunkMeta.index}/${chunkMeta.total} (invoices ${chunkMeta.invoice_range})...`);
+
+      try {
+        const response = await callClaudeAPI({
+          systemPrompt: actionPrompt,
+          userMessage,
+          model: MODELS.action_generation,
+          schema: actionOutputSchema,
+          maxTokens: STAGE_MAX_TOKENS.action_generation,
+          apiKey,
+          onRetry: ({ attempt }) => setStatusMessage(`Rate limited during drafting chunk ${chunkMeta.index}/${chunkMeta.total}. Retry ${attempt + 1} of 3...`)
+        });
+        const normalized = normalizeActionChunkResults(
+          context.invoices,
+          response.data,
+          classificationChunks[index],
+          chunkMeta.invoice_range
+        );
+        const aligned = validateAndAlignResults("action_generation", context.invoices, normalized, chunkMeta.invoice_range);
+        assertNoApiKeyLeak(aligned);
+        await recordAuditEntry({
+          step: "action_generation",
+          model: MODELS.action_generation,
+          input: userMessage,
+          output: aligned,
+          response,
+          promptVersion: "03_action_generation_v1",
+          chunk: chunkMeta
+        });
+        chunkResults.push(aligned);
+      } catch (chunkError) {
+        await recordAuditEntry({
+          step: "action_generation",
+          model: MODELS.action_generation,
+          input: `action_generation:${chunkMeta.invoice_range}:${chunkMeta.invoice_count}`,
+          output: null,
+          promptVersion: "03_action_generation_v1",
+          chunk: chunkMeta,
+          status: "failed",
+          errorMessage: chunkError.message,
+          latencyMs: Math.round(performance.now() - startedAt)
+        });
+        throw new Error(`Analysis failed on invoices ${chunkMeta.invoice_range}: ${chunkError.message}`);
+      }
+
+      if (index < chunks.length - 1) await waitForChunkWindow();
+    }
+
+    const merged = validateMergedResults(parsedFiles.invoices, mergeActionChunks(chunkResults), "action_generation");
+    assertNoApiKeyLeak(merged);
+    setActionResults(merged);
+    return { merged, chunks: chunkResults };
+  }
+
+  async function runPipeline() {
+    setError("");
+    setFailedStep("");
+    if (!parsedFiles) {
+      setError("Upload and validate all three CSV files first");
+      return;
+    }
+
+    const chunks = chunkInvoices(parsedFiles.invoices, ANALYSIS_CHUNK_SIZE);
+    let activeStep = "matching";
+
+    setMatchResults(null);
+    setClassificationResults(null);
+    setActionResults(null);
+    setAuditEntries([]);
+    setApprovedActions(new Set());
+    setTier3Notes({});
+    setReviewedTier3(new Set());
+    setActiveWorkspace("settings");
+    setStatusMessage(`Preparing ${parsedFiles.invoices.length} invoices across ${chunks.length} chunks of up to ${ANALYSIS_CHUNK_SIZE}.`);
+
+    try {
+      activeStep = "matching";
+      const nextMatchResults = await runMatchingChunks(chunks);
+      activeStep = "classification";
+      const nextClassificationResults = await runClassificationChunks(chunks, nextMatchResults.chunks);
+      activeStep = "action_generation";
+      await runActionGenerationChunks(chunks, nextMatchResults.chunks, nextClassificationResults.chunks);
       setStatusMessage("Prompt chain complete. Review drafted communications.");
     } catch (pipelineError) {
       setFailedStep(activeStep);
+      setMatchResults(null);
+      setClassificationResults(null);
+      setActionResults(null);
       setError(pipelineError.message);
     } finally {
       setRunningStep("");
@@ -1291,7 +1468,7 @@ export default function App() {
   }
 
   function retryFailedStep() {
-    runPipeline(failedStep || "matching");
+    runPipeline();
   }
 
   function exportAuditTrail() {
@@ -1327,7 +1504,7 @@ export default function App() {
               className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-700"
               type="button"
               disabled={!parsedFiles || Boolean(runningStep)}
-              onClick={() => runPipeline("matching")}
+              onClick={runPipeline}
             >
               {runningStep ? "Analyzing..." : "Analyze"}
             </button>

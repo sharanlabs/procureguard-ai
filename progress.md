@@ -18,7 +18,8 @@ Stage 6: IN PROGRESS — April 26, 2026
 Stage 6.1: Architectural decision log — COMPLETE — April 26, 2026
 Local Claude API contract stabilization — COMPLETE — April 26, 2026
 Claude API contract stabilization pass 2 (numeric constraints) — COMPLETE — April 26, 2026
-Next: Stage 6.2 — Documentation package
+Chunk 1 backend Analyze reliability pass — COMPLETE — April 26, 2026
+Next: local API retest, then enterprise UI polish
 
 ## Stage log
 
@@ -79,6 +80,9 @@ Next: Stage 6.2 — Documentation package
   - Local Claude API contract stabilization completed before Stage 6.2
   - Structured output requests now use output_config.format and strict JSON schemas with additionalProperties set to false recursively
   - Pass 2: normalizeAnthropicSchema now strips minimum/maximum and all other unsupported JSON Schema keywords before sending to Anthropic
+  - Chunk 1 backend Analyze reliability pass complete before Stage 6.2
+  - Analyze now runs the Claude prompt chain in invoice chunks, validates merged result counts/order, and records per-chunk audit metadata
+  - max_tokens is configurable per Claude call with a safe default
   - Stage 6.2 documentation package intentionally deferred
 
 ## Decisions pending

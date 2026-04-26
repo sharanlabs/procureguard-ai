@@ -3,11 +3,17 @@ const CSV_HEADERS = [
   "step",
   "model",
   "input_hash",
+  "status",
+  "chunk_index",
+  "chunk_total",
+  "invoice_range",
+  "chunk_invoice_count",
   "invoice_count",
   "exception_count",
   "tier_breakdown",
   "latency_ms",
-  "prompt_version"
+  "prompt_version",
+  "error_message"
 ];
 
 function bytesToHex(buffer) {
@@ -57,16 +63,30 @@ export function summarizeOutput(step, output) {
   };
 }
 
-export async function createAuditEntry({ step, model, input, output, tokenUsage, latencyMs, promptVersion }) {
+export async function createAuditEntry({
+  step,
+  model,
+  input,
+  output,
+  tokenUsage,
+  latencyMs,
+  promptVersion,
+  chunk = null,
+  status = "success",
+  errorMessage = ""
+}) {
   return {
     timestamp: new Date().toISOString(),
     step,
     model,
     input_hash: await hashInput(input),
+    status,
+    chunk,
     output_summary: summarizeOutput(step, output),
     token_usage: tokenUsage ?? null,
     latency_ms: latencyMs,
-    prompt_version: promptVersion
+    prompt_version: promptVersion,
+    error_message: errorMessage
   };
 }
 
@@ -81,11 +101,17 @@ export function exportAuditCsv(entries) {
     entry.step,
     entry.model,
     entry.input_hash,
+    entry.status ?? "success",
+    entry.chunk?.index ?? "",
+    entry.chunk?.total ?? "",
+    entry.chunk?.invoice_range ?? "",
+    entry.chunk?.invoice_count ?? "",
     entry.output_summary?.invoice_count ?? "",
     entry.output_summary?.exception_count ?? "",
     entry.output_summary?.tier_breakdown ?? "",
     entry.latency_ms,
-    entry.prompt_version
+    entry.prompt_version,
+    entry.error_message ?? ""
   ]);
 
   return [CSV_HEADERS, ...rows].map((row) => row.map(csvValue).join(",")).join("\n");
