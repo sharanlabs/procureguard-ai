@@ -1174,3 +1174,108 @@ Rework the Executive Summary into a decision-first page that answers what happen
 
 ### Next step
 Chunk 2A.3 Exception Workbench scanability
+
+## Chunk 2A.3 Exception Workbench scanability handoff — April 27, 2026
+
+### Purpose
+Rework only the Exception Workbench so an AP analyst can quickly answer which invoices need human review now, inspect the evidence behind each case, and review DRAFT-only follow-up material without changing the Claude runtime stack.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- app/lib/dashboard.js
+- app/lib/format.js
+- app/lib/rootCause.js
+- app/lib/uiModels.js
+- app/lib/schemas.js
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/lib/uiModels.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T16-12-53-167Z.json
+- evals/results/eval_results_2026-04-27T16-23-39-301Z.json
+
+### View-model/helper changes
+- Added pure Exception Workbench helpers in app/lib/uiModels.js: buildExceptionWorkbenchViewModel, buildWorkbenchRows, getReviewPriority, getDraftStatus, getRecommendedRouteLabel, buildInvoiceEvidenceSummary, buildWorkbenchSummary, and filterAndSortWorkbenchRows.
+- Workbench rows now carry stable invoice facts, supplier, tier label, review priority, exception labels, exposure, hold, route, draft status, evidence strength, model confidence, source records, and safe fallbacks.
+- Moved workbench sorting/filtering derivation out of JSX and into the view-model layer.
+
+### Workbench summary strip changes
+- Added a compact summary strip with invoices analyzed, need-review-now count, escalations, drafts prepared, and exposure.
+- Used red for escalation, amber for review, blue for exposure/draft insight, and green only for clean states.
+
+### Filter/search changes
+- Reworked filter controls into a tighter queue-control panel with search, review path, supplier, exception, sort, visible count, and reset.
+- Added hold and supplier sort options while keeping the existing search, tier, supplier, exception, and sort behavior.
+- No table library or new dependency was added.
+
+### Invoice card hierarchy changes
+- Invoice cards now lead with invoice number, supplier, priority, tier label, match status, PO, GRN, exposure, hold, recommended route, draft status, evidence strength, and model confidence.
+- Exception labels are quieter and secondary to route, exposure, hold, and review priority.
+- Policy simulation notices remain scoped to affected cards.
+
+### Evidence & rationale changes
+- Replaced the previous card organization with a structured Evidence & rationale disclosure.
+- Evidence is organized around: what is wrong, which source records prove it, dollar impact, rule applied, and what a human should do next.
+- Source records and comparisons show PO, invoice, GRN, quantity, price, UOM, dates, exposure, hold, exception code, and label when available, with safe Not available fallbacks.
+
+### Confidence display changes
+- Removed the large confidence progress bar.
+- Confidence is now supporting metadata: Evidence strength plus Model confidence percentage.
+- Wording reinforces source-record validation and does not imply blind trust.
+
+### Draft/action panel changes
+- Draft/action panel is DRAFT-only and uses the route labels Supplier follow-up draft, Procurement review draft, AP escalation memo, and No draft needed.
+- Draft body text is progressively disclosed.
+- Missing action output shows Draft status not available; invoices without draft actions show No draft generated for this invoice.
+- Local queue/reviewer-note controls remain human-in-the-loop only.
+
+### Empty/loading/failure state changes
+- Before analysis, the Workbench points users back to Start.
+- While analysis runs, the Workbench withholds partial queue results.
+- After failed analysis, the Workbench avoids stale completed queue output.
+- No filter results now show No invoices match the selected filters.
+- Missing classification and draft status have guarded fallback messages.
+
+### Visual/UI changes
+- Added a stronger page header, compact metrics, tighter filter grouping, calmer card density, tabular numbers, cleaner dark-mode borders, and progressive disclosure for detailed evidence and drafts.
+- No global app shell redesign, charts, icon libraries, animation libraries, or new dependencies were added.
+
+### Backend files protected or touched
+- No backend files were touched.
+- app/lib/pipeline.js, app/lib/claude.js, api/messages.js, and app/lib/schemas.js were protected and unchanged.
+- prompts/, data/, evals/run_evals.js, and evals/golden_dataset.json were protected and unchanged.
+
+### Verification commands and results
+- Pre-edit git status --short: clean.
+- Pre-edit git branch -vv: main at e670075, ahead of origin/main.
+- Pre-edit git log --oneline -10: confirmed e670075, a6236f6, and fe8e374 at the top of recent history.
+- Pre-edit npm run build: passed with existing Vite chunk-size warning.
+- Pre-edit node evals/run_evals.js: passed 25/25, 100%.
+- Post-edit npm run build: passed with existing Vite chunk-size warning.
+- Final npm run build: passed with existing Vite chunk-size warning.
+- Final node evals/run_evals.js: passed 25/25, 100%.
+- node --check api/messages.js: passed.
+- grep -R "console.log" app api || true: no matches.
+- grep -R "localStorage" app api || true: no matches.
+- grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true: no matches.
+- grep -R "Send" app || true: no matches.
+- git diff --check: passed.
+- git status --short: modified workbench/progress/handoff files and generated eval results before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T16-23-39-301Z.json
+- Also generated evals/results/eval_results_2026-04-27T16-12-53-167Z.json during the required pre-edit eval gate.
+
+### Known issues
+- The existing Vite production chunk-size warning remains.
+- No live Claude API call was run during this pass.
+
+### Next step
+Chunk 2A.4 Supplier & Policy Analytics grouping

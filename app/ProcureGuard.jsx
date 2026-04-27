@@ -17,10 +17,8 @@ import {
   formatMoney,
   formatPercent,
   formatStageName,
-  plainLanguageSummary,
   renderValue,
   statusLabel,
-  tierClass,
   tierLabel
 } from "./lib/format.js";
 import {
@@ -39,6 +37,7 @@ import {
 } from "./lib/pipeline.js";
 import { analyzeRootCauses } from "./lib/rootCause.js";
 import { actionOutputSchema, classificationOutputSchema, matchingOutputSchema } from "./lib/schemas.js";
+import { buildExceptionWorkbenchViewModel } from "./lib/uiModels.js";
 
 const LOCAL_API_KEY_STORAGE = "procureguard_anthropic_session_key";
 const DARK_MODE_STORAGE = "procureguard_dark_mode";
@@ -330,7 +329,7 @@ function FieldRow({ label, value }) {
   return (
     <div className="grid gap-1 rounded-lg bg-white p-3 text-sm sm:grid-cols-[10rem_1fr] dark:bg-slate-900">
       <dt className="font-semibold text-slate-500 dark:text-slate-400">{label}</dt>
-      <dd className="text-slate-800 dark:text-slate-200">{value}</dd>
+      <dd className="min-w-0 text-slate-800 dark:text-slate-200">{value}</dd>
     </div>
   );
 }
@@ -339,160 +338,214 @@ function formatMoneyValue(value) {
   return typeof value === "number" && !Number.isNaN(value) ? formatMoney(value) : "Not available";
 }
 
-function ConfidencePanel({ confidence }) {
-  const normalized = typeof confidence === "number" ? Math.max(0, Math.min(1, confidence)) : 0;
-  const isLowConfidence = typeof confidence === "number" && confidence < 0.85;
+function formatPercentValue(value) {
+  return typeof value === "number" && !Number.isNaN(value) ? formatPercent(value) : "Not available";
+}
 
+function formatInteger(value) {
+  return new Intl.NumberFormat("en-US").format(value ?? 0);
+}
+
+function toneBadgeClass(tone) {
+  return {
+    clean: "border-green-200 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-950/50 dark:text-green-200",
+    info: "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-200",
+    review: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200",
+    escalate: "border-red-200 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950/50 dark:text-red-200",
+    neutral: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+  }[tone] ?? "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
+}
+
+function toneBorderClass(tone) {
+  return {
+    clean: "border-green-200 dark:border-green-800",
+    info: "border-blue-200 dark:border-blue-800",
+    review: "border-amber-200 dark:border-amber-800",
+    escalate: "border-red-200 dark:border-red-800",
+    neutral: "border-slate-200 dark:border-slate-700"
+  }[tone] ?? "border-slate-200 dark:border-slate-700";
+}
+
+function routeLabelForAction(action) {
+  if (action?.action_type === "escalation_memo") return "AP escalation memo";
+  if (action?.action_type === "po_amendment_request") return "Procurement review draft";
+  if (action?.action_type === "supplier_email") return "Supplier follow-up draft";
+  return "No draft needed";
+}
+
+function SummaryMetric({ metric }) {
+  const value = metric.format === "money" ? formatMoney(metric.value) : formatInteger(metric.value);
   return (
-    <section className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Confidence</p>
-        <p className="font-mono text-sm font-semibold tabular-nums text-slate-950 dark:text-slate-100">{formatPercent(confidence)}</p>
-      </div>
-      <progress
-        className={`mt-3 h-2 w-full overflow-hidden rounded-full ${isLowConfidence ? "accent-amber-500" : "accent-blue-600"}`}
-        max="1"
-        value={normalized}
-      />
-      {isLowConfidence ? (
-        <p className="mt-3 text-sm font-semibold text-amber-700 dark:text-amber-300">
-          Low confidence. Human review is recommended before taking action.
-        </p>
+    <article className={`rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 ${toneBorderClass(metric.tone)}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</p>
+      <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-slate-950 dark:text-slate-100">{value}</p>
+      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{metric.helper}</p>
+    </article>
+  );
+}
+
+function WorkbenchSummaryStrip({ summary }) {
+  return (
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      {summary.cards.map((metric) => (
+        <SummaryMetric key={metric.id} metric={metric} />
+      ))}
+    </section>
+  );
+}
+
+function WorkbenchEmptyState({ eyebrow, title, body, actionLabel, onAction, tone = "neutral" }) {
+  return (
+    <section className={`rounded-2xl border bg-white p-6 shadow-sm dark:bg-slate-900 ${toneBorderClass(tone)}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{eyebrow}</p>
+      <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{title}</h2>
+      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">{body}</p>
+      {actionLabel && onAction ? (
+        <button
+          className="mt-4 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-blue-600 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          type="button"
+          onClick={onAction}
+        >
+          {actionLabel}
+        </button>
       ) : null}
     </section>
   );
 }
 
-function SeverityBadge({ tier, isClean }) {
-  const label = isClean ? tierLabel("clean") : tierLabel(tier);
-  const badgeClass = isClean ? "border-green-200 bg-green-50 text-green-800" : tierClass(tier);
-  return <Badge className={badgeClass}>{label}</Badge>;
+function WorkbenchHeader({ hasData, isAnalysisRunning }) {
+  return (
+    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Exception Workbench</p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+            Which invoices need human review now?
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+            Analyst queue for triaging invoice exceptions, validating evidence, and reviewing DRAFT-only follow-up material.
+          </p>
+        </div>
+        <Badge className={toneBadgeClass(isAnalysisRunning ? "info" : hasData ? "review" : "neutral")}>
+          {isAnalysisRunning ? "Analysis in progress" : hasData ? "Human-in-the-loop" : "Awaiting analysis"}
+        </Badge>
+      </div>
+    </header>
+  );
 }
 
-function FinancialImpact({ classification, isClean }) {
-  const financial = classification?.financial_summary;
-  if (!financial) return null;
-
-  if (classification.overall_tier >= 2) {
-    return (
-      <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-        <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Financial impact</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-md border border-red-100 bg-red-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Exposure</p>
-            <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-red-900">{formatMoney(financial.total_exposure)}</p>
-          </div>
-          <div className="rounded-md border border-amber-100 bg-amber-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Hold</p>
-            <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-amber-900">{formatMoney(financial.total_hold)}</p>
-          </div>
-          <div className="rounded-md border border-green-100 bg-green-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Cleared</p>
-            <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-green-900">{formatMoney(financial.total_approved)}</p>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
+function CardFact({ label, value, helper, tone = "neutral", isNumber = false }) {
   return (
-    <section className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900 dark:border-green-800 dark:bg-green-950/50 dark:text-green-100">
-      <p className="font-semibold">
-        {isClean ? "No hold indicated. Clean match amount:" : "No hold indicated. Cleared amount:"}{" "}
-        {formatMoney(financial.total_approved)}
+    <div className={`rounded-xl border bg-slate-50 p-3 dark:bg-slate-950/50 ${toneBorderClass(tone)}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+      <p className={`${isNumber ? "font-mono tabular-nums" : ""} mt-1 text-sm font-semibold leading-5 text-slate-950 dark:text-slate-100`}>
+        {value}
       </p>
+      {helper ? <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{helper}</p> : null}
+    </div>
+  );
+}
+
+function EvidenceConfidence({ row }) {
+  return (
+    <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Evidence strength</p>
+          <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-100">{row.evidenceStrength.label}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{row.evidenceStrength.helper}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Model confidence</p>
+          <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-slate-950 dark:text-slate-100">
+            {formatPercentValue(row.modelConfidence)}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            Supporting metadata only. Validate source records before action.
+          </p>
+        </div>
+      </div>
     </section>
   );
 }
 
-function MatchedFields({ match, invoiceRow }) {
-  const quantity = match.quantity_match ?? {};
-  const price = match.price_match ?? {};
-  const uom = match.uom_match ?? {};
-  const date = match.date_check ?? {};
-  const supplier = match.supplier_match ?? {};
+function EvidenceRationalePanel({ row }) {
+  const summary = row.evidenceSummary;
+  const comparisons = summary.comparisons;
 
   return (
     <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
-      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">Matched fields</summary>
-      <dl className="mt-4 grid gap-2">
-        <FieldRow label="PO number" value={renderValue(match.po_number, "No PO match")} />
-        <FieldRow label="GRN numbers" value={renderValue(match.grn_numbers, "No GRN")} />
-        <FieldRow label="Supplier name" value={renderValue(supplier.invoice_name ?? invoiceRow?.supplier_name)} />
-        <FieldRow label="Item code" value={renderValue(invoiceRow?.item_code)} />
-        <FieldRow
-          label="Quantity comparison"
-          value={`PO ${renderValue(quantity.po_qty)} | Invoice ${renderValue(quantity.invoiced_qty)} | GRN ${renderValue(quantity.grn_qty_total)}`}
-        />
-        <FieldRow
-          label="Price comparison"
-          value={`PO ${formatMoneyValue(price.po_price)} | Invoice ${formatMoneyValue(price.invoice_price)}`}
-        />
-        <FieldRow
-          label="UOM comparison"
-          value={`PO ${renderValue(uom.po_uom)} | Invoice ${renderValue(uom.invoice_uom)}`}
-        />
-        <FieldRow
-          label="Date comparison"
-          value={`Invoice ${renderValue(date.invoice_date)} | Earliest GRN ${renderValue(date.earliest_grn_date)}`}
-        />
-      </dl>
-    </details>
-  );
-}
-
-function ReasoningPanel({ match, classification }) {
-  const exceptionDetails = classification?.exception_details ?? [];
-  const quantity = match.quantity_match ?? {};
-  const price = match.price_match ?? {};
-  const uom = match.uom_match ?? {};
-  const date = match.date_check ?? {};
-
-  return (
-    <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800" open>
-      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">Evidence & rationale</summary>
-      <div className="mt-4 space-y-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
-        <section>
-          <p className="font-semibold text-slate-900 dark:text-slate-100">Step 1 matching evidence</p>
-          <p className="mt-1">{match.reasoning || "Not available"}</p>
-        </section>
-        {exceptionDetails.length ? (
-          <section>
-            <p className="font-semibold text-slate-900 dark:text-slate-100">Step 2 classification rationale</p>
-            <div className="mt-2 space-y-3">
-              {exceptionDetails.map((detail) => (
-                <div className="rounded-lg bg-white p-3 dark:bg-slate-900" key={`${detail.exception_code}-${detail.exception_name}`}>
-                  <p className="font-semibold">{detail.exception_code}: {detail.exception_name}</p>
+      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">
+        Evidence & rationale
+      </summary>
+      <div className="mt-4 grid gap-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <p className="font-semibold text-slate-900 dark:text-slate-100">1. What is wrong?</p>
+          {row.exceptionLabels.length ? (
+            <div className="mt-3 space-y-3">
+              {row.exceptionLabels.map((detail) => (
+                <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800" key={`${row.id}-${detail.code}`}>
+                  <p className="font-semibold text-slate-950 dark:text-slate-100">{detail.code}: {detail.label}</p>
                   <p className="mt-1">{detail.rationale}</p>
                 </div>
               ))}
             </div>
-          </section>
-        ) : null}
-        <section>
-          <p className="font-semibold text-slate-900 dark:text-slate-100">Matched values compared</p>
-          <dl className="mt-2 grid gap-2 md:grid-cols-2">
-            <FieldRow label="PO quantity" value={renderValue(quantity.po_qty)} />
-            <FieldRow label="Invoice quantity" value={renderValue(quantity.invoiced_qty)} />
-            <FieldRow label="GRN quantity" value={renderValue(quantity.grn_qty_total)} />
-            <FieldRow label="PO unit price" value={formatMoneyValue(price.po_price)} />
-            <FieldRow label="Invoice unit price" value={formatMoneyValue(price.invoice_price)} />
-            <FieldRow label="PO UOM" value={renderValue(uom.po_uom)} />
-            <FieldRow label="Invoice UOM" value={renderValue(uom.invoice_uom)} />
-            <FieldRow label="Invoice date" value={renderValue(date.invoice_date)} />
-            <FieldRow label="Earliest GRN date" value={renderValue(date.earliest_grn_date)} />
+          ) : (
+            <p className="mt-2">No exception rule triggered.</p>
+          )}
+          {!row.classification ? <p className="mt-3 font-semibold text-amber-700 dark:text-amber-300">Classification not available.</p> : null}
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <p className="font-semibold text-slate-900 dark:text-slate-100">2. Which source records prove it?</p>
+          <dl className="mt-3 grid gap-2 md:grid-cols-2">
+            {row.sourceRecords.map((record) => (
+              <FieldRow key={`${row.id}-${record.label}`} label={record.label} value={renderValue(record.value)} />
+            ))}
           </dl>
         </section>
-        <section>
-          <p className="font-semibold text-slate-900 dark:text-slate-100">Rule or exception code triggered</p>
-          <p className="mt-1">{(match.detected_exceptions ?? []).length ? match.detected_exceptions.join(", ") : "No exception rule triggered"}</p>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <p className="font-semibold text-slate-900 dark:text-slate-100">3. What is the dollar impact?</p>
+          <dl className="mt-3 grid gap-2 md:grid-cols-2">
+            <FieldRow label="Exposure amount" value={formatMoney(row.exposureAmount)} />
+            <FieldRow label="Hold amount" value={formatMoney(row.holdAmount)} />
+          </dl>
         </section>
-        {classification?.tier_rationale ? (
-          <section>
-            <p className="font-semibold text-slate-900 dark:text-slate-100">Tier rationale</p>
-            <p className="mt-1">{classification.tier_rationale}</p>
-          </section>
-        ) : null}
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <p className="font-semibold text-slate-900 dark:text-slate-100">4. What rule was applied?</p>
+          <p className="mt-2">{summary.ruleApplied}</p>
+          <p className="mt-3 text-slate-600 dark:text-slate-400">{summary.tierRationale}</p>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <p className="font-semibold text-slate-900 dark:text-slate-100">5. What should a human do next?</p>
+          <p className="mt-2">{summary.humanNextStep}</p>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <p className="font-semibold text-slate-900 dark:text-slate-100">Matched values compared</p>
+          <dl className="mt-3 grid gap-2 md:grid-cols-2">
+            <FieldRow
+              label="Quantity comparison"
+              value={`PO ${renderValue(comparisons.quantity.po)} | Invoice ${renderValue(comparisons.quantity.invoice)} | GRN ${renderValue(comparisons.quantity.grn)}`}
+            />
+            <FieldRow
+              label="Price comparison"
+              value={`PO ${formatMoneyValue(comparisons.price.po)} | Invoice ${formatMoneyValue(comparisons.price.invoice)}`}
+            />
+            <FieldRow
+              label="UOM comparison"
+              value={`PO ${renderValue(comparisons.uom.po)} | Invoice ${renderValue(comparisons.uom.invoice)}`}
+            />
+            <FieldRow
+              label="Date comparison"
+              value={`Invoice ${renderValue(comparisons.date.invoice)} | Earliest GRN ${renderValue(comparisons.date.earliestGrn)}`}
+            />
+          </dl>
+          <p className="mt-3 text-slate-600 dark:text-slate-400">{summary.matchRationale}</p>
+        </section>
       </div>
     </details>
   );
@@ -515,40 +568,47 @@ function DraftAction({
   const actionNote = tier3Notes[actionKey] ?? "";
 
   return (
-    <details className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
-      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">View Draft</summary>
-      <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+    <details className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">
+        View draft text
+      </summary>
+      <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <Badge className="border-blue-200 bg-blue-50 text-blue-800">{action.draft_label}</Badge>
-          <h4 className="mt-3 text-sm font-semibold text-slate-950 dark:text-slate-100">{action.subject}</h4>
+          <div className="flex flex-wrap gap-2">
+            <Badge className={toneBadgeClass(action.action_type === "escalation_memo" ? "escalate" : "info")}>
+              {routeLabelForAction(action)}
+            </Badge>
+            <Badge className={toneBadgeClass("neutral")}>{action.draft_label || "DRAFT - AWAITING REVIEW"}</Badge>
+          </div>
+          <h4 className="mt-3 text-sm font-semibold text-slate-950 dark:text-slate-100">{action.subject || "Draft subject not available"}</h4>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            {action.recipient_type}
+            {renderValue(action.recipient_type)}
             {action.recipient_name ? `: ${action.recipient_name}` : ""}
           </p>
         </div>
         {tier === 2 ? (
           <button
-            className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-blue-600 disabled:bg-green-700 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white dark:disabled:bg-green-700 dark:disabled:text-white"
+            className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-blue-600 disabled:bg-slate-500 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white dark:disabled:bg-slate-700 dark:disabled:text-slate-300"
             type="button"
             disabled={approved}
             onClick={() => onApprove(actionKey)}
           >
-            {approved ? "Queued ✓" : "Queue draft"}
+            {approved ? "Queued for review" : "Queue for review"}
           </button>
         ) : null}
       </div>
-      <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-white p-4 text-sm leading-6 text-slate-700 dark:bg-slate-900 dark:text-slate-300">
-        {action.body}
+      <pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm leading-6 text-slate-700 dark:bg-slate-950 dark:text-slate-300">
+        {action.body || "Draft body not available."}
       </pre>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-400">
+      <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3 dark:text-slate-400">
         <span>Deadline: {action.response_deadline_days ?? "None"}</span>
         <span>Exposure: {formatMoney(action.financial_reference?.exposure_amount)}</span>
         <span>Hold: {formatMoney(action.financial_reference?.hold_amount)}</span>
       </div>
       {tier === 3 ? (
-        <div className="mt-4 rounded-xl border border-red-200 bg-white p-4 dark:border-red-800 dark:bg-red-950/30">
+        <div className="mt-4 rounded-xl border border-red-200 bg-red-50/50 p-4 dark:border-red-800 dark:bg-red-950/30">
           <label className="text-sm font-semibold text-red-900 dark:text-red-100" htmlFor={`${actionKey}-note`}>
-            Action Taken note
+            Reviewer note
           </label>
           <textarea
             id={`${actionKey}-note`}
@@ -563,7 +623,7 @@ function DraftAction({
             disabled={!actionNote.trim() || reviewed}
             onClick={() => onTier3Reviewed(actionKey)}
           >
-            {reviewed ? "Reviewed ✓" : "Mark reviewed"}
+            {reviewed ? "Reviewed" : "Mark reviewed"}
           </button>
         </div>
       ) : null}
@@ -571,12 +631,8 @@ function DraftAction({
   );
 }
 
-function InvoiceCard({
-  match,
-  classification,
-  actionResult,
-  invoiceRow,
-  simulation,
+function DraftPanel({
+  row,
   approvedActions,
   tier3Notes,
   reviewedTier3,
@@ -584,55 +640,29 @@ function InvoiceCard({
   onTier3NoteChange,
   onTier3Reviewed
 }) {
-  const exceptions = match?.detected_exceptions ?? [];
-  const tier = classification?.overall_tier;
-  const isClean = exceptions.length === 0;
-  const confidence = classification?.confidence ?? match.confidence;
-  const showDrafts = actionResult?.actions?.length && (tier === 2 || tier === 3);
-  const simulationChanged = simulation?.changed;
-  const cardClass = simulationChanged
-    ? "rounded-2xl border border-blue-300 bg-blue-50 p-5 shadow-sm dark:border-blue-700 dark:bg-blue-950/40"
-    : "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900";
+  const draftActions = (row.actionResult?.actions ?? []).filter((action) => action.action_type !== "approval_note");
 
   return (
-    <article className={cardClass}>
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{plainLanguageSummary(match)}</h3>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            PO: {match.po_number ?? "No PO match"} | GRNs: {match.grn_numbers?.length ? match.grn_numbers.join(", ") : "None"}
-          </p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Draft/action panel</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{row.draftStatus.detail}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <SeverityBadge tier={tier} isClean={isClean} />
-          <Badge className="border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{statusLabel(match.match_status)}</Badge>
-        </div>
+        <Badge className={toneBadgeClass(row.draftStatus.tone)}>{row.draftStatus.label}</Badge>
       </div>
-
-      {simulationChanged ? (
-        <section className="mt-4 rounded-xl border border-blue-300 bg-white p-4 text-sm text-blue-950 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100">
-          <Badge className="border-blue-300 bg-blue-50 text-blue-800">Policy simulation changed this review path</Badge>
-          <p className="mt-3 font-semibold">
-            {tierLabel(simulation.originalTier)} &rarr; {tierLabel(simulation.simulatedTier)}
-          </p>
-          <p className="mt-1 text-blue-800 dark:text-blue-300">
-            This is a what-if view only. The original Claude rationale, draft actions, and review controls remain unchanged.
-          </p>
-        </section>
-      ) : null}
-
-      <ReasoningPanel match={match} classification={classification} />
-      <MatchedFields match={match} invoiceRow={invoiceRow} />
-      <FinancialImpact classification={classification} isClean={isClean} />
-
-      {showDrafts ? (
-        <div className="mt-4 space-y-4">
-          {actionResult.actions.map((action) => (
+      {!row.actionResult ? (
+        <p className="mt-4 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+          Draft status not available.
+        </p>
+      ) : draftActions.length ? (
+        <div className="mt-4 space-y-3">
+          {draftActions.map((action) => (
             <DraftAction
               action={action}
-              invoiceNumber={match.invoice_number}
-              tier={tier}
-              key={`${action.exception_code}-${action.action_type}-${action.subject}`}
+              invoiceNumber={row.invoiceNumber}
+              tier={row.classification?.overall_tier}
+              key={`${row.id}-${action.exception_code}-${action.action_type}-${action.subject}`}
               approvedActions={approvedActions}
               tier3Notes={tier3Notes}
               reviewedTier3={reviewedTier3}
@@ -642,9 +672,105 @@ function InvoiceCard({
             />
           ))}
         </div>
+      ) : (
+        <p className="mt-4 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+          No draft generated for this invoice.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function InvoiceCard({
+  row,
+  approvedActions,
+  tier3Notes,
+  reviewedTier3,
+  onApprove,
+  onTier3NoteChange,
+  onTier3Reviewed
+}) {
+  const simulationChanged = row.simulation?.changed;
+  const cardClass = simulationChanged
+    ? "rounded-2xl border border-blue-300 bg-blue-50 p-5 shadow-sm dark:border-blue-700 dark:bg-blue-950/40"
+    : "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900";
+
+  return (
+    <article className={cardClass}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Invoice exception case</p>
+          <h3 className="mt-1 text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{row.invoiceNumber}</h3>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{row.supplierName}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge className={toneBadgeClass(row.reviewPriority.tone)}>{row.reviewPriority.label}</Badge>
+            <Badge className={toneBadgeClass(row.tier === "clean" ? "clean" : row.tier === 3 ? "escalate" : row.tier === 2 ? "review" : "info")}>
+              {row.tierLabel}
+            </Badge>
+            <Badge className={toneBadgeClass("neutral")}>{statusLabel(row.match?.match_status)}</Badge>
+          </div>
+        </div>
+        <div className="grid gap-2 text-sm sm:grid-cols-2 lg:min-w-[22rem]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">PO</p>
+            <p className="mt-1 font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{renderValue(row.match?.po_number, "No PO match")}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">GRN</p>
+            <p className="mt-1 font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{renderValue(row.match?.grn_numbers, "No GRN")}</p>
+          </div>
+        </div>
+      </div>
+
+      {simulationChanged ? (
+        <section className="mt-4 rounded-xl border border-blue-300 bg-white p-4 text-sm text-blue-950 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100">
+          <Badge className="border-blue-300 bg-blue-50 text-blue-800">Policy simulation changed this review path</Badge>
+          <p className="mt-3 font-semibold">
+            {tierLabel(row.simulation.originalTier)} &rarr; {tierLabel(row.simulation.simulatedTier)}
+          </p>
+          <p className="mt-1 text-blue-800 dark:text-blue-300">
+            This is a what-if view only. The original Claude rationale, draft actions, and review controls remain unchanged.
+          </p>
+        </section>
       ) : null}
 
-      <ConfidencePanel confidence={confidence} />
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <CardFact label="Exposure" value={formatMoney(row.exposureAmount)} tone="info" isNumber />
+        <CardFact label="Hold" value={formatMoney(row.holdAmount)} tone={row.holdAmount > 0 ? "review" : "neutral"} isNumber />
+        <CardFact label="Recommended route" value={row.recommendedRoute.label} tone={row.recommendedRoute.tone} />
+        <CardFact label="Draft status" value={row.draftStatus.label} tone={row.draftStatus.tone} />
+        <CardFact label="Evidence" value={row.evidenceStrength.label} helper={formatPercentValue(row.modelConfidence)} tone={row.evidenceStrength.tone} isNumber />
+      </div>
+
+      <div className="mt-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Exception labels</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {row.exceptionLabels.length ? (
+            row.exceptionLabels.map((item) => (
+              <Badge
+                key={`${row.id}-${item.code}-badge`}
+                className={toneBadgeClass(item.tier === 3 ? "escalate" : item.tier === 2 ? "review" : "info")}
+              >
+                {item.code}: {item.label}
+              </Badge>
+            ))
+          ) : (
+            <Badge className={toneBadgeClass("clean")}>No detected exceptions</Badge>
+          )}
+        </div>
+      </div>
+
+      <EvidenceRationalePanel row={row} />
+      <DraftPanel
+        row={row}
+        approvedActions={approvedActions}
+        tier3Notes={tier3Notes}
+        reviewedTier3={reviewedTier3}
+        onApprove={onApprove}
+        onTier3NoteChange={onTier3NoteChange}
+        onTier3Reviewed={onTier3Reviewed}
+      />
+      <EvidenceConfidence row={row} />
     </article>
   );
 }
@@ -729,6 +855,7 @@ function WorkspaceTabs({ activeWorkspace, onChange, dashboardReady, reviewCount,
 function ReviewQueueControls({
   filters,
   onFiltersChange,
+  onReset,
   supplierOptions,
   exceptionOptions,
   visibleCount,
@@ -739,20 +866,25 @@ function ReviewQueueControls({
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Exception Workbench</h2>
+          <h3 className="text-sm font-semibold text-slate-950 dark:text-slate-100">Filter and sort queue</h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            {visibleCount} of {totalCount} invoice cards shown. Filters are local and do not change classifications.
+            <span className="font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{visibleCount}</span> of{" "}
+            <span className="font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{totalCount}</span> invoices visible. Filters are local and do not change classifications.
           </p>
         </div>
-        <Badge className="border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-200">
-          Requires human review
-        </Badge>
+        <button
+          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-blue-600 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          type="button"
+          onClick={onReset}
+        >
+          Reset filters
+        </button>
       </div>
 
-      <div className="mt-5 grid gap-3 lg:grid-cols-[1.4fr_0.8fr_1fr_1fr_1fr]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(16rem,1.35fr)_repeat(4,minmax(9rem,1fr))]">
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" htmlFor="queue-search">
             Search
@@ -825,12 +957,117 @@ function ReviewQueueControls({
             value={filters.sort}
             onChange={(event) => updateFilter("sort", event.target.value)}
           >
-            <option value="severity">Severity first</option>
+            <option value="severity">Priority first</option>
             <option value="exposure">Exposure high to low</option>
+            <option value="hold">Hold high to low</option>
+            <option value="supplier">Supplier name</option>
             <option value="invoice">Invoice number</option>
           </select>
         </div>
       </div>
+    </section>
+  );
+}
+
+function ExceptionWorkbenchPanel({
+  viewModel,
+  filters,
+  onFiltersChange,
+  onResetFilters,
+  isAnalysisRunning,
+  hasAnalysisFailure,
+  onStart,
+  approvedActions,
+  tier3Notes,
+  reviewedTier3,
+  onApprove,
+  onTier3NoteChange,
+  onTier3Reviewed
+}) {
+  if (isAnalysisRunning) {
+    return (
+      <section className="grid gap-4">
+        <WorkbenchHeader hasData={false} isAnalysisRunning />
+        <WorkbenchEmptyState
+          eyebrow="Analysis in progress"
+          title="Workbench will populate after the prompt chain completes"
+          body="The queue is intentionally withheld while matching, classification, or draft generation is running so analysts do not act on partial results."
+          tone="info"
+        />
+      </section>
+    );
+  }
+
+  if (hasAnalysisFailure) {
+    return (
+      <section className="grid gap-4">
+        <WorkbenchHeader hasData={false} isAnalysisRunning={false} />
+        <WorkbenchEmptyState
+          eyebrow="Analysis failed"
+          title="Exception Workbench is waiting for a successful run"
+          body="The previous run did not complete, so no stale completed queue is shown here. Return to Start, resolve the failure, and rerun analysis."
+          actionLabel="Go to Start"
+          onAction={onStart}
+          tone="escalate"
+        />
+      </section>
+    );
+  }
+
+  if (!viewModel.hasData) {
+    return (
+      <section className="grid gap-4">
+        <WorkbenchHeader hasData={false} isAnalysisRunning={false} />
+        <WorkbenchEmptyState
+          eyebrow="Awaiting analysis"
+          title="Run analysis from Start to build the exception queue"
+          body="Upload purchase orders, invoices, and goods receipts, then run Analyze. Completed results will populate invoice priorities, evidence, exposure, holds, and DRAFT-only follow-up material."
+          actionLabel="Go to Start"
+          onAction={onStart}
+          tone="neutral"
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section className="grid gap-4">
+      <WorkbenchHeader hasData={viewModel.hasData} isAnalysisRunning={false} />
+      <WorkbenchSummaryStrip summary={viewModel.summary} />
+      <ReviewQueueControls
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        onReset={onResetFilters}
+        supplierOptions={viewModel.supplierOptions}
+        exceptionOptions={viewModel.exceptionOptions}
+        visibleCount={viewModel.visibleRows.length}
+        totalCount={viewModel.rows.length}
+      />
+      {viewModel.visibleRows.length ? (
+        <div className="grid gap-4">
+          {viewModel.visibleRows.map((row) => (
+            <InvoiceCard
+              key={row.id}
+              row={row}
+              approvedActions={approvedActions}
+              tier3Notes={tier3Notes}
+              reviewedTier3={reviewedTier3}
+              onApprove={onApprove}
+              onTier3NoteChange={onTier3NoteChange}
+              onTier3Reviewed={onTier3Reviewed}
+            />
+          ))}
+        </div>
+      ) : (
+        <WorkbenchEmptyState
+          eyebrow="No filter results"
+          title="No invoices match the selected filters."
+          body="Adjust search, supplier, review path, exception, or sort controls to bring invoices back into view."
+          actionLabel="Reset filters"
+          onAction={onResetFilters}
+          tone="neutral"
+        />
+      )}
     </section>
   );
 }
@@ -1055,81 +1292,6 @@ function buildToleranceSimulation(matchResults, classificationResults, tolerance
   };
 }
 
-function renderRank(item) {
-  const exceptions = item.match?.detected_exceptions ?? [];
-  if (item.classification?.overall_tier === 3) return 1;
-  if (item.classification?.overall_tier === 2) return 2;
-  if (item.classification?.overall_tier === 1) return 3;
-  if (exceptions.length === 0) return 4;
-  return 5;
-}
-
-function getCardSupplierName(item) {
-  return item.invoiceRow?.supplier_name || item.match?.supplier_match?.invoice_name || "Unknown supplier";
-}
-
-function getCardExceptionCodes(item) {
-  return item.classification?.detected_exceptions ?? item.match?.detected_exceptions ?? [];
-}
-
-function getCardTier(item) {
-  const exceptions = getCardExceptionCodes(item);
-  if (exceptions.length === 0) return "clean";
-  return item.classification?.overall_tier ?? "unknown";
-}
-
-function getCardExposure(item) {
-  const financial = item.classification?.financial_summary ?? {};
-  const summaryExposure = typeof financial.total_exposure === "number" ? financial.total_exposure : 0;
-  if (summaryExposure) return summaryExposure;
-
-  return (item.classification?.exception_details ?? []).reduce((sum, detail) => (
-    typeof detail.exposure_amount === "number" ? sum + detail.exposure_amount : sum
-  ), 0);
-}
-
-function matchesTierFilter(item, tierFilter) {
-  if (tierFilter === "all") return true;
-  const tier = getCardTier(item);
-  if (tierFilter === "clean") return tier === "clean";
-  if (tierFilter === "tier1") return tier === 1;
-  if (tierFilter === "tier2") return tier === 2;
-  if (tierFilter === "tier3") return tier === 3;
-  return true;
-}
-
-function filterAndSortReviewCards(cards, filters) {
-  const query = filters.search.trim().toLowerCase();
-  return cards
-    .filter((item) => {
-      const supplierName = getCardSupplierName(item);
-      const exceptions = getCardExceptionCodes(item);
-      const searchable = [
-        item.match?.invoice_number,
-        item.match?.po_number,
-        supplierName,
-        item.invoiceRow?.po_reference,
-        ...exceptions
-      ].filter(Boolean).join(" ").toLowerCase();
-
-      return (
-        (!query || searchable.includes(query)) &&
-        matchesTierFilter(item, filters.tier) &&
-        (filters.supplier === "all" || supplierName === filters.supplier) &&
-        (filters.exception === "all" || exceptions.includes(filters.exception))
-      );
-    })
-    .sort((left, right) => {
-      if (filters.sort === "exposure") {
-        return getCardExposure(right) - getCardExposure(left) || renderRank(left) - renderRank(right) || left.index - right.index;
-      }
-      if (filters.sort === "invoice") {
-        return String(left.match?.invoice_number ?? "").localeCompare(String(right.match?.invoice_number ?? ""));
-      }
-      return renderRank(left) - renderRank(right) || left.index - right.index;
-    });
-}
-
 export default function App() {
   const [parsedFiles, setParsedFiles] = useState(null);
   const [uploadError, setUploadError] = useState("");
@@ -1172,27 +1334,17 @@ export default function App() {
     }),
     [actionResults, auditEntries, classificationResults, matchResults, parsedFiles, rootCauseAnalysis]
   );
-  const renderedCards = useMemo(() => {
-    return (matchResults?.results ?? [])
-      .map((match, index) => ({
-        match,
-        index,
-        invoiceRow: parsedFiles?.invoices?.[index],
-        classification: classificationResults?.classifications?.[index],
-        actionResult: actionResults?.action_results?.[index],
-        simulation: toleranceSimulation.cards[index]
-      }))
-      .sort((left, right) => renderRank(left) - renderRank(right) || left.index - right.index);
-  }, [actionResults, classificationResults, matchResults, parsedFiles, toleranceSimulation]);
-  const supplierFilterOptions = useMemo(() => (
-    [...new Set(renderedCards.map((item) => getCardSupplierName(item)))].sort((left, right) => left.localeCompare(right))
-  ), [renderedCards]);
-  const exceptionFilterOptions = useMemo(() => (
-    [...new Set(renderedCards.flatMap((item) => getCardExceptionCodes(item)))].sort()
-  ), [renderedCards]);
-  const reviewQueueCards = useMemo(() => (
-    filterAndSortReviewCards(renderedCards, queueFilters)
-  ), [queueFilters, renderedCards]);
+  const workbenchViewModel = useMemo(
+    () => buildExceptionWorkbenchViewModel({
+      parsedFiles,
+      matchResults,
+      classificationResults,
+      actionResults,
+      toleranceSimulation,
+      filters: queueFilters
+    }),
+    [actionResults, classificationResults, matchResults, parsedFiles, queueFilters, toleranceSimulation]
+  );
 
   function handleApiKeyChange(value) {
     setApiKey(value);
@@ -1556,7 +1708,7 @@ export default function App() {
           activeWorkspace={activeWorkspace}
           onChange={setActiveWorkspace}
           dashboardReady={Boolean(classificationResults)}
-          reviewCount={renderedCards.length}
+          reviewCount={workbenchViewModel.rows.length}
           auditEntryCount={auditEntries.length}
         />
 
@@ -1583,51 +1735,34 @@ export default function App() {
         ) : null}
 
         {activeWorkspace === "workbench" ? (
-          <section className="grid gap-4">
-            <ReviewQueueControls
-              filters={queueFilters}
-              onFiltersChange={setQueueFilters}
-              supplierOptions={supplierFilterOptions}
-              exceptionOptions={exceptionFilterOptions}
-              visibleCount={reviewQueueCards.length}
-              totalCount={renderedCards.length}
-            />
-            {reviewQueueCards.length ? (
-              reviewQueueCards.map(({ match, index, invoiceRow, classification, actionResult, simulation }) => (
-                <InvoiceCard
-                  key={`${match.invoice_number}-${index}`}
-                  match={match}
-                  classification={classification}
-                  actionResult={actionResult}
-                  invoiceRow={invoiceRow}
-                  simulation={simulation}
-                  approvedActions={approvedActions}
-                  tier3Notes={tier3Notes}
-                  reviewedTier3={reviewedTier3}
-                  onApprove={(actionKey) => {
-                    setApprovedActions((current) => new Set([...current, actionKey]));
-                  }}
-                  onTier3NoteChange={(actionKey, value) => {
-                    setTier3Notes((current) => ({ ...current, [actionKey]: value }));
-                    if (!value.trim()) {
-                      setReviewedTier3((current) => {
-                        const next = new Set(current);
-                        next.delete(actionKey);
-                        return next;
-                      });
-                    }
-                  }}
-                  onTier3Reviewed={(actionKey) => {
-                    setReviewedTier3((current) => new Set([...current, actionKey]));
-                  }}
-                />
-              ))
-            ) : (
-              <section className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                No invoice cards match the current workbench filters.
-              </section>
-            )}
-          </section>
+          <ExceptionWorkbenchPanel
+            viewModel={workbenchViewModel}
+            filters={queueFilters}
+            onFiltersChange={setQueueFilters}
+            onResetFilters={() => setQueueFilters(DEFAULT_QUEUE_FILTERS)}
+            isAnalysisRunning={Boolean(runningStep)}
+            hasAnalysisFailure={Boolean(error && failedStep)}
+            onStart={() => setActiveWorkspace("start")}
+            approvedActions={approvedActions}
+            tier3Notes={tier3Notes}
+            reviewedTier3={reviewedTier3}
+            onApprove={(actionKey) => {
+              setApprovedActions((current) => new Set([...current, actionKey]));
+            }}
+            onTier3NoteChange={(actionKey, value) => {
+              setTier3Notes((current) => ({ ...current, [actionKey]: value }));
+              if (!value.trim()) {
+                setReviewedTier3((current) => {
+                  const next = new Set(current);
+                  next.delete(actionKey);
+                  return next;
+                });
+              }
+            }}
+            onTier3Reviewed={(actionKey) => {
+              setReviewedTier3((current) => new Set([...current, actionKey]));
+            }}
+          />
         ) : null}
 
         {activeWorkspace === "analytics" ? (

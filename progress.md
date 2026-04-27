@@ -21,7 +21,8 @@ Claude API contract stabilization pass 2 (numeric constraints) — COMPLETE — 
 Chunk 1 backend Analyze reliability pass — COMPLETE — April 26, 2026
 Chunk 2A.1 Product IA shell and safe wording completed.
 Chunk 2A.2 Executive Summary decision-first page completed.
-Next: Chunk 2A.3 Exception Workbench scanability
+Chunk 2A.3 Exception Workbench scanability completed.
+Next: Chunk 2A.4 Supplier & Policy Analytics grouping
 
 ## Stage log
 
@@ -94,7 +95,9 @@ Next: Chunk 2A.3 Exception Workbench scanability
   - Executive Summary now starts with outcome, exposure, top drivers, and deterministic next actions
   - Supplier scorecard and supplier exception heatmap moved into Supplier & Policy Analytics
   - Session token/model trace moved into Audit & Governance
-  - Chunk 2A.3 Exception Workbench scanability is the next micro-chunk
+  - Chunk 2A.3 Exception Workbench scanability completed
+  - Exception Workbench now uses derived rows, compact queue metrics, clearer filters, stronger invoice hierarchy, structured evidence, quieter confidence metadata, and DRAFT-only action panels
+  - Chunk 2A.4 Supplier & Policy Analytics grouping is the next micro-chunk
 
 ## Decisions pending
 
