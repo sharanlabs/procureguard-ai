@@ -987,3 +987,86 @@ Local API retest, then Chunk 2 planning.
 - No prompts, CSV data, golden dataset, eval harness logic, product architecture, runtime AI stack, Send button, or real email sending changed.
 - Claude remains the runtime AI stack.
 - Codex is only the repo editing assistant.
+
+## Chunk 2A.1 Product IA shell and safe wording handoff — April 26, 2026
+
+### Purpose
+Make the top-level product structure and visible wording safer and more enterprise-ready without redesigning the inner dashboard or changing the Claude-based AI stack.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- app/lib/format.js
+- app/lib/dashboard.js
+- app/lib/rootCause.js
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/lib/format.js
+- app/lib/dashboard.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T14-46-21-871Z.json
+- evals/results/eval_results_2026-04-27T15-30-40-141Z.json
+- evals/results/eval_results_2026-04-27T15-36-46-748Z.json
+
+### Navigation/product structure changes
+- Replaced the old top-level surfaces with Start, Executive Summary, Exception Workbench, Supplier & Policy Analytics, and Audit & Governance.
+- Start now holds the existing local API key, CSV upload, and progress setup.
+- Executive Summary uses the existing dashboard content for this chunk.
+- Exception Workbench uses the existing review queue cards and filters with safer labels.
+- Supplier & Policy Analytics now hosts the policy tolerance simulator, root-cause panel, and a placeholder note for supplier scorecard separation in a later chunk.
+- Audit & Governance now hosts the existing audit export and session audit trail.
+- Analyze completion now navigates to Executive Summary after the full prompt chain completes.
+
+### Wording/safety changes
+- Product framing now presents ProcureGuard AI as an AP Exception Control Tower.
+- Tier labels now read Clean match, Expedited review candidate, Human review required, and Escalation recommended.
+- Replaced visible Review Queue language with Exception Workbench.
+- Replaced Reasoning with Evidence & rationale.
+- Replaced unsafe auto-review and auto-approve wording in the tolerance simulator with low-risk human-review routing language.
+- Replaced Client-side only with Browser-only pattern review.
+- Replaced draft approval button wording with queue-oriented draft wording.
+- Kept draft communications DRAFT-only and did not add any Send action.
+
+### Formatting helper changes
+- Added formatModelName, formatStageName, formatDiversityCert, and formatDuration in app/lib/format.js.
+- Used formatStageName, formatModelName, and formatDuration in visible audit rows.
+- Used formatModelName in dashboard model display.
+- Used formatDiversityCert in supplier scorecard output, including None for empty certifications.
+
+### Backend files protected or touched
+- No backend files were touched.
+- app/lib/pipeline.js, app/lib/claude.js, api/messages.js, and app/lib/schemas.js were protected and unchanged.
+- No prompts, CSV data, golden dataset, or eval harness logic changed.
+
+### Verification commands and results
+- Pre-edit git status --short: one pre-existing untracked eval result was present.
+- Pre-edit npm run build: passed with the existing Vite chunk-size warning.
+- Pre-edit node evals/run_evals.js: passed 25/25, 100%.
+- Post-edit npm run build: passed with the existing Vite chunk-size warning.
+- Post-edit node evals/run_evals.js: passed 25/25, 100%.
+- node --check api/messages.js: passed.
+- grep -R "console.log" app api || true: no matches.
+- grep -R "localStorage" app api || true: no matches.
+- grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true: no matches.
+- grep -R "Send" app || true: no matches.
+- git diff --check: passed.
+- git status --short: modified app/docs/progress files plus untracked eval result files before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T15-36-46-748Z.json
+- Also committed the pre-existing eval output evals/results/eval_results_2026-04-27T14-46-21-871Z.json and the required pre-edit eval output evals/results/eval_results_2026-04-27T15-30-40-141Z.json so the stage leaves no loose eval artifacts.
+
+### Known issues
+- The Recharts dashboard still triggers the existing Vite production chunk-size warning.
+- Supplier scorecard and heatmap remain inside Executive Summary for this shell chunk; fuller separation is deferred.
+- No live Claude API call was run during this pass.
+
+### Next step
+Chunk 2A.2 Executive Summary decision-first page

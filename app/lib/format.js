@@ -11,11 +11,81 @@ export function formatPercent(value) {
   return `${Math.round(value * 100)}%`;
 }
 
+const MODEL_LABELS = {
+  "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6",
+  "claude-opus-4-7": "Claude Opus 4.7"
+};
+
+const STAGE_LABELS = {
+  matching: "Matching",
+  classification: "Classification",
+  action_generation: "Draft generation"
+};
+
+const DIVERSITY_CERT_LABELS = {
+  small_business: "Small business",
+  woman_owned: "Woman-owned",
+  veteran_owned: "Veteran-owned",
+  minority_owned: "Minority-owned"
+};
+
+function titleCaseWords(text) {
+  return String(text)
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`)
+    .join(" ");
+}
+
+export function formatModelName(model) {
+  const value = String(model ?? "").trim();
+  if (!value) return "Not available";
+  if (MODEL_LABELS[value]) return MODEL_LABELS[value];
+
+  const parsed = value.match(/^claude-([a-z]+)-(\d+)-(\d+)/i);
+  if (parsed) {
+    return `Claude ${titleCaseWords(parsed[1])} ${parsed[2]}.${parsed[3]}`;
+  }
+
+  return titleCaseWords(value.replace(/[-_]/g, " "));
+}
+
+export function formatStageName(stage) {
+  const value = String(stage ?? "").trim();
+  if (!value) return "Not available";
+  return STAGE_LABELS[value] ?? titleCaseWords(value.replace(/[-_]/g, " "));
+}
+
+export function formatDiversityCert(cert) {
+  const value = String(cert ?? "").trim();
+  if (!value) return "None";
+
+  const normalized = value.toLowerCase().replace(/[\s-]+/g, "_");
+  return DIVERSITY_CERT_LABELS[normalized] ?? titleCaseWords(value.replace(/_/g, " "));
+}
+
+export function formatDuration(milliseconds) {
+  if (typeof milliseconds !== "number" || Number.isNaN(milliseconds)) return "-";
+  if (milliseconds < 1000) return `${Math.max(0, Math.round(milliseconds))} ms`;
+  if (milliseconds < 60_000) {
+    const seconds = milliseconds / 1000;
+    return `${seconds.toFixed(seconds >= 10 ? 0 : 1)} sec`;
+  }
+  if (milliseconds < 3_600_000) {
+    const minutes = milliseconds / 60_000;
+    return `${minutes.toFixed(minutes >= 10 ? 0 : 1)} min`;
+  }
+
+  const hours = milliseconds / 3_600_000;
+  return `${hours.toFixed(hours >= 10 ? 0 : 1)} hr`;
+}
+
 export function tierLabel(tier) {
-  if (tier === "clean") return "CLEAN MATCH";
-  if (tier === 1) return "AUTO-APPROVE";
-  if (tier === 2) return "REVIEW REQUIRED";
-  if (tier === 3) return "ESCALATE";
+  if (tier === "clean") return "Clean match";
+  if (tier === 1) return "Expedited review candidate";
+  if (tier === 2) return "Human review required";
+  if (tier === 3) return "Escalation recommended";
   return "Not classified";
 }
 

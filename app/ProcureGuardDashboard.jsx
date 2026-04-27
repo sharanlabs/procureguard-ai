@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { formatMoney, formatPercent } from "./lib/format.js";
+import { formatDuration, formatModelName, formatMoney, formatPercent, tierLabel } from "./lib/format.js";
 
 const CHART_COLORS = {
   clean: "#22c55e",
@@ -50,7 +50,7 @@ function formatPercentOneDecimal(value) {
 
 function formatMilliseconds(value) {
   if (!value) return "-";
-  return `${formatInteger(value)} ms`;
+  return formatDuration(value);
 }
 
 function formatReviewTime(minutes) {
@@ -162,9 +162,9 @@ export default function ExecutiveDashboard({ analytics, isDarkMode }) {
   if (!analytics.hasData) {
     return (
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Executive Dashboard</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Executive Summary</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
-          AI-assisted review operations console
+          AP exception summary
         </h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
           Upload the three procurement CSVs and run analysis to populate batch health, exposure, supplier, warehouse,
@@ -190,9 +190,9 @@ export default function ExecutiveDashboard({ analytics, isDarkMode }) {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Executive Dashboard</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Executive Summary</p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
-            AI-assisted review operations console
+            AP exception summary
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
             Batch health, exposure, review load, and governance status for AP and procurement leaders.
@@ -213,7 +213,7 @@ export default function ExecutiveDashboard({ analytics, isDarkMode }) {
         <DashboardKpi
           label="Exceptions Found"
           value={formatInteger(analytics.exceptionRows)}
-          helper={`Tier 1: ${analytics.tierCounts.tier1} | Tier 2: ${analytics.tierCounts.tier2} | Tier 3: ${analytics.tierCounts.tier3}`}
+          helper={`${tierLabel(1)}: ${analytics.tierCounts.tier1} | ${tierLabel(2)}: ${analytics.tierCounts.tier2} | ${tierLabel(3)}: ${analytics.tierCounts.tier3}`}
           tone={analytics.escalateCount ? "escalate" : "review"}
         />
         <DashboardKpi
@@ -433,7 +433,9 @@ export default function ExecutiveDashboard({ analytics, isDarkMode }) {
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800">
               <p className="font-semibold text-slate-900 dark:text-slate-100">Models used</p>
-              <p className="mt-1 text-slate-600 dark:text-slate-400">{governance.models.join(", ") || "Not available"}</p>
+              <p className="mt-1 text-slate-600 dark:text-slate-400">
+                {governance.models.map(formatModelName).join(", ") || "Not available"}
+              </p>
             </div>
           </div>
           <p className="mt-4 text-xs leading-5 text-slate-500 dark:text-slate-400">
@@ -496,7 +498,7 @@ export function RootCauseAnalysisPanel({ analysis }) {
           </p>
         </div>
         <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">
-          Client-side only
+          Browser-only pattern review
         </Badge>
       </div>
 

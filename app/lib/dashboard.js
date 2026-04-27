@@ -1,4 +1,5 @@
 import { EXCEPTION_NAMES } from "./rootCause.js";
+import { formatDiversityCert } from "./format.js";
 
 const FALLBACK_SUPPLIER = "Unknown supplier";
 const FALLBACK_WAREHOUSE = "No GRN";
@@ -293,6 +294,9 @@ export function buildDashboardAnalytics({
     .map((supplier) => {
       const exceptionRate = supplier.invoiceCount ? supplier.exceptionRows / supplier.invoiceCount : 0;
       const riskLevel = getSupplierRisk(exceptionRate, supplier.reviewCount, supplier.escalateCount);
+      const diversityCerts = supplier.diversityCerts
+        .map(formatDiversityCert)
+        .filter((cert) => cert !== "None");
 
       return {
         ...supplier,
@@ -300,7 +304,7 @@ export function buildDashboardAnalytics({
         matchRate: supplier.invoiceCount ? supplier.cleanCount / supplier.invoiceCount : 0,
         riskLevel,
         riskRank: RISK_RANK[riskLevel],
-        diversityCertification: supplier.diversityCerts.join(", ") || "Not provided",
+        diversityCertification: diversityCerts.join(", ") || "None",
         topExceptionCodes: Object.entries(supplier.topCodes)
         .sort((left, right) => right[1] - left[1])
         .slice(0, 3)
@@ -371,9 +375,9 @@ export function buildDashboardAnalytics({
       escalate: escalateCount
     }],
     exposureByTierData: [
-      { name: "Auto-approve", exposure: tierExposure.autoApprove, count: autoApproveCount },
-      { name: "Review", exposure: tierExposure.review, count: reviewCount },
-      { name: "Escalate", exposure: tierExposure.escalate, count: escalateCount }
+      { name: "Expedited review candidate", exposure: tierExposure.autoApprove, count: autoApproveCount },
+      { name: "Human review required", exposure: tierExposure.review, count: reviewCount },
+      { name: "Escalation recommended", exposure: tierExposure.escalate, count: escalateCount }
     ],
     patternCount: rootCauseAnalysis?.patterns?.length ?? 0,
     roiEstimate: {

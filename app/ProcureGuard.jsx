@@ -8,8 +8,11 @@ import { callClaudeAPI } from "./lib/claude.js";
 import { normalizeProcurementFiles } from "./lib/csv.js";
 import { buildDashboardAnalytics } from "./lib/dashboard.js";
 import {
+  formatDuration,
+  formatModelName,
   formatMoney,
   formatPercent,
+  formatStageName,
   plainLanguageSummary,
   renderValue,
   statusLabel,
@@ -53,9 +56,11 @@ const DEFAULT_TOLERANCES = {
   dateBusinessDays: 2
 };
 const WORKSPACE_TABS = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "review", label: "Review Queue" },
-  { id: "settings", label: "Settings & Audit" }
+  { id: "start", label: "Start" },
+  { id: "executive", label: "Executive Summary" },
+  { id: "workbench", label: "Exception Workbench" },
+  { id: "analytics", label: "Supplier & Policy Analytics" },
+  { id: "governance", label: "Audit & Governance" }
 ];
 const DEFAULT_QUEUE_FILTERS = {
   search: "",
@@ -181,9 +186,9 @@ function ApiKeyPanel({ apiKey, onApiKeyChange }) {
 
 function ProgressPanel({ runningStep, statusMessage, hasMatchResults, hasClassificationResults, hasActionResults }) {
   const steps = [
-    ["matching", "Match", hasMatchResults],
-    ["classification", "Classify", hasClassificationResults],
-    ["action_generation", "Draft", hasActionResults]
+    ["matching", formatStageName("matching"), hasMatchResults],
+    ["classification", formatStageName("classification"), hasClassificationResults],
+    ["action_generation", formatStageName("action_generation"), hasActionResults]
   ];
 
   return (
@@ -244,8 +249,8 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
 
   const changedCount = simulation.changedInvoiceCount;
   const summaryText = changedCount
-    ? `Adjusting tolerances would reclassify ${changedCount} invoice(s), changing Tier 2 count from ${simulation.originalCounts.tier2} to ${simulation.simulatedCounts.tier2}.`
-    : "No invoices would change tier under the current tolerance settings.";
+    ? `Adjusting tolerances would reclassify ${changedCount} invoice(s), changing ${tierLabel(2).toLowerCase()} count from ${simulation.originalCounts.tier2} to ${simulation.simulatedCounts.tier2}.`
+    : "No invoices would change review path under the current tolerance settings.";
 
   return (
     <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm dark:border-blue-800 dark:bg-blue-950/40">
@@ -298,19 +303,19 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
       <div className="mt-5 rounded-xl border border-blue-200 bg-white p-4 dark:border-blue-800 dark:bg-slate-900">
         <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{summaryText}</p>
         <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
-          <p>Original Tier 1: <span className="font-semibold">{simulation.originalCounts.tier1}</span></p>
-          <p>Original Tier 2: <span className="font-semibold">{simulation.originalCounts.tier2}</span></p>
-          <p>Original Tier 3: <span className="font-semibold">{simulation.originalCounts.tier3}</span></p>
-          <p>Simulated Tier 1: <span className="font-semibold">{simulation.simulatedCounts.tier1}</span></p>
-          <p>Simulated Tier 2: <span className="font-semibold">{simulation.simulatedCounts.tier2}</span></p>
-          <p>Simulated Tier 3: <span className="font-semibold">{simulation.simulatedCounts.tier3}</span></p>
+          <p>Original {tierLabel(1)}: <span className="font-semibold">{simulation.originalCounts.tier1}</span></p>
+          <p>Original {tierLabel(2)}: <span className="font-semibold">{simulation.originalCounts.tier2}</span></p>
+          <p>Original {tierLabel(3)}: <span className="font-semibold">{simulation.originalCounts.tier3}</span></p>
+          <p>Simulated {tierLabel(1)}: <span className="font-semibold">{simulation.simulatedCounts.tier1}</span></p>
+          <p>Simulated {tierLabel(2)}: <span className="font-semibold">{simulation.simulatedCounts.tier2}</span></p>
+          <p>Simulated {tierLabel(3)}: <span className="font-semibold">{simulation.simulatedCounts.tier3}</span></p>
         </div>
         <p className="mt-4 text-sm font-semibold text-blue-950 dark:text-blue-100">
-          Potential auto-review shift: {formatMoney(simulation.potentialAutoReviewShift)} in held exposure would move
-          from review to auto-approve under this simulated policy.
+          Potential low-risk review shift: {formatMoney(simulation.potentialAutoReviewShift)} in held exposure could be
+          routed to expedited human review under this simulated policy.
         </p>
         <p className="mt-2 text-xs text-blue-800 dark:text-blue-300">
-          Simulation only. Actual classifications remain unchanged until policy is approved.
+          Simulation only. Actual classifications remain unchanged until policy is reviewed.
         </p>
       </div>
     </section>
@@ -378,7 +383,7 @@ function FinancialImpact({ classification, isClean }) {
             <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-amber-900">{formatMoney(financial.total_hold)}</p>
           </div>
           <div className="rounded-md border border-green-100 bg-green-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Approved</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">Cleared</p>
             <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-green-900">{formatMoney(financial.total_approved)}</p>
           </div>
         </div>
@@ -389,7 +394,7 @@ function FinancialImpact({ classification, isClean }) {
   return (
     <section className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900 dark:border-green-800 dark:bg-green-950/50 dark:text-green-100">
       <p className="font-semibold">
-        {isClean ? "No hold required. Clean match approved amount:" : "No payment hold required. Approved amount:"}{" "}
+        {isClean ? "No hold indicated. Clean match amount:" : "No hold indicated. Cleared amount:"}{" "}
         {formatMoney(financial.total_approved)}
       </p>
     </section>
@@ -441,10 +446,10 @@ function ReasoningPanel({ match, classification }) {
 
   return (
     <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800" open>
-      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">Reasoning</summary>
+      <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">Evidence & rationale</summary>
       <div className="mt-4 space-y-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
         <section>
-          <p className="font-semibold text-slate-900 dark:text-slate-100">Step 1 matching reasoning</p>
+          <p className="font-semibold text-slate-900 dark:text-slate-100">Step 1 matching evidence</p>
           <p className="mt-1">{match.reasoning || "Not available"}</p>
         </section>
         {exceptionDetails.length ? (
@@ -524,7 +529,7 @@ function DraftAction({
             disabled={approved}
             onClick={() => onApprove(actionKey)}
           >
-            {approved ? "Approved ✓" : "Approve & Queue"}
+            {approved ? "Queued ✓" : "Queue draft"}
           </button>
         ) : null}
       </div>
@@ -546,7 +551,7 @@ function DraftAction({
             className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-950 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 dark:border-red-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-red-950"
             value={actionNote}
             onChange={(event) => onTier3NoteChange(actionKey, event.target.value)}
-            placeholder="Document supervisor escalation, payment block, or procurement action before marking reviewed."
+            placeholder="Document supervisor escalation, hold recommendation, or procurement action before marking reviewed."
           />
           <button
             className="mt-3 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-600 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-700"
@@ -602,7 +607,7 @@ function InvoiceCard({
 
       {simulationChanged ? (
         <section className="mt-4 rounded-xl border border-blue-300 bg-white p-4 text-sm text-blue-950 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100">
-          <Badge className="border-blue-300 bg-blue-50 text-blue-800">Policy simulation changed this tier</Badge>
+          <Badge className="border-blue-300 bg-blue-50 text-blue-800">Policy simulation changed this review path</Badge>
           <p className="mt-3 font-semibold">
             {tierLabel(simulation.originalTier)} &rarr; {tierLabel(simulation.simulatedTier)}
           </p>
@@ -645,7 +650,7 @@ function AuditPanel({ entries, onExport }) {
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Audit Trail</h2>
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Audit & Governance</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{entries.length} entries captured</p>
         </div>
         <button
@@ -662,10 +667,10 @@ function AuditPanel({ entries, onExport }) {
           {entries.map((entry) => (
             <div className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800" key={`${entry.step}-${entry.timestamp}`}>
               <p className="font-semibold text-slate-950 dark:text-slate-100">
-                {entry.step} | {entry.model} | {entry.status ?? "success"}
+                {formatStageName(entry.step)} | {formatModelName(entry.model)} | {statusLabel(entry.status ?? "success")}
               </p>
               <p className="mt-1 text-slate-600 dark:text-slate-400">
-                {entry.timestamp} | {entry.latency_ms} ms | {entry.output_summary?.invoice_count ?? 0} invoices
+                {entry.timestamp} | {formatDuration(entry.latency_ms)} | {entry.output_summary?.invoice_count ?? 0} invoices
                 {entry.chunk ? ` | chunk ${entry.chunk.index}/${entry.chunk.total} | invoices ${entry.chunk.invoice_range}` : ""}
               </p>
             </div>
@@ -676,19 +681,21 @@ function AuditPanel({ entries, onExport }) {
   );
 }
 
-function WorkspaceTabs({ activeWorkspace, onChange, dashboardReady, reviewCount }) {
+function WorkspaceTabs({ activeWorkspace, onChange, dashboardReady, reviewCount, auditEntryCount }) {
   return (
     <nav
       aria-label="Workspace navigation"
       className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900"
     >
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {WORKSPACE_TABS.map((tab) => {
           const isActive = activeWorkspace === tab.id;
           const helper = {
-            dashboard: dashboardReady ? "Batch intelligence" : "Appears after analysis",
-            review: `${reviewCount} invoice cards`,
-            settings: "Setup, progress, audit"
+            start: "Upload and analyze",
+            executive: dashboardReady ? "Batch summary" : "Appears after analysis",
+            workbench: `${reviewCount} invoice cards`,
+            analytics: "Supplier and policy views",
+            governance: `${auditEntryCount} audit entries`
           }[tab.id];
 
           return (
@@ -731,7 +738,7 @@ function ReviewQueueControls({
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Review Queue</h2>
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Exception Workbench</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             {visibleCount} of {totalCount} invoice cards shown. Filters are local and do not change classifications.
           </p>
@@ -757,7 +764,7 @@ function ReviewQueueControls({
         </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" htmlFor="tier-filter">
-            Tier
+            Review path
           </label>
           <select
             id="tier-filter"
@@ -766,10 +773,10 @@ function ReviewQueueControls({
             onChange={(event) => updateFilter("tier", event.target.value)}
           >
             <option value="all">All</option>
-            <option value="tier3">Tier 3</option>
-            <option value="tier2">Tier 2</option>
-            <option value="tier1">Tier 1</option>
-            <option value="clean">Clean</option>
+            <option value="tier3">{tierLabel(3)}</option>
+            <option value="tier2">{tierLabel(2)}</option>
+            <option value="tier1">{tierLabel(1)}</option>
+            <option value="clean">{tierLabel("clean")}</option>
           </select>
         </div>
         <div>
@@ -820,6 +827,33 @@ function ReviewQueueControls({
           </select>
         </div>
       </div>
+    </section>
+  );
+}
+
+function SupplierPolicyAnalyticsPanel({
+  dashboardReady,
+  tolerances,
+  onTolerancesChange,
+  toleranceSimulation,
+  rootCauseAnalysis
+}) {
+  return (
+    <section className="grid gap-4">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Supplier & Policy Analytics</h2>
+        <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+          {dashboardReady
+            ? "Supplier scorecard and exception heatmap remain in Executive Summary during this shell update."
+            : "Run analysis to populate supplier, policy, and root-cause views."}
+        </p>
+      </section>
+      <ToleranceSimulator
+        tolerances={tolerances}
+        onTolerancesChange={onTolerancesChange}
+        simulation={toleranceSimulation}
+      />
+      <RootCauseAnalysisPanel analysis={rootCauseAnalysis} />
     </section>
   );
 }
@@ -1110,7 +1144,7 @@ export default function App() {
   const [tier3Notes, setTier3Notes] = useState({});
   const [reviewedTier3, setReviewedTier3] = useState(new Set());
   const [tolerances, setTolerances] = useState(DEFAULT_TOLERANCES);
-  const [activeWorkspace, setActiveWorkspace] = useState("settings");
+  const [activeWorkspace, setActiveWorkspace] = useState("start");
   const [queueFilters, setQueueFilters] = useState(DEFAULT_QUEUE_FILTERS);
 
   const toleranceSimulation = useMemo(
@@ -1182,7 +1216,7 @@ export default function App() {
       setReviewedTier3(new Set());
       setTolerances(DEFAULT_TOLERANCES);
       setQueueFilters(DEFAULT_QUEUE_FILTERS);
-      setActiveWorkspace("settings");
+      setActiveWorkspace("start");
       setStatusMessage("Files validated. Ready to analyze.");
     } catch (fileError) {
       setParsedFiles(null);
@@ -1356,7 +1390,6 @@ export default function App() {
     const merged = validateMergedResults(parsedFiles.invoices, mergeClassificationChunks(chunkResults), "classification");
     assertNoApiKeyLeak(merged);
     setClassificationResults(merged);
-    setActiveWorkspace("dashboard");
     return { merged, chunks: chunkResults };
   }
 
@@ -1445,7 +1478,7 @@ export default function App() {
     setApprovedActions(new Set());
     setTier3Notes({});
     setReviewedTier3(new Set());
-    setActiveWorkspace("settings");
+    setActiveWorkspace("start");
     setStatusMessage(`Preparing ${parsedFiles.invoices.length} invoices across ${chunks.length} chunks of up to ${ANALYSIS_CHUNK_SIZE}.`);
 
     try {
@@ -1456,6 +1489,7 @@ export default function App() {
       activeStep = "action_generation";
       await runActionGenerationChunks(chunks, nextMatchResults.chunks, nextClassificationResults.chunks);
       setStatusMessage("Prompt chain complete. Review drafted communications.");
+      setActiveWorkspace("executive");
     } catch (pipelineError) {
       setFailedStep(activeStep);
       setMatchResults(null);
@@ -1486,9 +1520,8 @@ export default function App() {
       <section className="mx-auto flex max-w-7xl flex-col gap-6">
         <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-300">Stage 5.2</p>
             <h1 className="mt-2 text-4xl font-semibold tracking-tight">ProcureGuard AI</h1>
-            <p className="mt-2 text-lg text-slate-600 dark:text-slate-400">Intelligent 3-Way Procurement Matching</p>
+            <p className="mt-2 text-lg text-slate-600 dark:text-slate-400">AP Exception Control Tower</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
@@ -1518,21 +1551,28 @@ export default function App() {
           onChange={setActiveWorkspace}
           dashboardReady={Boolean(classificationResults)}
           reviewCount={renderedCards.length}
+          auditEntryCount={auditEntries.length}
         />
 
-        {activeWorkspace === "dashboard" ? (
+        {activeWorkspace === "start" ? (
           <section className="grid gap-6">
-            <ExecutiveDashboard analytics={dashboardAnalytics} isDarkMode={isDarkMode} />
-            <ToleranceSimulator
-              tolerances={tolerances}
-              onTolerancesChange={setTolerances}
-              simulation={toleranceSimulation}
+            <ApiKeyPanel apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
+            <UploadPanel parsedFiles={parsedFiles} onFilesSelected={handleFilesSelected} isBusy={Boolean(runningStep)} />
+            <ProgressPanel
+              runningStep={runningStep}
+              statusMessage={statusMessage}
+              hasMatchResults={Boolean(matchResults)}
+              hasClassificationResults={Boolean(classificationResults)}
+              hasActionResults={Boolean(actionResults)}
             />
-            <RootCauseAnalysisPanel analysis={rootCauseAnalysis} />
           </section>
         ) : null}
 
-        {activeWorkspace === "review" ? (
+        {activeWorkspace === "executive" ? (
+          <ExecutiveDashboard analytics={dashboardAnalytics} isDarkMode={isDarkMode} />
+        ) : null}
+
+        {activeWorkspace === "workbench" ? (
           <section className="grid gap-4">
             <ReviewQueueControls
               filters={queueFilters}
@@ -1574,25 +1614,24 @@ export default function App() {
               ))
             ) : (
               <section className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                No invoice cards match the current review queue filters.
+                No invoice cards match the current workbench filters.
               </section>
             )}
           </section>
         ) : null}
 
-        {activeWorkspace === "settings" ? (
-          <section className="grid gap-4">
-            <ApiKeyPanel apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
-            <UploadPanel parsedFiles={parsedFiles} onFilesSelected={handleFilesSelected} isBusy={Boolean(runningStep)} />
-            <ProgressPanel
-              runningStep={runningStep}
-              statusMessage={statusMessage}
-              hasMatchResults={Boolean(matchResults)}
-              hasClassificationResults={Boolean(classificationResults)}
-              hasActionResults={Boolean(actionResults)}
-            />
-            <AuditPanel entries={auditEntries} onExport={exportAuditTrail} />
-          </section>
+        {activeWorkspace === "analytics" ? (
+          <SupplierPolicyAnalyticsPanel
+            dashboardReady={Boolean(classificationResults)}
+            tolerances={tolerances}
+            onTolerancesChange={setTolerances}
+            toleranceSimulation={toleranceSimulation}
+            rootCauseAnalysis={rootCauseAnalysis}
+          />
+        ) : null}
+
+        {activeWorkspace === "governance" ? (
+          <AuditPanel entries={auditEntries} onExport={exportAuditTrail} />
         ) : null}
       </section>
     </main>

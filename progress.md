@@ -19,7 +19,8 @@ Stage 6.1: Architectural decision log — COMPLETE — April 26, 2026
 Local Claude API contract stabilization — COMPLETE — April 26, 2026
 Claude API contract stabilization pass 2 (numeric constraints) — COMPLETE — April 26, 2026
 Chunk 1 backend Analyze reliability pass — COMPLETE — April 26, 2026
-Next: local API retest, then enterprise UI polish
+Chunk 2A.1 Product IA shell and safe wording completed.
+Next: Chunk 2A.2 Executive Summary decision-first page
 
 ## Stage log
 
@@ -84,6 +85,10 @@ Next: local API retest, then enterprise UI polish
   - Analyze now runs the Claude prompt chain in invoice chunks, validates merged result counts/order, and records per-chunk audit metadata
   - max_tokens is configurable per Claude call with a safe default
   - Stage 6.2 documentation package intentionally deferred
+  - Chunk 2A.1 Product IA shell and safe wording completed
+  - Workspace navigation now uses Start, Executive Summary, Exception Workbench, Supplier & Policy Analytics, and Audit & Governance surfaces
+  - Visible high-risk review wording was replaced with safer human-review language
+  - Chunk 2A.2 Executive Summary decision-first page is the next micro-chunk
 
 ## Decisions pending
 
