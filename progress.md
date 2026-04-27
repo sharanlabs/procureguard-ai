@@ -30,7 +30,8 @@ Production Rework Chunk 1.2 Prompt caching completed.
 Production Rework Chunk 1.3 Partial result saving and chunk-level retry completed.
 Production Rework Chunk 1.4A resolved the TC-23/E12 data conflict and completed the E12 eval fix.
 Production Rework Chunk 1.5 dependency pinning and git hygiene completed.
-Next: Production Rework Chunk 1.6 documentation fixes
+Production Rework Chunk 1.6 documentation fixes completed.
+Next: Live local API retest of Chunk 1 changes, then Chunk 2 design system foundation
 
 ## Stage log
 
@@ -120,7 +121,8 @@ Next: Production Rework Chunk 1.6 documentation fixes
   - Partial runs keep completed chunks visible only as clearly marked partial data; final dashboard state remains withheld until all stages complete and merge validation passes
   - Production Rework Chunk 1.4A resolved the TC-23/E12 data conflict and completed the E12 eval fix
   - Production Rework Chunk 1.5 dependency pinning and git hygiene completed
-  - Production Rework Chunk 1.6 documentation fixes is the next step
+  - Production Rework Chunk 1.6 documentation fixes completed
+  - CLAUDE.md now matches source model routing and softens planned architecture docs, README.md now reflects the current repo structure, and Prompt 04 now states its tested-but-not-wired status
 
 ## Decisions pending
 

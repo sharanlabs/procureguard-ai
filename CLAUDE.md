@@ -4,7 +4,7 @@ Intelligent 3-way procurement matching workflow. Takes PO, Invoice, and GRN data
 
 ## Tech Stack
 
-- **AI**: Claude API with model routing (Haiku 4.5 for extraction, Sonnet 4.6 for classification and drafting, Opus 4.7 for complex analysis)
+- **AI**: Claude API with runtime model routing (Haiku 4.5 / `claude-haiku-4-5-20251001` for matching; Sonnet 4.6 / `claude-sonnet-4-6` for classification and action generation). Opus is not used in the current runtime pipeline.
 - **API features**: Structured Outputs (`anthropic-beta: structured-outputs-2025-11-13`), adaptive thinking, prompt caching
 - **Frontend**: React (JSX), single-file artifact pattern
 - **Styling**: Tailwind CSS with custom design tokens
@@ -15,11 +15,12 @@ Intelligent 3-way procurement matching workflow. Takes PO, Invoice, and GRN data
 ## Key Directories
 
 - `/data` — sample CSVs and data dictionary
-- `/prompts` — system prompts for each pipeline step
+- `/prompts` — system prompts for the 3-stage pipeline plus the auxiliary text extraction prompt
 - `/app` — React application
+- `/app/lib` — Claude client helpers, schemas, CSV parsing, pipeline utilities, and view models
+- `/api` — Vercel serverless Claude proxy
 - `/evals` — golden dataset and evaluation harness
-- `/docs` — architecture, security, enterprise scaling, user guide
-- `/tests` — exception test matrix
+- `/docs` — handoff history and planned future reference docs
 
 ## Code Style
 
@@ -50,7 +51,8 @@ Intelligent 3-way procurement matching workflow. Takes PO, Invoice, and GRN data
 
 - `@PRD.md` for product requirements
 - `@data/DATA_DICTIONARY.md` for data schema
-- `@docs/ARCHITECTURE.md` for system design
+- `@docs/HANDOFF.md` for stage handoff history
+- Architecture documentation is planned for the documentation package.
 
 ## Git Workflow
 

@@ -1,5 +1,7 @@
 # System Prompt — Step 04: Unstructured Invoice Text Extraction
 
+NOTE: This prompt is built and tested through TC-26 to TC-28 in evals/golden_dataset.json, but it is not currently wired into the main CSV analysis pipeline. Integration is planned as a future enhancement.
+
 **Model:** Claude Haiku 4.5  
 **API feature:** Structured Outputs using output_config with json_schema  
 **Purpose:** Auxiliary extraction step — converts unstructured invoice text (email, OCR output, pasted content) into structured invoice records compatible with the 3-way matching pipeline.

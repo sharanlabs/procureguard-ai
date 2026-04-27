@@ -2127,3 +2127,93 @@ Make the repository dependency and build-artifact hygiene reproducible for produ
 
 ### Next step
 Production Rework Chunk 1.6 documentation fixes.
+
+## Production Rework Chunk 1.6 documentation fixes handoff — April 27, 2026
+
+### Purpose
+Resolve narrow documentation drift from the Claude Code audit without changing runtime behavior, API contracts, prompts 01-03, CSV data, eval harness logic, UI, dependencies, or deployment behavior.
+
+### Audit issues fixed
+- Corrected stale model-routing documentation so it matches the source-controlled runtime constants.
+- Softened the current architecture-doc reference because the full architecture document is planned but not present yet.
+- Updated the README folder tree to match the tracked repo layout and current eval location.
+- Left the deployment URL as pending because no live URL is recorded in the repo.
+- Added a status note to Prompt 04 clarifying that it is built and covered by TC-26 through TC-28 but not wired into the main CSV analysis pipeline.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- CLAUDE.md
+- README.md
+- DECISIONS.md
+- package.json
+- app/ProcureGuard.jsx
+- app/lib/claude.js
+- app/lib/format.js
+- app/lib/uiModels.js
+- prompts/04_text_extraction.md
+- evals/golden_dataset.json
+
+### Files changed
+- CLAUDE.md
+- README.md
+- prompts/04_text_extraction.md
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T23-13-14-912Z.json
+- evals/results/eval_results_2026-04-27T23-16-15-050Z.json
+- evals/results/eval_results_2026-04-27T23-17-31-544Z.json
+
+### CLAUDE.md model routing correction
+- Documented the actual runtime route from app/ProcureGuard.jsx:
+  - matching: `claude-haiku-4-5-20251001`
+  - classification: `claude-sonnet-4-6`
+  - action generation: `claude-sonnet-4-6`
+- Clarified that the larger Claude model named in the audit is not used by the current runtime pipeline.
+- Replaced the required current architecture-doc reference with HANDOFF guidance plus a note that architecture documentation is planned.
+
+### README structure correction
+- Removed the stale test-suite row from the README folder tree.
+- Added `api/`, `app/lib/`, `evals/results/`, `DECISIONS.md`, `index.html`, `package-lock.json`, and `vite.config.js`.
+- Described `evals/` as the home for the golden dataset, deterministic harness, and generated result artifacts.
+- Kept the deployment URL pending and did not invent a live deployment URL.
+
+### Prompt 04 status note
+- Added a top-of-file note to prompts/04_text_extraction.md:
+  - Built and tested through TC-26 to TC-28 in evals/golden_dataset.json.
+  - Not currently wired into the main CSV analysis pipeline.
+  - Integration remains a future enhancement.
+- No prompt instructions, examples, or schema text were changed.
+
+### Verification commands and results
+- Pre-edit `git status --short`: clean.
+- Pre-edit `git branch -vv`: `main` at `07ae585`, ahead of `origin/main` by 16.
+- Pre-edit `git log --oneline -10`: confirmed Chunk 1.5, 1.4A, 1.3, 1.2, and 1.1 commits.
+- Pre-edit listed-file check: all required files existed.
+- Pre-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Pre-edit `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- Post-doc `npm run build`: passed with the existing Vite large-chunk warning.
+- Post-doc `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- Final post-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Final post-edit `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- `node --check api/messages.js`: passed.
+- Documentation drift greps: CLAUDE.md and README.md no longer claim the stale larger-model current route; CLAUDE.md no longer requires the missing architecture document as a current source of truth; README.md no longer references `/tests`. The larger-model string grep returns only protected app display helper labels, not runtime route usage.
+- Package/app safety greps: no `latest` dependency string in package.json, no `console.log`, no `localStorage`, no secret logging pattern, no unsafe approval/payment/fraud/email wording in app code, and no `Send` string in app code.
+- `git diff --check`: passed.
+- `git diff --name-only`: only allowed documentation files changed.
+- `git status --short`: only intended modified files plus generated eval result artifacts before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T23-17-31-544Z.json
+- Also generated during post-doc verification: evals/results/eval_results_2026-04-27T23-16-15-050Z.json
+- Also generated during the required pre-edit eval gate: evals/results/eval_results_2026-04-27T23-13-14-912Z.json
+
+### Known issues
+- The existing Vite production large-chunk warning remains.
+- No live Claude API retest was run during this documentation-only stage.
+- An empty untracked `tests/` directory exists locally, but there are no tracked test files under it; it was not modified.
+- Protected app display/pricing helper maps still contain a label/keyword for a larger Claude model. The runtime constants and call sites do not route to it, and app files were intentionally not touched in this documentation stage.
+
+### Next step
+Live local API retest of Chunk 1 changes, then Chunk 2 design system foundation.
