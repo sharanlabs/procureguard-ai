@@ -1829,3 +1829,132 @@ Enable Anthropic 5-minute ephemeral prompt caching for repeated chunk calls so t
 
 ### Next step
 Live local API retest, then Chunk 1.3 partial result saving and chunk-level retry.
+
+## Production Rework Chunk 1.3 Partial result saving and chunk-level retry handoff — April 27, 2026
+
+### Purpose
+Harden the runtime pipeline so completed chunk outputs are retained in memory when a later chunk fails, the failed stage/chunk/range is explicit, and safe failures can retry only the failed chunk before continuing the current 3-stage Claude prompt chain.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/lib/claude.js
+- app/lib/pipeline.js
+- app/lib/audit.js
+- app/lib/schemas.js
+- app/lib/dashboard.js
+- app/lib/uiModels.js
+- api/messages.js
+- package.json
+- vite.config.js
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/lib/pipeline.js
+- app/lib/audit.js
+- app/lib/uiModels.js
+- app/lib/claude.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T21-39-08-342Z.json
+- evals/results/eval_results_2026-04-27T21-52-35-903Z.json
+
+### Pipeline run state changes
+- Added an explicit in-memory pipeline run state with runId, status, current stage/chunk, total chunks, failed stage/chunk/range/message, retryability, per-stage completed chunk metadata, per-stage chunk outputs, merged stage outputs, retry attempts, and finalResultsComplete.
+- Run status now distinguishes idle, running, partial_failed, failed, and complete.
+- Raw chunk outputs stay only in React runtime state and are not written to audit export.
+
+### Partial result saving behavior
+- Each successful chunk is stored immediately after validation and before the next chunk starts.
+- Matching, classification, and action-generation chunk outputs retain original chunk order by array index.
+- Prior completed stages and chunks remain available after a later chunk failure.
+- Full React result state for final dashboard surfaces is only treated as complete after all required stage merges validate.
+
+### Failed chunk descriptor behavior
+- Failed chunks now capture stage, chunk index, total chunks, invoice range, invoice count, failure type, user-facing message, retry count/attempt, and retryable.
+- Retryable failures are timeout, network, rate limit, and safely identified transient 5xx/overload API errors.
+- Validation/count/order/alignment failures, schema/API-contract failures, auth/API-key failures, max-token failures, and missing required input data are treated as non-retryable.
+
+### Retry failed chunk behavior
+- The retry control reruns only the failed stage/chunk when retryable.
+- Successful chunks before the failed chunk are reused; completed prior stages are reused.
+- After a successful retry, the pipeline continues from that point through remaining chunks and downstream stages.
+- A repeat retry failure keeps partial state and updates failure metadata rather than clearing retained chunks.
+- No automatic infinite retry loop was added; retries are user-initiated.
+
+### Partial display rules
+- Executive Summary is withheld for partial_failed/failed runs and shows a partial-state notice instead of completed-batch metrics.
+- Exception Workbench can show only invoices with completed classification data, clearly marked as partial.
+- Action data is shown only where action-generation chunks completed; missing draft generation remains unavailable and not counted as completed final output.
+- Supplier & Policy Analytics withholds completed analytics during partial/failed runs.
+- Start and Audit & Governance show failed stage/chunk/range, retained chunk counts, and retry/restart controls.
+
+### Audit metadata behavior
+- Audit entries now include safe chunk attempt, retry_count, retry_status, failure_type, and retryable metadata.
+- Retry success/failure audit entries are labeled with retry status so duplicate chunk audit entries do not imply duplicate completed analysis.
+- Audit export still contains hashes, metadata, token usage, latency, summaries, and safe errors only.
+- Audit export does not include raw prompts, raw invoice payloads, API keys, or secrets.
+
+### API contract preservation
+- `/api/messages` was not modified.
+- The app still calls only `/api/messages` for Claude requests.
+- `output_config.format` remains the structured-output request shape.
+- No `output_format` usage or old `output_config.type` request shape was introduced.
+- Prompt caching system blocks, stage-aware timeouts, current model routing, max_tokens behavior, strict result count/order validation, global E07/E11 guards, and clean-row action normalization are preserved.
+
+### Security behavior
+- No API key logging was added.
+- No localStorage usage was added.
+- No raw invoice payloads are exported in audit CSV.
+- No prompts, CSV data, golden dataset, eval harness logic, database persistence, Python backend, OpenAI runtime API, agent framework, RAG/vector DB, Send button, real email sending, autonomous approval, payment release, fraud accusation, or AI-decided language was added.
+
+### Verification commands and results
+- Pre-edit `git status --short`: clean before required eval generated evals/results/eval_results_2026-04-27T21-39-08-342Z.json.
+- Pre-edit `git branch -vv`: `main` at `928b940`, ahead of `origin/main` by 13.
+- Pre-edit `git log --oneline -10`: confirmed `928b940` and `9745ca5` as the latest production rework commits.
+- Pre-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Pre-edit `node evals/run_evals.js`: passed 25/25, 100%.
+- Early post-code `npm run build`: passed with the existing Vite large-chunk warning.
+- Final `npm run build`: passed with the existing Vite large-chunk warning.
+- Final `node evals/run_evals.js`: passed 25/25, 100%.
+- `node --check api/messages.js`: passed.
+- `grep -R "console.log" app api || true`: no matches.
+- `grep -R "localStorage" app api || true`: no matches.
+- `grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api || true`: no matches.
+- `grep -R "output_format" app api vite.config.js || true`: no matches.
+- `grep -R "output_config:.*type" app api vite.config.js || true`: no matches.
+- `grep -R "additionalProperties: true" app api || true`: no matches.
+- `grep -R '"additionalProperties": true' app api || true`: no matches.
+- `grep -R "https://api.anthropic.com" app || true`: no matches.
+- `grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true`: no matches.
+- `grep -R "Send" app || true`: no matches.
+- `git diff --check`: passed.
+- `git diff --name-only`: only intended app/progress/handoff files.
+- `git status --short`: modified intended files plus the two generated eval result files before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T21-52-35-903Z.json
+- Also generated during the required pre-edit eval gate: evals/results/eval_results_2026-04-27T21-39-08-342Z.json
+
+### Known issues
+- No live Claude API retest was run during this code change.
+- The existing Vite production large-chunk warning remains.
+
+### Manual live retest steps
+1. Restart Vite dev server.
+2. Open local app.
+3. Upload purchase_orders.csv, invoices.csv, goods_receipts.csv.
+4. Enter local Anthropic API key.
+5. Click Analyze.
+6. Confirm all chunks complete if no failure occurs.
+7. If a chunk fails, confirm completed prior chunks remain visible only as partial data.
+8. Confirm failed stage/chunk/invoice range are shown.
+9. Confirm Retry failed chunk reruns only the failed chunk/stage.
+10. Confirm final Executive Summary appears only after all required chunks complete.
+11. Confirm Audit & Governance shows retry/failure metadata without raw payloads or API keys.
+12. Export audit CSV and confirm no raw payloads or API keys appear.
+
+### Next step
+Live local API retest, then Chunk 1.4 E12 eval fix.

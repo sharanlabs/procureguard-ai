@@ -1301,7 +1301,9 @@ function buildUploadedDataSummary(parsedFiles) {
   };
 }
 
-function getGovernanceRunState({ isAnalysisRunning, runningStep, failedStep, error, auditEntries, analytics }) {
+function getGovernanceRunState({ isAnalysisRunning, runningStep, failedStep, error, auditEntries, analytics, pipelineRunState }) {
+  const descriptor = pipelineRunState?.retryDescriptor;
+
   if (isAnalysisRunning) {
     return {
       id: "running",
@@ -1310,6 +1312,19 @@ function getGovernanceRunState({ isAnalysisRunning, runningStep, failedStep, err
       detail: runningStep
         ? `${formatGovernanceStageName(runningStep)} is running. Completed governance claims are withheld until the prompt chain finishes.`
         : "The prompt chain is running. Completed governance claims are withheld until the run finishes."
+    };
+  }
+
+  if (["partial_failed", "failed"].includes(pipelineRunState?.status)) {
+    const stageLabel = descriptor?.stage ? formatGovernanceStageName(descriptor.stage) : formatGovernanceStageName(failedStep);
+    const chunkLabel = descriptor ? ` chunk ${descriptor.chunkIndex}/${descriptor.totalChunks}` : "";
+    const rangeLabel = descriptor?.invoiceRange ? ` for invoices ${descriptor.invoiceRange}` : "";
+
+    return {
+      id: pipelineRunState.status,
+      label: pipelineRunState.status === "partial_failed" ? "Partial run stopped" : "Run failed",
+      tone: "escalate",
+      detail: `${stageLabel}${chunkLabel}${rangeLabel} did not complete. Completed chunks are retained as partial data only and final batch claims are withheld.`
     };
   }
 
@@ -1813,7 +1828,7 @@ export function buildAiReliabilitySummary({
 
 function buildGovernanceHeaderTakeaway({ runState, auditEntries, auditGroups, auditExport }) {
   if (runState?.id === "running") return runState.detail;
-  if (runState?.id === "failed") return runState.detail;
+  if (["failed", "partial_failed"].includes(runState?.id)) return runState.detail;
   if (auditEntries.length) {
     return `${auditEntries.length} ${pluralize(auditEntries.length, "audit entry")} captured across ${auditGroups.length} ${pluralize(auditGroups.length, "stage")}; ${auditExport.statusLabel.toLowerCase()} for audit-supporting review.`;
   }
@@ -1832,7 +1847,8 @@ export function buildGovernanceViewModel({
   error = "",
   matchResults,
   classificationResults,
-  actionResults
+  actionResults,
+  pipelineRunState
 } = {}) {
   const entries = normalizeAuditEntries(auditEntries);
   const uploadedData = buildUploadedDataSummary(parsedFiles);
@@ -1842,7 +1858,8 @@ export function buildGovernanceViewModel({
     failedStep,
     error,
     auditEntries: entries,
-    analytics
+    analytics,
+    pipelineRunState
   });
   const apiExposure = getApiExposureStatus({ isDev, apiKey });
   const auditGroups = groupAuditEntriesByStage(entries);
@@ -1883,7 +1900,7 @@ export function buildGovernanceViewModel({
   });
 
   return {
-    hasData: Boolean(uploadedData.hasFiles || entries.length || analytics?.hasData || isAnalysisRunning || failedStep || error),
+    hasData: Boolean(uploadedData.hasFiles || entries.length || analytics?.hasData || isAnalysisRunning || failedStep || error || pipelineRunState?.runId),
     header: {
       eyebrow: "Audit & Governance",
       title: "Can we trust, explain, and export this AI-assisted review process?",

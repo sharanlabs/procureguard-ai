@@ -57,6 +57,12 @@ function userFacingApiError(message) {
   return text;
 }
 
+function claudeError(message, metadata = {}) {
+  const error = new Error(message);
+  Object.assign(error, metadata);
+  return error;
+}
+
 function normalizeTimeoutMs(timeoutMs) {
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
     return Math.round(timeoutMs);
@@ -225,7 +231,11 @@ export async function callClaudeAPI({
       }
 
       if (response.status === 429) {
-        throw new Error("Claude API rate limit persisted after 3 attempts");
+        throw claudeError("Claude API rate limit persisted after 3 attempts", {
+          failureType: "rate_limit",
+          retryable: true,
+          status: response.status
+        });
       }
 
       if (!response.ok) {
@@ -239,10 +249,18 @@ export async function callClaudeAPI({
         }
 
         if (response.status === 401) {
-          throw new Error("Claude API authentication failed. Check the API key and try again.");
+          throw claudeError("Claude API authentication failed. Check the API key and try again.", {
+            failureType: "api",
+            retryable: false,
+            status: response.status
+          });
         }
 
-        throw new Error(userFacingApiError(errorMessage));
+        throw claudeError(userFacingApiError(errorMessage), {
+          failureType: "api",
+          retryable: response.status >= 500 && response.status < 600,
+          status: response.status
+        });
       }
 
       let raw;
@@ -270,7 +288,10 @@ export async function callClaudeAPI({
       const errorName = String(error?.name ?? "");
       const errorMessage = String(error?.message ?? "").toLowerCase();
       if (errorName === "AbortError" || errorName === "TimeoutError" || errorMessage.includes("timeout")) {
-        throw new Error(timeoutMessage(stage, requestTimeoutMs));
+        throw claudeError(timeoutMessage(stage, requestTimeoutMs), {
+          failureType: "timeout",
+          retryable: true
+        });
       }
       if (attempt === MAX_ATTEMPTS || !String(error?.message).includes("429")) {
         break;
@@ -279,7 +300,10 @@ export async function callClaudeAPI({
   }
 
   if (String(lastError?.message).includes("429")) {
-    throw new Error("Claude API rate limit persisted after 3 attempts");
+    throw claudeError("Claude API rate limit persisted after 3 attempts", {
+      failureType: "rate_limit",
+      retryable: true
+    });
   }
 
   if (String(lastError?.message).includes(DIRECT_BROWSER_ACCESS_ERROR)) {
@@ -291,7 +315,10 @@ export async function callClaudeAPI({
   }
 
   if (lastError instanceof TypeError) {
-    throw new Error("Network error while contacting Claude API");
+    throw claudeError("Network error while contacting Claude API", {
+      failureType: "network",
+      retryable: true
+    });
   }
 
   throw lastError ?? new Error("Claude API request failed");

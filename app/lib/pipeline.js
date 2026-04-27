@@ -1,13 +1,123 @@
 export const DEFAULT_ANALYSIS_CHUNK_SIZE = 5;
+export const PIPELINE_STAGES = ["matching", "classification", "action_generation"];
 
 const SECRET_PATTERNS = [
   /sk-ant-[A-Za-z0-9_-]+/i,
   /ANTHROPIC_API_KEY/i,
   /x-api-key/i
 ];
+const STAGE_OUTPUT_KEYS = {
+  matching: "matchingChunkOutputs",
+  classification: "classificationChunkOutputs",
+  action_generation: "actionGenerationChunkOutputs"
+};
+const STAGE_MERGED_KEYS = {
+  matching: "mergedMatchingResults",
+  classification: "mergedClassificationResults",
+  action_generation: "mergedActionResults"
+};
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function emptyStageMap() {
+  return PIPELINE_STAGES.reduce((acc, stage) => {
+    acc[stage] = [];
+    return acc;
+  }, {});
+}
+
+function copyStageMap(value = {}) {
+  return PIPELINE_STAGES.reduce((acc, stage) => {
+    acc[stage] = [...(value[stage] ?? [])];
+    return acc;
+  }, {});
+}
+
+function copyRunState(runState) {
+  return {
+    ...runState,
+    completedChunks: copyStageMap(runState?.completedChunks),
+    retryAttempts: copyStageMap(runState?.retryAttempts),
+    matchingChunkOutputs: [...(runState?.matchingChunkOutputs ?? [])],
+    classificationChunkOutputs: [...(runState?.classificationChunkOutputs ?? [])],
+    actionGenerationChunkOutputs: [...(runState?.actionGenerationChunkOutputs ?? [])]
+  };
+}
+
+function clearFailureFields(runState) {
+  return {
+    ...runState,
+    failedStage: null,
+    failedChunkIndex: null,
+    failedInvoiceRange: "",
+    failedMessage: "",
+    failureType: null,
+    retryable: false,
+    retryDescriptor: null
+  };
+}
+
+function completedChunkCount(runState, stage) {
+  return (runState?.completedChunks?.[stage] ?? []).filter(Boolean).length;
+}
+
+function hasCompletedChunks(runState) {
+  return PIPELINE_STAGES.some((stage) => completedChunkCount(runState, stage) > 0);
+}
+
+function failureTypeFromMessage(message) {
+  const text = String(message ?? "");
+  const lower = text.toLowerCase();
+
+  if (lower.includes("timed out") || lower.includes("timeout")) return "timeout";
+  if (lower.includes("429") || lower.includes("rate limit")) return "rate_limit";
+  if (lower.includes("network") || lower.includes("unable to reach")) return "network";
+  if (lower.includes("status 500") || lower.includes("status 502") || lower.includes("status 503") || lower.includes("status 504") || lower.includes("overloaded")) return "api";
+  if (
+    (lower.includes("returned") && lower.includes("expected")) ||
+    lower.includes("missing a result array") ||
+    lower.includes("without invoice_number") ||
+    lower.includes("out of order") ||
+    lower.includes("duplicate invoice") ||
+    (lower.includes("missing") && lower.includes("unexpected")) ||
+    lower.includes("omitted non-clean invoice") ||
+    lower.includes("unexpected invoice")
+  ) {
+    return "validation";
+  }
+  if (
+    lower.includes("structured-output") ||
+    lower.includes("output_config") ||
+    lower.includes("additionalproperties") ||
+    lower.includes("schema") ||
+    lower.includes("authentication") ||
+    lower.includes("api key") ||
+    lower.includes("not valid json") ||
+    lower.includes("valid structured json") ||
+    lower.includes("content blocks") ||
+    lower.includes("max token") ||
+    lower.includes("missing required input")
+  ) {
+    return "api";
+  }
+
+  return "unknown";
+}
+
+function isRetryableFailureType(failureType, message) {
+  if (["timeout", "network", "rate_limit"].includes(failureType)) return true;
+  if (failureType === "api") {
+    const lower = String(message ?? "").toLowerCase();
+    return lower.includes("status 500") || lower.includes("status 502") || lower.includes("status 503") || lower.includes("status 504") || lower.includes("overloaded");
+  }
+  return false;
+}
+
+function chunkRetryStatus(attempt, success) {
+  if (attempt <= 1) return success ? "initial_success" : "initial_failed";
+  return success ? "retry_success" : "retry_failed";
 }
 
 function invoiceNumber(row) {
@@ -203,6 +313,202 @@ export function mergeClassificationChunks(chunks) {
 
 export function mergeActionChunks(chunks) {
   return { action_results: chunks.flatMap((chunk) => chunk?.action_results ?? []) };
+}
+
+export function createIdlePipelineRunState() {
+  return {
+    runId: null,
+    status: "idle",
+    currentStage: null,
+    currentChunkIndex: null,
+    totalChunks: 0,
+    failedStage: null,
+    failedChunkIndex: null,
+    failedInvoiceRange: "",
+    failedMessage: "",
+    failureType: null,
+    retryable: false,
+    completedChunks: emptyStageMap(),
+    retryAttempts: emptyStageMap(),
+    matchingChunkOutputs: [],
+    classificationChunkOutputs: [],
+    actionGenerationChunkOutputs: [],
+    mergedMatchingResults: null,
+    mergedClassificationResults: null,
+    mergedActionResults: null,
+    finalResultsComplete: false,
+    retryDescriptor: null
+  };
+}
+
+export function createPipelineRunState({ runId, totalChunks = 0 } = {}) {
+  return {
+    ...createIdlePipelineRunState(),
+    runId,
+    status: "running",
+    totalChunks
+  };
+}
+
+export function getPipelineStageOutputs(runState, stage) {
+  const key = STAGE_OUTPUT_KEYS[stage];
+  return key ? [...(runState?.[key] ?? [])] : [];
+}
+
+export function mergeCompletedPipelineStage(runState, stage) {
+  const chunks = getPipelineStageOutputs(runState, stage).filter(Boolean);
+  if (!chunks.length) return null;
+  if (stage === "matching") return mergeMatchingChunks(chunks);
+  if (stage === "classification") return mergeClassificationChunks(chunks);
+  if (stage === "action_generation") return mergeActionChunks(chunks);
+  return null;
+}
+
+export function getPipelineCompletedSummary(runState) {
+  return PIPELINE_STAGES.map((stage) => ({
+    stage,
+    completed: completedChunkCount(runState, stage),
+    total: runState?.totalChunks ?? 0
+  }));
+}
+
+export function classifyPipelineFailure(error) {
+  const message = String(error?.message ?? error ?? "Pipeline stage failed");
+  const failureType = error?.failureType ?? failureTypeFromMessage(message);
+  const retryable = typeof error?.retryable === "boolean"
+    ? error.retryable
+    : isRetryableFailureType(failureType, message);
+
+  return {
+    failureType,
+    retryable,
+    message
+  };
+}
+
+export function buildFailedChunkDescriptor({ stage, chunkIndex, totalChunks, chunkMeta, error }) {
+  const classified = classifyPipelineFailure(error);
+  return {
+    stage,
+    chunkIndex: chunkIndex + 1,
+    totalChunks,
+    invoiceRange: chunkMeta?.invoice_range ?? "",
+    invoiceCount: chunkMeta?.invoice_count ?? 0,
+    failureType: classified.failureType,
+    message: classified.message,
+    userMessage: `Analysis stopped at ${stage} chunk ${chunkIndex + 1}/${totalChunks} for invoices ${chunkMeta?.invoice_range ?? "unknown"}: ${classified.message}`,
+    retryable: classified.retryable
+  };
+}
+
+export function markPipelineRetryStarted(runState, descriptor) {
+  return clearFailureFields({
+    ...copyRunState(runState),
+    status: "running",
+    currentStage: descriptor?.stage ?? runState?.currentStage ?? null,
+    currentChunkIndex: descriptor?.chunkIndex ?? runState?.currentChunkIndex ?? null,
+    finalResultsComplete: false
+  });
+}
+
+export function markPipelineChunkStarted(runState, { stage, chunkIndex, chunkMeta }) {
+  const next = clearFailureFields({
+    ...copyRunState(runState),
+    status: "running",
+    currentStage: stage,
+    currentChunkIndex: chunkIndex + 1,
+    finalResultsComplete: false
+  });
+  const attempt = (next.retryAttempts[stage]?.[chunkIndex] ?? 0) + 1;
+  next.retryAttempts[stage][chunkIndex] = attempt;
+
+  return {
+    runState: next,
+    attempt,
+    auditChunk: {
+      ...chunkMeta,
+      attempt,
+      retry_count: Math.max(0, attempt - 1),
+      retry_status: attempt > 1 ? "retrying" : "initial"
+    }
+  };
+}
+
+export function markPipelineChunkSucceeded(runState, { stage, chunkIndex, chunkMeta, output, attempt }) {
+  const next = clearFailureFields({
+    ...copyRunState(runState),
+    status: "running",
+    currentStage: stage,
+    currentChunkIndex: chunkIndex + 1,
+    finalResultsComplete: false
+  });
+  const outputKey = STAGE_OUTPUT_KEYS[stage];
+  if (!outputKey) throw new Error(`Unknown pipeline stage ${stage}`);
+
+  const safeAttempt = attempt ?? next.retryAttempts[stage]?.[chunkIndex] ?? 1;
+  next[outputKey][chunkIndex] = output;
+  next.completedChunks[stage][chunkIndex] = {
+    ...chunkMeta,
+    attempt: safeAttempt,
+    retry_count: Math.max(0, safeAttempt - 1),
+    retry_status: chunkRetryStatus(safeAttempt, true),
+    completed_at: new Date().toISOString()
+  };
+  return next;
+}
+
+export function markPipelineStageMerged(runState, { stage, merged }) {
+  const mergedKey = STAGE_MERGED_KEYS[stage];
+  if (!mergedKey) throw new Error(`Unknown pipeline stage ${stage}`);
+  return {
+    ...clearFailureFields(copyRunState(runState)),
+    status: "running",
+    currentStage: stage,
+    currentChunkIndex: runState?.totalChunks ?? null,
+    [mergedKey]: merged,
+    finalResultsComplete: false
+  };
+}
+
+export function markPipelineChunkFailed(runState, { stage, chunkIndex, chunkMeta, error, attempt }) {
+  const next = copyRunState(runState);
+  const descriptor = buildFailedChunkDescriptor({
+    stage,
+    chunkIndex,
+    totalChunks: next.totalChunks,
+    chunkMeta,
+    error
+  });
+  const safeAttempt = attempt ?? next.retryAttempts[stage]?.[chunkIndex] ?? 1;
+
+  next.status = hasCompletedChunks(next) ? "partial_failed" : "failed";
+  next.currentStage = stage;
+  next.currentChunkIndex = chunkIndex + 1;
+  next.failedStage = stage;
+  next.failedChunkIndex = chunkIndex + 1;
+  next.failedInvoiceRange = descriptor.invoiceRange;
+  next.failedMessage = descriptor.message;
+  next.failureType = descriptor.failureType;
+  next.retryable = descriptor.retryable;
+  next.finalResultsComplete = false;
+  next.retryDescriptor = {
+    ...descriptor,
+    attempt: safeAttempt,
+    retryCount: Math.max(0, safeAttempt - 1),
+    retryStatus: chunkRetryStatus(safeAttempt, false)
+  };
+
+  return next;
+}
+
+export function markPipelineComplete(runState) {
+  return {
+    ...clearFailureFields(copyRunState(runState)),
+    status: "complete",
+    currentStage: null,
+    currentChunkIndex: null,
+    finalResultsComplete: true
+  };
 }
 
 function createDefaultActionResult(invoice, classification) {

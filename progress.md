@@ -27,7 +27,8 @@ Chunk 2A.5 Audit & Governance / AI Reliability Center completed.
 Chunk 2A.6 Visual consistency, spacing, and responsive polish completed.
 Production Rework Chunk 1.1 Timeout fix completed after live timeout on invoices 21-25.
 Production Rework Chunk 1.2 Prompt caching completed.
-Next: Live local API retest, then Chunk 1.3 partial result saving and chunk-level retry
+Production Rework Chunk 1.3 Partial result saving and chunk-level retry completed.
+Next: Live local API retest, then Chunk 1.4 E12 eval fix
 
 ## Stage log
 
@@ -112,7 +113,10 @@ Next: Live local API retest, then Chunk 1.3 partial result saving and chunk-leve
   - Claude API timeouts are now stage-aware: matching remains 60 seconds, classification is 120 seconds, and action generation is 120 seconds
   - Production Rework Chunk 1.2 Prompt caching completed
   - Claude request bodies now mark stable stage system prompts with 5-minute ephemeral prompt caching while keeping dynamic chunk data uncached
-  - Live local API retest, then Chunk 1.3 partial result saving and chunk-level retry is the next step
+  - Production Rework Chunk 1.3 Partial result saving and chunk-level retry completed
+  - Analyze now retains successful chunk outputs in in-memory run state, records failed stage/chunk/range metadata, and can retry only safe failed chunks before continuing the prompt chain
+  - Partial runs keep completed chunks visible only as clearly marked partial data; final dashboard state remains withheld until all stages complete and merge validation passes
+  - Live local API retest, then Chunk 1.4 E12 eval fix is the next step
 
 ## Decisions pending
 

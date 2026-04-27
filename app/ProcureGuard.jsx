@@ -22,11 +22,22 @@ import {
   applyGlobalMatchingGuards,
   assertNoApiKeyLeak,
   buildChunkContext,
+  createIdlePipelineRunState,
+  createPipelineRunState,
   chunkInvoices,
   getInvoiceRangeLabel,
+  getPipelineCompletedSummary,
+  getPipelineStageOutputs,
+  markPipelineChunkFailed,
+  markPipelineChunkStarted,
+  markPipelineChunkSucceeded,
+  markPipelineComplete,
+  markPipelineRetryStarted,
+  markPipelineStageMerged,
   mergeActionChunks,
   mergeClassificationChunks,
   mergeMatchingChunks,
+  mergeCompletedPipelineStage,
   normalizeActionChunkResults,
   validateAndAlignResults,
   validateMergedResults
@@ -215,6 +226,109 @@ function ProgressPanel({ runningStep, statusMessage, hasMatchResults, hasClassif
         </div>
         <p className="text-sm text-slate-600 dark:text-slate-400">{statusMessage || "Ready to analyze validated files."}</p>
       </div>
+    </section>
+  );
+}
+
+function formatFailureTypeLabel(value) {
+  return {
+    timeout: "Timeout",
+    rate_limit: "Rate limit",
+    network: "Network",
+    api: "Claude API",
+    validation: "Validation",
+    unknown: "Unknown"
+  }[value] ?? "Unknown";
+}
+
+function retryButtonLabel(descriptor) {
+  if (!descriptor) return "Retry failed chunk";
+  return `Retry ${formatStageName(descriptor.stage)} chunk ${descriptor.chunkIndex}/${descriptor.totalChunks}`;
+}
+
+function getStoppedRunTitle(runState) {
+  const descriptor = runState?.retryDescriptor;
+  if (!descriptor) return "Analysis did not complete";
+  return `Analysis stopped at ${formatStageName(descriptor.stage)} chunk ${descriptor.chunkIndex}/${descriptor.totalChunks}`;
+}
+
+function PipelineRunStatusPanel({ runState, isRunning, onRetry, onRestart }) {
+  if (!runState?.runId) return null;
+
+  const completedSummary = getPipelineCompletedSummary(runState);
+  const descriptor = runState.retryDescriptor;
+  const hasFailure = ["partial_failed", "failed"].includes(runState.status);
+
+  return (
+    <section className={`pg-card p-4 ${hasFailure ? "border-amber-300 dark:border-amber-700" : ""}`}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Pipeline run state</p>
+          <h3 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-100">
+            {hasFailure ? getStoppedRunTitle(runState) : runState.status === "complete" ? "Analysis complete" : "Analysis in progress"}
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+            {hasFailure
+              ? "Completed chunks are retained in memory, but this run is not a completed batch analysis."
+              : isRunning
+                ? `Running ${formatStageName(runState.currentStage)} chunk ${runState.currentChunkIndex ?? "-"} of ${runState.totalChunks}.`
+                : "Chunk-level progress is captured for the current run."}
+          </p>
+        </div>
+        <Badge className={toneBadgeClass(hasFailure ? "review" : runState.status === "complete" ? "clean" : "info")}>
+          {runState.status === "partial_failed" ? "Partial data retained" : runState.status === "failed" ? "Run failed" : runState.status === "complete" ? "Complete" : "Running"}
+        </Badge>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        {completedSummary.map((item) => (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800" key={item.stage}>
+            <p className="font-semibold text-slate-950 dark:text-slate-100">{formatStageName(item.stage)}</p>
+            <p className="mt-1 font-mono text-xs tabular-nums text-slate-500 dark:text-slate-400">
+              {item.completed}/{item.total} chunks retained
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {descriptor ? (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <FieldRow label="Failed stage" value={formatStageName(descriptor.stage)} />
+            <FieldRow label="Failed chunk" value={`${descriptor.chunkIndex}/${descriptor.totalChunks}`} />
+            <FieldRow label="Invoice range" value={descriptor.invoiceRange || "Not available"} />
+            <FieldRow label="Failure type" value={formatFailureTypeLabel(descriptor.failureType)} />
+            <FieldRow label="Retryable" value={descriptor.retryable ? "Yes" : "No"} />
+          </dl>
+          <p className="mt-3 rounded-lg border border-amber-200 bg-white p-3 leading-6 text-amber-950 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-100">
+            {descriptor.message}
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            {descriptor.retryable ? (
+              <button
+                className="pg-button pg-button-primary"
+                type="button"
+                disabled={isRunning}
+                onClick={onRetry}
+              >
+                {retryButtonLabel(descriptor)}
+              </button>
+            ) : (
+              <p className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-100">
+                Retry is unavailable for this failure type.
+              </p>
+            )}
+            <button
+              className="pg-button pg-button-secondary"
+              type="button"
+              disabled={isRunning}
+              onClick={onRestart}
+            >
+              Restart full analysis
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -459,7 +573,40 @@ function WorkbenchEmptyState({ eyebrow, title, body, actionLabel, onAction, tone
   );
 }
 
-function WorkbenchHeader({ hasData, isAnalysisRunning }) {
+function PartialAnalysisNotice({ runState, onRetry, onStart }) {
+  const descriptor = runState?.retryDescriptor;
+  if (!descriptor) return null;
+
+  return (
+    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Partial analysis</p>
+          <h2 className="mt-1 text-lg font-semibold">{getStoppedRunTitle(runState)}</h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6">
+            Completed chunks are retained, but final batch results are not complete. Partial rows below are limited to invoices with completed prerequisite data.
+          </p>
+          <p className="mt-2 text-sm font-semibold">
+            Failed invoices {descriptor.invoiceRange || "not available"}: {descriptor.message}
+          </p>
+        </div>
+        <Badge className={toneBadgeClass("review")}>Not complete</Badge>
+      </div>
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        {descriptor.retryable ? (
+          <button className="pg-button pg-button-primary" type="button" onClick={onRetry}>
+            {retryButtonLabel(descriptor)}
+          </button>
+        ) : null}
+        <button className="pg-button pg-button-secondary" type="button" onClick={onStart}>
+          Go to Start
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function WorkbenchHeader({ hasData, isAnalysisRunning, isPartial = false }) {
   return (
     <header className="pg-page-header">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -472,8 +619,8 @@ function WorkbenchHeader({ hasData, isAnalysisRunning }) {
             Analyst queue for triaging invoice exceptions, validating evidence, and reviewing DRAFT-only follow-up material.
           </p>
         </div>
-        <Badge className={toneBadgeClass(isAnalysisRunning ? "info" : hasData ? "review" : "neutral")}>
-          {isAnalysisRunning ? "Analysis in progress" : hasData ? "Human-in-the-loop" : "Awaiting analysis"}
+        <Badge className={toneBadgeClass(isAnalysisRunning ? "info" : isPartial ? "review" : hasData ? "review" : "neutral")}>
+          {isAnalysisRunning ? "Analysis in progress" : isPartial ? "Partial data retained" : hasData ? "Human-in-the-loop" : "Awaiting analysis"}
         </Badge>
       </div>
     </header>
@@ -1205,6 +1352,9 @@ function AuditEntryRow({ entry, index }) {
       </div>
       <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
         <FieldRow label="Invoice range" value={entry.chunk?.invoice_range || "Not available"} />
+        <FieldRow label="Retry status" value={entry.chunk?.retry_status || "Not available"} />
+        <FieldRow label="Attempt" value={entry.chunk?.attempt ? `${entry.chunk.attempt}` : "Not available"} />
+        <FieldRow label="Failure type" value={entry.chunk?.failure_type ? formatFailureTypeLabel(entry.chunk.failure_type) : "Not available"} />
         <FieldRow label="Latency" value={formatTelemetryDuration(entry.latency_ms)} />
         <FieldRow label="Tokens" value={`In ${formatOptionalInteger(inputTokens)} · Out ${formatOptionalInteger(outputTokens)}`} />
         <FieldRow label="Cache tokens" value={`Write ${formatOptionalInteger(cacheCreationTokens)} · Read ${formatOptionalInteger(cacheReadTokens)}`} />
@@ -1455,6 +1605,8 @@ function ExceptionWorkbenchPanel({
   onResetFilters,
   isAnalysisRunning,
   hasAnalysisFailure,
+  partialRunState,
+  onRetryPartial,
   onStart,
   approvedActions,
   tier3Notes,
@@ -1477,14 +1629,14 @@ function ExceptionWorkbenchPanel({
     );
   }
 
-  if (hasAnalysisFailure) {
+  if (hasAnalysisFailure && !viewModel.hasData) {
     return (
       <section className="pg-page-stack">
         <WorkbenchHeader hasData={false} isAnalysisRunning={false} />
         <WorkbenchEmptyState
           eyebrow="Analysis failed"
-          title="Exception Workbench is waiting for a successful run"
-          body="The previous run did not complete, so no stale completed queue is shown here. Return to Start, resolve the failure, and rerun analysis."
+          title={partialRunState?.retryDescriptor ? getStoppedRunTitle(partialRunState) : "Exception Workbench is waiting for a successful run"}
+          body="Completed chunks are retained, but no completed classification subset is available for the workbench yet. Return to Start, retry the failed chunk when available, or restart the full analysis."
           actionLabel="Go to Start"
           onAction={onStart}
           tone="escalate"
@@ -1511,7 +1663,10 @@ function ExceptionWorkbenchPanel({
 
   return (
     <section className="pg-page-stack">
-      <WorkbenchHeader hasData={viewModel.hasData} isAnalysisRunning={false} />
+      <WorkbenchHeader hasData={viewModel.hasData} isAnalysisRunning={false} isPartial={Boolean(partialRunState?.retryDescriptor)} />
+      {partialRunState?.retryDescriptor ? (
+        <PartialAnalysisNotice runState={partialRunState} onRetry={onRetryPartial} onStart={onStart} />
+      ) : null}
       <WorkbenchSummaryStrip summary={viewModel.summary} />
       <ReviewQueueControls
         filters={filters}
@@ -2155,6 +2310,56 @@ function buildToleranceSimulation(matchResults, classificationResults, tolerance
   };
 }
 
+function isIncompleteRun(runState) {
+  return ["partial_failed", "failed"].includes(runState?.status);
+}
+
+function isFinalRunComplete(runState, matchResults, classificationResults, actionResults) {
+  return Boolean(
+    runState?.status === "complete" &&
+    runState.finalResultsComplete &&
+    matchResults &&
+    classificationResults &&
+    actionResults
+  );
+}
+
+function buildPartialWorkbenchResults(runState) {
+  const classificationResults = mergeCompletedPipelineStage(runState, "classification");
+  const completedClassificationCount = classificationResults?.classifications?.length ?? 0;
+  if (!completedClassificationCount) {
+    return {
+      matchResults: null,
+      classificationResults: null,
+      actionResults: null
+    };
+  }
+
+  const matchResults = mergeCompletedPipelineStage(runState, "matching");
+  const actionResults = mergeCompletedPipelineStage(runState, "action_generation");
+
+  return {
+    matchResults: matchResults?.results
+      ? { results: matchResults.results.slice(0, completedClassificationCount) }
+      : null,
+    classificationResults,
+    actionResults: actionResults?.action_results
+      ? { action_results: actionResults.action_results.slice(0, completedClassificationCount) }
+      : null
+  };
+}
+
+function auditChunkForAttempt(chunkMeta, attempt, retryStatus, failureDescriptor = null) {
+  return {
+    ...chunkMeta,
+    attempt,
+    retry_count: Math.max(0, attempt - 1),
+    retry_status: retryStatus,
+    failure_type: failureDescriptor?.failureType ?? "",
+    retryable: failureDescriptor?.retryable ?? ""
+  };
+}
+
 export default function App() {
   const [parsedFiles, setParsedFiles] = useState(null);
   const [uploadError, setUploadError] = useState("");
@@ -2177,25 +2382,48 @@ export default function App() {
   const [tolerances, setTolerances] = useState(DEFAULT_TOLERANCES);
   const [activeWorkspace, setActiveWorkspace] = useState("start");
   const [queueFilters, setQueueFilters] = useState(DEFAULT_QUEUE_FILTERS);
+  const [pipelineRunState, setPipelineRunState] = useState(() => createIdlePipelineRunState());
 
+  const finalResultsComplete = isFinalRunComplete(pipelineRunState, matchResults, classificationResults, actionResults);
+  const partialWorkbenchResults = useMemo(
+    () => isIncompleteRun(pipelineRunState)
+      ? buildPartialWorkbenchResults(pipelineRunState)
+      : { matchResults: null, classificationResults: null, actionResults: null },
+    [pipelineRunState]
+  );
+  const workbenchMatchResults = finalResultsComplete ? matchResults : partialWorkbenchResults.matchResults;
+  const workbenchClassificationResults = finalResultsComplete ? classificationResults : partialWorkbenchResults.classificationResults;
+  const workbenchActionResults = finalResultsComplete ? actionResults : partialWorkbenchResults.actionResults;
   const toleranceSimulation = useMemo(
-    () => buildToleranceSimulation(matchResults, classificationResults, tolerances),
-    [classificationResults, matchResults, tolerances]
+    () => buildToleranceSimulation(
+      finalResultsComplete ? matchResults : null,
+      finalResultsComplete ? classificationResults : null,
+      tolerances
+    ),
+    [classificationResults, finalResultsComplete, matchResults, tolerances]
+  );
+  const workbenchToleranceSimulation = useMemo(
+    () => buildToleranceSimulation(workbenchMatchResults, workbenchClassificationResults, tolerances),
+    [workbenchClassificationResults, workbenchMatchResults, tolerances]
   );
   const rootCauseAnalysis = useMemo(
-    () => analyzeRootCauses({ parsedFiles, matchResults, classificationResults }),
-    [classificationResults, matchResults, parsedFiles]
+    () => analyzeRootCauses({
+      parsedFiles,
+      matchResults: finalResultsComplete ? matchResults : null,
+      classificationResults: finalResultsComplete ? classificationResults : null
+    }),
+    [classificationResults, finalResultsComplete, matchResults, parsedFiles]
   );
   const dashboardAnalytics = useMemo(
     () => buildDashboardAnalytics({
       parsedFiles,
-      matchResults,
-      classificationResults,
-      actionResults,
+      matchResults: finalResultsComplete ? matchResults : null,
+      classificationResults: finalResultsComplete ? classificationResults : null,
+      actionResults: finalResultsComplete ? actionResults : null,
       auditEntries,
       rootCauseAnalysis
     }),
-    [actionResults, auditEntries, classificationResults, matchResults, parsedFiles, rootCauseAnalysis]
+    [actionResults, auditEntries, classificationResults, finalResultsComplete, matchResults, parsedFiles, rootCauseAnalysis]
   );
   const supplierPolicyViewModel = useMemo(
     () => buildSupplierPolicyAnalyticsViewModel({
@@ -2209,13 +2437,13 @@ export default function App() {
   const workbenchViewModel = useMemo(
     () => buildExceptionWorkbenchViewModel({
       parsedFiles,
-      matchResults,
-      classificationResults,
-      actionResults,
-      toleranceSimulation,
+      matchResults: workbenchMatchResults,
+      classificationResults: workbenchClassificationResults,
+      actionResults: workbenchActionResults,
+      toleranceSimulation: workbenchToleranceSimulation,
       filters: queueFilters
     }),
-    [actionResults, classificationResults, matchResults, parsedFiles, queueFilters, toleranceSimulation]
+    [parsedFiles, queueFilters, workbenchActionResults, workbenchClassificationResults, workbenchMatchResults, workbenchToleranceSimulation]
   );
   const governanceViewModel = useMemo(
     () => buildGovernanceViewModel({
@@ -2230,9 +2458,10 @@ export default function App() {
       error,
       matchResults,
       classificationResults,
-      actionResults
+      actionResults,
+      pipelineRunState
     }),
-    [actionResults, apiKey, auditEntries, classificationResults, dashboardAnalytics, error, failedStep, matchResults, parsedFiles, runningStep]
+    [actionResults, apiKey, auditEntries, classificationResults, dashboardAnalytics, error, failedStep, matchResults, parsedFiles, pipelineRunState, runningStep]
   );
 
   function handleApiKeyChange(value) {
@@ -2263,6 +2492,7 @@ export default function App() {
       setReviewedTier3(new Set());
       setTolerances(DEFAULT_TOLERANCES);
       setQueueFilters(DEFAULT_QUEUE_FILTERS);
+      setPipelineRunState(createIdlePipelineRunState());
       setActiveWorkspace("start");
       setStatusMessage("Files validated. Ready to analyze.");
     } catch (fileError) {
@@ -2320,13 +2550,16 @@ export default function App() {
     };
   }
 
-  async function runMatchingChunks(chunks) {
-    const chunkResults = [];
+  async function runMatchingChunks(chunks, initialRunState, startIndex = 0) {
+    let runState = initialRunState;
     setRunningStep("matching");
 
-    for (let index = 0; index < chunks.length; index += 1) {
+    for (let index = startIndex; index < chunks.length; index += 1) {
       const chunk = chunks[index];
       const chunkMeta = createChunkMeta(chunk, index, chunks.length);
+      const started = markPipelineChunkStarted(runState, { stage: "matching", chunkIndex: index, chunkMeta });
+      runState = started.runState;
+      setPipelineRunState(runState);
       const context = buildChunkContext(parsedFiles, chunk, parsedFiles.invoices);
       const userMessage = JSON.stringify(matchingPayloadForContext(context));
       const startedAt = performance.now();
@@ -2348,6 +2581,19 @@ export default function App() {
         const guarded = applyGlobalMatchingGuards(context, alignedResponse);
         const aligned = validateAndAlignResults("matching", context.invoices, guarded, chunkMeta.invoice_range);
         assertNoApiKeyLeak(aligned);
+        const auditChunk = auditChunkForAttempt(
+          chunkMeta,
+          started.attempt,
+          started.attempt > 1 ? "retry_success" : "initial_success"
+        );
+        runState = markPipelineChunkSucceeded(runState, {
+          stage: "matching",
+          chunkIndex: index,
+          chunkMeta: auditChunk,
+          output: aligned,
+          attempt: started.attempt
+        });
+        setPipelineRunState(runState);
         await recordAuditEntry({
           step: "matching",
           model: MODELS.matching,
@@ -2355,47 +2601,70 @@ export default function App() {
           output: aligned,
           response,
           promptVersion: "01_matching_v1",
-          chunk: chunkMeta
+          chunk: auditChunk
         });
-        chunkResults.push(aligned);
       } catch (chunkError) {
+        const failedRunState = markPipelineChunkFailed(runState, {
+          stage: "matching",
+          chunkIndex: index,
+          chunkMeta,
+          error: chunkError,
+          attempt: started.attempt
+        });
+        const descriptor = failedRunState.retryDescriptor;
+        const auditChunk = auditChunkForAttempt(chunkMeta, started.attempt, descriptor.retryStatus, descriptor);
+        setPipelineRunState(failedRunState);
+        setFailedStep("matching");
         await recordAuditEntry({
           step: "matching",
           model: MODELS.matching,
           input: `matching:${chunkMeta.invoice_range}:${chunkMeta.invoice_count}`,
           output: null,
           promptVersion: "01_matching_v1",
-          chunk: chunkMeta,
+          chunk: auditChunk,
           status: "failed",
           errorMessage: chunkError.message,
           latencyMs: Math.round(performance.now() - startedAt)
         });
-        throw new Error(`Analysis failed on invoices ${chunkMeta.invoice_range}: ${chunkError.message}`);
+        throw new Error(descriptor.userMessage);
       }
 
       if (index < chunks.length - 1) await waitForChunkWindow();
     }
 
-    const merged = validateMergedResults(parsedFiles.invoices, mergeMatchingChunks(chunkResults), "matching");
+    const merged = validateMergedResults(
+      parsedFiles.invoices,
+      mergeMatchingChunks(getPipelineStageOutputs(runState, "matching")),
+      "matching"
+    );
     assertNoApiKeyLeak(merged);
+    runState = markPipelineStageMerged(runState, { stage: "matching", merged });
+    setPipelineRunState(runState);
     setMatchResults(merged);
-    return { merged, chunks: chunkResults };
+    return runState;
   }
 
-  async function runClassificationChunks(chunks, matchingChunks) {
-    const chunkResults = [];
+  async function runClassificationChunks(chunks, initialRunState, startIndex = 0) {
+    let runState = initialRunState;
     setRunningStep("classification");
+    const matchingChunks = getPipelineStageOutputs(runState, "matching");
 
-    for (let index = 0; index < chunks.length; index += 1) {
+    for (let index = startIndex; index < chunks.length; index += 1) {
       const chunk = chunks[index];
       const chunkMeta = createChunkMeta(chunk, index, chunks.length);
+      const started = markPipelineChunkStarted(runState, { stage: "classification", chunkIndex: index, chunkMeta });
+      runState = started.runState;
+      setPipelineRunState(runState);
       const context = buildChunkContext(parsedFiles, chunk, parsedFiles.invoices);
-      const userMessage = JSON.stringify({ results: matchingChunks[index].results });
       const startedAt = performance.now();
 
       setStatusMessage(`Classification chunk ${chunkMeta.index}/${chunkMeta.total} (invoices ${chunkMeta.invoice_range})...`);
 
       try {
+        if (!matchingChunks[index]) {
+          throw new Error(`Missing required input data for classification chunk ${chunkMeta.index}/${chunkMeta.total}`);
+        }
+        const userMessage = JSON.stringify({ results: matchingChunks[index].results });
         const response = await callClaudeAPI({
           systemPrompt: classificationPrompt,
           userMessage,
@@ -2408,6 +2677,19 @@ export default function App() {
         });
         const aligned = validateAndAlignResults("classification", context.invoices, response.data, chunkMeta.invoice_range);
         assertNoApiKeyLeak(aligned);
+        const auditChunk = auditChunkForAttempt(
+          chunkMeta,
+          started.attempt,
+          started.attempt > 1 ? "retry_success" : "initial_success"
+        );
+        runState = markPipelineChunkSucceeded(runState, {
+          stage: "classification",
+          chunkIndex: index,
+          chunkMeta: auditChunk,
+          output: aligned,
+          attempt: started.attempt
+        });
+        setPipelineRunState(runState);
         await recordAuditEntry({
           step: "classification",
           model: MODELS.classification,
@@ -2415,49 +2697,73 @@ export default function App() {
           output: aligned,
           response,
           promptVersion: "02_classification_v1",
-          chunk: chunkMeta
+          chunk: auditChunk
         });
-        chunkResults.push(aligned);
       } catch (chunkError) {
+        const failedRunState = markPipelineChunkFailed(runState, {
+          stage: "classification",
+          chunkIndex: index,
+          chunkMeta,
+          error: chunkError,
+          attempt: started.attempt
+        });
+        const descriptor = failedRunState.retryDescriptor;
+        const auditChunk = auditChunkForAttempt(chunkMeta, started.attempt, descriptor.retryStatus, descriptor);
+        setPipelineRunState(failedRunState);
+        setFailedStep("classification");
         await recordAuditEntry({
           step: "classification",
           model: MODELS.classification,
           input: `classification:${chunkMeta.invoice_range}:${chunkMeta.invoice_count}`,
           output: null,
           promptVersion: "02_classification_v1",
-          chunk: chunkMeta,
+          chunk: auditChunk,
           status: "failed",
           errorMessage: chunkError.message,
           latencyMs: Math.round(performance.now() - startedAt)
         });
-        throw new Error(`Analysis failed on invoices ${chunkMeta.invoice_range}: ${chunkError.message}`);
+        throw new Error(descriptor.userMessage);
       }
 
       if (index < chunks.length - 1) await waitForChunkWindow();
     }
 
-    const merged = validateMergedResults(parsedFiles.invoices, mergeClassificationChunks(chunkResults), "classification");
+    const merged = validateMergedResults(
+      parsedFiles.invoices,
+      mergeClassificationChunks(getPipelineStageOutputs(runState, "classification")),
+      "classification"
+    );
     assertNoApiKeyLeak(merged);
+    runState = markPipelineStageMerged(runState, { stage: "classification", merged });
+    setPipelineRunState(runState);
     setClassificationResults(merged);
-    return { merged, chunks: chunkResults };
+    return runState;
   }
 
-  async function runActionGenerationChunks(chunks, matchingChunks, classificationChunks) {
-    const chunkResults = [];
+  async function runActionGenerationChunks(chunks, initialRunState, startIndex = 0) {
+    let runState = initialRunState;
     setRunningStep("action_generation");
+    const matchingChunks = getPipelineStageOutputs(runState, "matching");
+    const classificationChunks = getPipelineStageOutputs(runState, "classification");
 
-    for (let index = 0; index < chunks.length; index += 1) {
+    for (let index = startIndex; index < chunks.length; index += 1) {
       const chunk = chunks[index];
       const chunkMeta = createChunkMeta(chunk, index, chunks.length);
+      const started = markPipelineChunkStarted(runState, { stage: "action_generation", chunkIndex: index, chunkMeta });
+      runState = started.runState;
+      setPipelineRunState(runState);
       const context = buildChunkContext(parsedFiles, chunk, parsedFiles.invoices);
-      const userMessage = JSON.stringify({
-        batch: buildActionBatch(context, matchingChunks[index], classificationChunks[index])
-      });
       const startedAt = performance.now();
 
       setStatusMessage(`Drafting chunk ${chunkMeta.index}/${chunkMeta.total} (invoices ${chunkMeta.invoice_range})...`);
 
       try {
+        if (!matchingChunks[index] || !classificationChunks[index]) {
+          throw new Error(`Missing required input data for draft generation chunk ${chunkMeta.index}/${chunkMeta.total}`);
+        }
+        const userMessage = JSON.stringify({
+          batch: buildActionBatch(context, matchingChunks[index], classificationChunks[index])
+        });
         const response = await callClaudeAPI({
           systemPrompt: actionPrompt,
           userMessage,
@@ -2476,6 +2782,19 @@ export default function App() {
         );
         const aligned = validateAndAlignResults("action_generation", context.invoices, normalized, chunkMeta.invoice_range);
         assertNoApiKeyLeak(aligned);
+        const auditChunk = auditChunkForAttempt(
+          chunkMeta,
+          started.attempt,
+          started.attempt > 1 ? "retry_success" : "initial_success"
+        );
+        runState = markPipelineChunkSucceeded(runState, {
+          stage: "action_generation",
+          chunkIndex: index,
+          chunkMeta: auditChunk,
+          output: aligned,
+          attempt: started.attempt
+        });
+        setPipelineRunState(runState);
         await recordAuditEntry({
           step: "action_generation",
           model: MODELS.action_generation,
@@ -2483,31 +2802,71 @@ export default function App() {
           output: aligned,
           response,
           promptVersion: "03_action_generation_v1",
-          chunk: chunkMeta
+          chunk: auditChunk
         });
-        chunkResults.push(aligned);
       } catch (chunkError) {
+        const failedRunState = markPipelineChunkFailed(runState, {
+          stage: "action_generation",
+          chunkIndex: index,
+          chunkMeta,
+          error: chunkError,
+          attempt: started.attempt
+        });
+        const descriptor = failedRunState.retryDescriptor;
+        const auditChunk = auditChunkForAttempt(chunkMeta, started.attempt, descriptor.retryStatus, descriptor);
+        setPipelineRunState(failedRunState);
+        setFailedStep("action_generation");
         await recordAuditEntry({
           step: "action_generation",
           model: MODELS.action_generation,
           input: `action_generation:${chunkMeta.invoice_range}:${chunkMeta.invoice_count}`,
           output: null,
           promptVersion: "03_action_generation_v1",
-          chunk: chunkMeta,
+          chunk: auditChunk,
           status: "failed",
           errorMessage: chunkError.message,
           latencyMs: Math.round(performance.now() - startedAt)
         });
-        throw new Error(`Analysis failed on invoices ${chunkMeta.invoice_range}: ${chunkError.message}`);
+        throw new Error(descriptor.userMessage);
       }
 
       if (index < chunks.length - 1) await waitForChunkWindow();
     }
 
-    const merged = validateMergedResults(parsedFiles.invoices, mergeActionChunks(chunkResults), "action_generation");
+    const merged = validateMergedResults(
+      parsedFiles.invoices,
+      mergeActionChunks(getPipelineStageOutputs(runState, "action_generation")),
+      "action_generation"
+    );
     assertNoApiKeyLeak(merged);
+    runState = markPipelineStageMerged(runState, { stage: "action_generation", merged });
+    setPipelineRunState(runState);
     setActionResults(merged);
-    return { merged, chunks: chunkResults };
+    return runState;
+  }
+
+  async function continuePipelineFrom({ chunks, initialRunState, startStage, startIndex }) {
+    let runState = initialRunState;
+
+    if (startStage === "matching") {
+      runState = await runMatchingChunks(chunks, runState, startIndex);
+      startStage = "classification";
+      startIndex = 0;
+    }
+
+    if (startStage === "classification") {
+      runState = await runClassificationChunks(chunks, runState, startIndex);
+      startStage = "action_generation";
+      startIndex = 0;
+    }
+
+    if (startStage === "action_generation") {
+      runState = await runActionGenerationChunks(chunks, runState, startIndex);
+    }
+
+    runState = markPipelineComplete(runState);
+    setPipelineRunState(runState);
+    return runState;
   }
 
   async function runPipeline() {
@@ -2520,11 +2879,16 @@ export default function App() {
 
     const chunks = chunkInvoices(parsedFiles.invoices, ANALYSIS_CHUNK_SIZE);
     let activeStep = "matching";
+    let runState = createPipelineRunState({
+      runId: `run-${Date.now()}`,
+      totalChunks: chunks.length
+    });
 
     setMatchResults(null);
     setClassificationResults(null);
     setActionResults(null);
     setAuditEntries([]);
+    setPipelineRunState(runState);
     setApprovedActions(new Set());
     setTier3Notes({});
     setReviewedTier3(new Set());
@@ -2533,26 +2897,49 @@ export default function App() {
 
     try {
       activeStep = "matching";
-      const nextMatchResults = await runMatchingChunks(chunks);
-      activeStep = "classification";
-      const nextClassificationResults = await runClassificationChunks(chunks, nextMatchResults.chunks);
-      activeStep = "action_generation";
-      await runActionGenerationChunks(chunks, nextMatchResults.chunks, nextClassificationResults.chunks);
+      runState = await continuePipelineFrom({
+        chunks,
+        initialRunState: runState,
+        startStage: "matching",
+        startIndex: 0
+      });
       setStatusMessage("Prompt chain complete. Review drafted communications.");
       setActiveWorkspace("executive");
     } catch (pipelineError) {
-      setFailedStep(activeStep);
-      setMatchResults(null);
-      setClassificationResults(null);
-      setActionResults(null);
+      setFailedStep((current) => current || activeStep);
       setError(pipelineError.message);
     } finally {
       setRunningStep("");
     }
   }
 
-  function retryFailedStep() {
-    runPipeline();
+  async function retryFailedChunk() {
+    const descriptor = pipelineRunState.retryDescriptor;
+    if (!parsedFiles || !descriptor?.retryable || runningStep) return;
+
+    const chunks = chunkInvoices(parsedFiles.invoices, ANALYSIS_CHUNK_SIZE);
+    let runState = markPipelineRetryStarted(pipelineRunState, descriptor);
+    setPipelineRunState(runState);
+    setError("");
+    setFailedStep("");
+    setActiveWorkspace("start");
+    setStatusMessage(`Retrying ${formatStageName(descriptor.stage)} chunk ${descriptor.chunkIndex}/${descriptor.totalChunks} (invoices ${descriptor.invoiceRange})...`);
+
+    try {
+      runState = await continuePipelineFrom({
+        chunks,
+        initialRunState: runState,
+        startStage: descriptor.stage,
+        startIndex: descriptor.chunkIndex - 1
+      });
+      setStatusMessage("Prompt chain complete after retry. Review drafted communications.");
+      setActiveWorkspace("executive");
+    } catch (retryError) {
+      setFailedStep((current) => current || descriptor.stage);
+      setError(retryError.message);
+    } finally {
+      setRunningStep("");
+    }
   }
 
   function exportAuditTrail() {
@@ -2595,11 +2982,11 @@ export default function App() {
         </header>
 
         <Alert message={uploadError} />
-        <Alert message={error} onRetry={failedStep ? retryFailedStep : null} />
+        <Alert message={error} />
         <WorkspaceTabs
           activeWorkspace={activeWorkspace}
           onChange={setActiveWorkspace}
-          dashboardReady={Boolean(classificationResults)}
+          dashboardReady={finalResultsComplete}
           reviewCount={workbenchViewModel.rows.length}
           auditEntryCount={auditEntries.length}
         />
@@ -2615,10 +3002,32 @@ export default function App() {
               hasClassificationResults={Boolean(classificationResults)}
               hasActionResults={Boolean(actionResults)}
             />
+            <PipelineRunStatusPanel
+              runState={pipelineRunState}
+              isRunning={Boolean(runningStep)}
+              onRetry={retryFailedChunk}
+              onRestart={runPipeline}
+            />
           </section>
         ) : null}
 
-        {activeWorkspace === "executive" ? (
+        {activeWorkspace === "executive" && isIncompleteRun(pipelineRunState) ? (
+          <section className="pg-page-stack">
+            <PartialAnalysisNotice
+              runState={pipelineRunState}
+              onRetry={retryFailedChunk}
+              onStart={() => setActiveWorkspace("start")}
+            />
+            <WorkbenchEmptyState
+              eyebrow="Executive Summary withheld"
+              title="Final batch summary is available only after all stages complete"
+              body="This run has retained partial chunks, but Executive Summary metrics, estimated recovery, and completed-batch wording stay hidden until matching, classification, draft generation, and merge validation all pass."
+              actionLabel="Go to Start"
+              onAction={() => setActiveWorkspace("start")}
+              tone="review"
+            />
+          </section>
+        ) : activeWorkspace === "executive" ? (
           <ExecutiveDashboard
             analytics={dashboardAnalytics}
             isDarkMode={isDarkMode}
@@ -2633,7 +3042,9 @@ export default function App() {
             onFiltersChange={setQueueFilters}
             onResetFilters={() => setQueueFilters(DEFAULT_QUEUE_FILTERS)}
             isAnalysisRunning={Boolean(runningStep)}
-            hasAnalysisFailure={Boolean(error && failedStep)}
+            hasAnalysisFailure={Boolean(error && failedStep) || isIncompleteRun(pipelineRunState)}
+            partialRunState={isIncompleteRun(pipelineRunState) ? pipelineRunState : null}
+            onRetryPartial={retryFailedChunk}
             onStart={() => setActiveWorkspace("start")}
             approvedActions={approvedActions}
             tier3Notes={tier3Notes}
@@ -2661,7 +3072,7 @@ export default function App() {
           <SupplierPolicyAnalyticsPanel
             viewModel={supplierPolicyViewModel}
             isAnalysisRunning={Boolean(runningStep)}
-            hasAnalysisFailure={Boolean(error && failedStep)}
+            hasAnalysisFailure={Boolean(error && failedStep) || isIncompleteRun(pipelineRunState)}
             onStart={() => setActiveWorkspace("start")}
             tolerances={tolerances}
             onTolerancesChange={setTolerances}
