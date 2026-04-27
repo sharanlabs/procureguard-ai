@@ -100,7 +100,9 @@ Next: Chunk 2A.5 Audit & Governance / AI Reliability Center
   - Exception Workbench now uses derived rows, compact queue metrics, clearer filters, stronger invoice hierarchy, structured evidence, quieter confidence metadata, and DRAFT-only action panels
   - Chunk 2A.4 Supplier & Policy Analytics grouping completed
   - Supplier & Policy Analytics now uses derived supplier/policy view models, supplier risk explanations, deterministic procurement actions, cleaner exception concentration, policy simulator framing, and grouped browser-only pattern signals
-  - Chunk 2A.5 Audit & Governance / AI Reliability Center is the next micro-chunk
+  - Chunk 2A.5 Audit & Governance / AI Reliability Center completed
+  - Audit & Governance now uses a derived governance view model, AI Reliability Center, API/service status, workflow trace, runtime/cost telemetry, grouped audit entries, and audit-supporting export readiness
+  - Chunk 2A.6 Visual consistency, spacing, and responsive polish is the next micro-chunk
 
 ## Decisions pending
 

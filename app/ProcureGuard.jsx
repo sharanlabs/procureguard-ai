@@ -2,9 +2,7 @@ import { useMemo, useState } from "react";
 import matchingPrompt from "../prompts/01_matching.md?raw";
 import classificationPrompt from "../prompts/02_classification.md?raw";
 import actionPrompt from "../prompts/03_action_generation.md?raw";
-import ExecutiveDashboard, {
-  SessionGovernancePanel
-} from "./ProcureGuardDashboard.jsx";
+import ExecutiveDashboard from "./ProcureGuardDashboard.jsx";
 import { createAuditEntry, exportAuditCsv } from "./lib/audit.js";
 import { callClaudeAPI } from "./lib/claude.js";
 import { normalizeProcurementFiles } from "./lib/csv.js";
@@ -37,6 +35,7 @@ import { analyzeRootCauses } from "./lib/rootCause.js";
 import { actionOutputSchema, classificationOutputSchema, matchingOutputSchema } from "./lib/schemas.js";
 import {
   buildExceptionWorkbenchViewModel,
+  buildGovernanceViewModel,
   buildSupplierPolicyAnalyticsViewModel
 } from "./lib/uiModels.js";
 
@@ -371,6 +370,24 @@ function formatPercentValue(value) {
 
 function formatInteger(value) {
   return new Intl.NumberFormat("en-US").format(value ?? 0);
+}
+
+function formatOptionalInteger(value) {
+  return typeof value === "number" && !Number.isNaN(value) ? formatInteger(value) : "Not available";
+}
+
+function formatCostValue(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "Not available";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: value < 1 ? 4 : 2,
+    maximumFractionDigits: value < 1 ? 4 : 2
+  }).format(value);
+}
+
+function formatTelemetryDuration(value) {
+  return typeof value === "number" && !Number.isNaN(value) && value > 0 ? formatDuration(value) : "Not available";
 }
 
 function toneBadgeClass(tone) {
@@ -804,38 +821,470 @@ function InvoiceCard({
   );
 }
 
-function AuditPanel({ entries, onExport }) {
+function governanceMetricValue(metric) {
+  if (metric.format === "text") return metric.value || "Not available";
+  if (metric.format === "duration") return formatTelemetryDuration(metric.value);
+  if (metric.format === "integer-optional") return formatOptionalInteger(metric.value);
+  if (metric.format === "money") return formatMoney(metric.value);
+  return formatInteger(metric.value);
+}
+
+function GovernanceMetric({ label, value, helper, tone = "neutral", isNumber = true }) {
+  return (
+    <article className={`rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 ${toneBorderClass(tone)}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
+      <p className={`${isNumber ? "font-mono tabular-nums" : ""} mt-2 text-lg font-semibold leading-6 text-slate-950 dark:text-slate-100`}>
+        {value}
+      </p>
+      {helper ? <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{helper}</p> : null}
+    </article>
+  );
+}
+
+function GovernanceHeader({ viewModel }) {
+  return (
+    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">{viewModel.header.eyebrow}</p>
+          <h2 className="mt-1 max-w-5xl text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+            {viewModel.header.title}
+          </h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+            {viewModel.header.takeaway}
+          </p>
+        </div>
+        <Badge className={toneBadgeClass(viewModel.runState.tone)}>{viewModel.runState.label}</Badge>
+      </div>
+    </header>
+  );
+}
+
+function AiReliabilityCenter({ viewModel }) {
+  return (
+    <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm dark:border-indigo-800 dark:bg-indigo-950/40">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">AI Reliability Center</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Run health, controls, and audit readiness</h3>
+          <p className="mt-1 text-sm leading-6 text-indigo-900 dark:text-indigo-200">
+            Reliability metadata for the current AI-assisted review process. Claims are based on captured run data only.
+          </p>
+        </div>
+        <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">
+          Audit-supporting
+        </Badge>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {viewModel.reliabilitySummary.cards.map((metric) => (
+          <GovernanceMetric
+            key={metric.id}
+            label={metric.label}
+            value={governanceMetricValue(metric)}
+            helper={metric.helper}
+            tone={metric.tone}
+            isNumber={!["text"].includes(metric.format)}
+          />
+        ))}
+      </div>
+
+      <div className="mt-5 rounded-xl border border-indigo-200 bg-white p-4 dark:border-indigo-800 dark:bg-slate-900">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">Validation gates</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+              {viewModel.validationGates.hasValidationDetail
+                ? "Available gate detail is shown from current run metadata."
+                : viewModel.validationGates.unavailableMessage}
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-5">
+          {viewModel.validationGates.gates.map((gate) => (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800" key={gate.id}>
+              <div className="flex flex-col gap-2">
+                <Badge className={toneBadgeClass(gate.tone)}>{gate.statusLabel}</Badge>
+                <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{gate.label}</p>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-400">{gate.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ApiServiceAndDataInputs({ viewModel, apiKey, onApiKeyChange }) {
+  const exposure = viewModel.apiExposure;
+  const uploaded = viewModel.uploadedData;
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Audit & Governance</h2>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{entries.length} entries captured</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">AI service and data inputs</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Claude service mode and uploaded data</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+            Production uses server-side Claude configuration. Local development keeps the key session-only when provided.
+          </p>
+        </div>
+        <Badge className={toneBadgeClass(exposure.serviceTone)}>{exposure.modeLabel}</Badge>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <GovernanceMetric
+          label="AI service status"
+          value={exposure.serviceStatus}
+          helper={exposure.detail}
+          tone={exposure.serviceTone}
+          isNumber={false}
+        />
+        <GovernanceMetric
+          label="Client key exposure"
+          value={exposure.clientKeyExposure}
+          helper="Audit export excludes raw API keys."
+          tone={exposure.exposureTone}
+          isNumber={false}
+        />
+        <GovernanceMetric
+          label="Invoices loaded"
+          value={formatInteger(uploaded.invoiceCount)}
+          helper={uploaded.hasFiles ? "Parsed from uploaded CSVs" : "Available after upload"}
+          tone={uploaded.hasFiles ? "info" : "neutral"}
+        />
+        <GovernanceMetric
+          label="Input files"
+          value={formatInteger(uploaded.files.length)}
+          helper={uploaded.summary}
+          tone={uploaded.hasFiles ? "info" : "neutral"}
+        />
+      </div>
+
+      {exposure.allowLocalKeyInput ? (
+        <div className="mt-5">
+          <ApiKeyPanel apiKey={apiKey} onApiKeyChange={onApiKeyChange} />
+        </div>
+      ) : null}
+
+      {uploaded.files.length ? (
+        <div className="mt-5 grid gap-2 md:grid-cols-3">
+          {uploaded.files.map((file) => (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800" key={file.key}>
+              <p className="font-semibold text-slate-950 dark:text-slate-100">{file.name}</p>
+              <p className="mt-1 font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatInteger(file.rowCount)} rows parsed</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          Uploaded file summary appears after CSV validation from Start.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function WorkflowTraceSummary({ trace }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Workflow trace summary</p>
+        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Prompt-chain trace from data setup to export</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+          {formatInteger(trace.completedCount)} of {formatInteger(trace.steps.length)} trace steps have current run evidence.
+        </p>
+      </div>
+
+      <div className="mt-5 grid gap-3 lg:grid-cols-7">
+        {trace.steps.map((step) => (
+          <article className={`rounded-xl border bg-slate-50 p-3 dark:bg-slate-800 ${toneBorderClass(step.tone)}`} key={step.id}>
+            <div className="flex flex-col gap-2">
+              <Badge className={toneBadgeClass(step.tone)}>{step.statusLabel}</Badge>
+              <h4 className="text-sm font-semibold text-slate-950 dark:text-slate-100">{step.stageLabel}</h4>
+            </div>
+            <p className="mt-2 min-h-10 text-xs leading-5 text-slate-600 dark:text-slate-400">{step.detail}</p>
+            <dl className="mt-3 space-y-1 border-t border-slate-200 pt-3 text-xs dark:border-slate-700">
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-500 dark:text-slate-400">Chunks</dt>
+                <dd className="font-mono tabular-nums text-slate-800 dark:text-slate-200">{step.chunkCount ? formatInteger(step.chunkCount) : "Not available"}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-500 dark:text-slate-400">Model</dt>
+                <dd className="text-right text-slate-800 dark:text-slate-200">{step.model}</dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-slate-500 dark:text-slate-400">Latency</dt>
+                <dd className="font-mono tabular-nums text-slate-800 dark:text-slate-200">{formatTelemetryDuration(step.latencyMs)}</dd>
+              </div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RuntimeCostTelemetry({ viewModel }) {
+  const tokenCost = viewModel.tokenCost;
+  const latency = viewModel.latency;
+  const modelRouting = viewModel.modelRouting;
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Runtime and cost telemetry</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Tokens, cost estimate, latency, and model routing</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+            Token and cost values appear only when usage metadata is returned by the Claude API response.
+          </p>
+        </div>
+        <Badge className={toneBadgeClass(tokenCost.tokenDataReported ? "info" : "neutral")}>
+          {tokenCost.tokenDataReported ? "Usage metadata captured" : "Token usage not available"}
+        </Badge>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <GovernanceMetric
+          label="Input tokens"
+          value={tokenCost.tokenDataReported ? formatInteger(tokenCost.inputTokens) : "Not available"}
+          helper={tokenCost.tokenDataReported ? "Prompt/input usage" : tokenCost.emptyMessage}
+          tone="neutral"
+        />
+        <GovernanceMetric
+          label="Output tokens"
+          value={tokenCost.tokenDataReported ? formatInteger(tokenCost.outputTokens) : "Not available"}
+          helper={tokenCost.tokenDataReported ? "Completion/output usage" : tokenCost.emptyMessage}
+          tone="neutral"
+        />
+        <GovernanceMetric
+          label="Estimated cost"
+          value={tokenCost.tokenDataReported ? formatCostValue(tokenCost.estimatedFullPriceCost) : "Not available"}
+          helper="Full-price estimate from reported token usage"
+          tone="neutral"
+        />
+        <GovernanceMetric
+          label="Cost per invoice"
+          value={tokenCost.tokenDataReported ? formatCostValue(tokenCost.costPerInvoice) : "Not available"}
+          helper="Derived from invoice count when available"
+          tone="neutral"
+        />
+        <GovernanceMetric
+          label="Total latency"
+          value={latency.hasLatency ? formatDuration(latency.totalLatencyMs) : "Not available"}
+          helper={latency.hasLatency ? "Sum of captured API response timings" : latency.emptyMessage}
+          tone="neutral"
+        />
+        <GovernanceMetric
+          label="Average latency"
+          value={latency.hasLatency ? formatDuration(latency.averageLatencyMs) : "Not available"}
+          helper="Average per captured audit entry"
+          tone="neutral"
+        />
+        <GovernanceMetric
+          label="Slowest chunk"
+          value={latency.slowest ? latency.slowest.chunkLabel : "Not available"}
+          helper={latency.slowest ? `${latency.slowest.stage} · ${formatDuration(latency.slowest.latencyMs)} · invoices ${latency.slowest.invoiceRange}` : latency.emptyMessage}
+          tone={latency.slowest ? "review" : "neutral"}
+          isNumber={false}
+        />
+        <GovernanceMetric
+          label="Models used"
+          value={modelRouting.modelsUsed.length ? modelRouting.modelsUsed.join(", ") : "Not available"}
+          helper={modelRouting.summary}
+          tone="neutral"
+          isNumber={false}
+        />
+      </div>
+
+      {modelRouting.rows.length ? (
+        <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <tr>
+                <th className="px-3 py-2" scope="col">Stage</th>
+                <th className="px-3 py-2" scope="col">Model routing</th>
+                <th className="px-3 py-2 text-right" scope="col">Chunks</th>
+                <th className="px-3 py-2" scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+              {modelRouting.rows.map((row) => (
+                <tr className="align-top hover:bg-slate-50 dark:hover:bg-slate-800" key={row.stage}>
+                  <td className="px-3 py-3 font-semibold text-slate-900 dark:text-slate-100">{row.stageLabel}</td>
+                  <td className="px-3 py-3 text-slate-700 dark:text-slate-300">{row.models.join(", ")}</td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatInteger(row.chunkCount)}</td>
+                  <td className="px-3 py-3"><Badge className={toneBadgeClass(row.status.tone)}>{row.status.label}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          Model usage not available for this run.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function AuditTrailSummaryAndExport({ viewModel, onExport }) {
+  const auditExport = viewModel.auditExport;
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Audit trail summary and export</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">{auditExport.statusLabel}</h3>
+          <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">{auditExport.safetyText}</p>
         </div>
         <button
           className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           type="button"
-          disabled={entries.length === 0}
+          disabled={!auditExport.ready}
           onClick={onExport}
         >
           Export audit CSV
         </button>
       </div>
-      {entries.length ? (
-        <div className="mt-4 space-y-2">
-          {entries.map((entry) => (
-            <div className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800" key={`${entry.step}-${entry.timestamp}`}>
-              <p className="font-semibold text-slate-950 dark:text-slate-100">
-                {formatStageName(entry.step)} | {formatModelName(entry.model)} | {statusLabel(entry.status ?? "success")}
-              </p>
-              <p className="mt-1 text-slate-600 dark:text-slate-400">
-                {entry.timestamp} | {formatDuration(entry.latency_ms)} | {entry.output_summary?.invoice_count ?? 0} invoices
-                {entry.chunk ? ` | chunk ${entry.chunk.index}/${entry.chunk.total} | invoices ${entry.chunk.invoice_range}` : ""}
-              </p>
-            </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <GovernanceMetric
+          label="Audit entries captured"
+          value={formatInteger(auditExport.entryCount)}
+          helper={auditExport.ready ? "Run metadata available for export" : "No audit entries captured yet."}
+          tone={auditExport.ready ? "info" : "neutral"}
+        />
+        <GovernanceMetric
+          label="Failed audit entries"
+          value={formatInteger(auditExport.failedCount)}
+          helper="Captured failed-stage entries stay visible for diagnosis"
+          tone={auditExport.failedCount ? "escalate" : "neutral"}
+        />
+        <GovernanceMetric
+          label="Export status"
+          value={auditExport.ready ? "Audit-ready" : "Not ready"}
+          helper="Audit-supporting export, not a legal certification"
+          tone={auditExport.tone}
+          isNumber={false}
+        />
+        <GovernanceMetric
+          label="Draft-only controls"
+          value="Active"
+          helper="Communications require human review before use"
+          tone="clean"
+          isNumber={false}
+        />
+      </div>
+    </section>
+  );
+}
+
+function AuditEntryRow({ entry, index }) {
+  const inputTokens = entry.token_usage?.input_tokens ?? entry.token_usage?.prompt_tokens;
+  const outputTokens = entry.token_usage?.output_tokens ?? entry.token_usage?.completion_tokens;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="font-semibold text-slate-950 dark:text-slate-100">
+            {formatStageName(entry.step)} · {formatModelName(entry.model)} · {statusLabel(entry.status ?? "success")}
+          </p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{entry.timestamp || `Entry ${index + 1}`}</p>
+        </div>
+        <Badge className={toneBadgeClass(entry.status === "failed" ? "escalate" : "neutral")}>
+          {entry.chunk ? `Chunk ${entry.chunk.index}/${entry.chunk.total}` : "No chunk metadata"}
+        </Badge>
+      </div>
+      <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+        <FieldRow label="Invoice range" value={entry.chunk?.invoice_range || "Not available"} />
+        <FieldRow label="Latency" value={formatTelemetryDuration(entry.latency_ms)} />
+        <FieldRow label="Tokens" value={`In ${formatOptionalInteger(inputTokens)} · Out ${formatOptionalInteger(outputTokens)}`} />
+        <FieldRow label="Output summary" value={`${entry.output_summary?.invoice_count ?? 0} invoices · ${entry.output_summary?.exception_count ?? 0} exceptions`} />
+      </dl>
+      {entry.error_message ? (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+          {entry.error_message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function AuditStageGroups({ groups }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Grouped audit entries</p>
+        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Raw audit records by stage</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+          Raw entries sit below the reliability summary so analysts can inspect evidence without starting from a log wall.
+        </p>
+      </div>
+
+      {groups.length ? (
+        <div className="mt-5 space-y-3">
+          {groups.map((group) => (
+            <details className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800" key={group.id}>
+              <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {group.label} · {formatInteger(group.count)} {group.count === 1 ? "entry" : "entries"}
+              </summary>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <GovernanceMetric label="Status" value={group.status.label} helper={group.chunkRangeLabel} tone={group.status.tone} isNumber={false} />
+                <GovernanceMetric label="Chunks" value={formatInteger(group.chunkCount)} helper="Unique chunk records" tone="neutral" />
+                <GovernanceMetric label="Latency" value={formatTelemetryDuration(group.totalLatencyMs)} helper="Total captured latency" tone="neutral" />
+                <GovernanceMetric label="Tokens" value={formatInteger(group.totalTokens)} helper="Input plus output tokens" tone="neutral" />
+                <GovernanceMetric label="Models" value={group.models.join(", ") || "Not available"} helper="Humanized model labels" tone="neutral" isNumber={false} />
+              </div>
+              <div className="mt-4 space-y-2">
+                {group.entries.map((entry, index) => (
+                  <AuditEntryRow entry={entry} index={index} key={`${group.id}-${entry.timestamp}-${index}`} />
+                ))}
+              </div>
+            </details>
           ))}
         </div>
-      ) : null}
+      ) : (
+        <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          No audit entries captured yet.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function GovernancePanel({ viewModel, apiKey, onApiKeyChange, onExport, onStart }) {
+  if (!viewModel.hasData) {
+    return (
+      <section className="grid gap-4">
+        <GovernanceHeader viewModel={viewModel} />
+        <ApiServiceAndDataInputs viewModel={viewModel} apiKey={apiKey} onApiKeyChange={onApiKeyChange} />
+        <WorkbenchEmptyState
+          eyebrow="Awaiting analysis"
+          title="Run analysis from Start to capture audit and reliability metadata"
+          body="Audit entries, workflow trace, token usage, latency, model routing, and export readiness appear after the Claude prompt-chain workflow runs."
+          actionLabel="Go to Start"
+          onAction={onStart}
+          tone="neutral"
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section className="grid gap-4">
+      <GovernanceHeader viewModel={viewModel} />
+      <AiReliabilityCenter viewModel={viewModel} />
+      <ApiServiceAndDataInputs viewModel={viewModel} apiKey={apiKey} onApiKeyChange={onApiKeyChange} />
+      <WorkflowTraceSummary trace={viewModel.workflowTrace} />
+      <RuntimeCostTelemetry viewModel={viewModel} />
+      <AuditTrailSummaryAndExport viewModel={viewModel} onExport={onExport} />
+      <AuditStageGroups groups={viewModel.auditGroups} />
     </section>
   );
 }
@@ -1767,6 +2216,23 @@ export default function App() {
     }),
     [actionResults, classificationResults, matchResults, parsedFiles, queueFilters, toleranceSimulation]
   );
+  const governanceViewModel = useMemo(
+    () => buildGovernanceViewModel({
+      parsedFiles,
+      auditEntries,
+      analytics: dashboardAnalytics,
+      isDev: import.meta.env.DEV,
+      apiKey,
+      isAnalysisRunning: Boolean(runningStep),
+      runningStep,
+      failedStep,
+      error,
+      matchResults,
+      classificationResults,
+      actionResults
+    }),
+    [actionResults, apiKey, auditEntries, classificationResults, dashboardAnalytics, error, failedStep, matchResults, parsedFiles, runningStep]
+  );
 
   function handleApiKeyChange(value) {
     setApiKey(value);
@@ -2200,10 +2666,13 @@ export default function App() {
         ) : null}
 
         {activeWorkspace === "governance" ? (
-          <section className="grid gap-4">
-            <SessionGovernancePanel analytics={dashboardAnalytics} />
-            <AuditPanel entries={auditEntries} onExport={exportAuditTrail} />
-          </section>
+          <GovernancePanel
+            viewModel={governanceViewModel}
+            apiKey={apiKey}
+            onApiKeyChange={handleApiKeyChange}
+            onExport={exportAuditTrail}
+            onStart={() => setActiveWorkspace("start")}
+          />
         ) : null}
       </section>
     </main>

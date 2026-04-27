@@ -24,6 +24,36 @@ const DRIVER_MEANINGS = {
   E16: "Missing discount needs pricing term validation.",
   E17: "Tariff-adjusted pricing needs amendment and pricing validation."
 };
+const GOVERNANCE_STAGE_LABELS = {
+  upload: "Data setup",
+  matching: "Matching",
+  classification: "Classification",
+  action_generation: "Draft generation",
+  alignment: "Result alignment",
+  review_surface: "Review surface",
+  export: "Audit export",
+  other: "Other"
+};
+const GOVERNANCE_STAGE_ORDER = {
+  upload: 0,
+  matching: 1,
+  classification: 2,
+  action_generation: 3,
+  alignment: 4,
+  review_surface: 5,
+  export: 6,
+  other: 7
+};
+const MODEL_LABELS = {
+  "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6",
+  "claude-opus-4-7": "Claude Opus 4.7"
+};
+const MODEL_TOKEN_PRICING = [
+  { match: "haiku", inputPerMillion: 1, outputPerMillion: 5 },
+  { match: "sonnet", inputPerMillion: 3, outputPerMillion: 15 },
+  { match: "opus", inputPerMillion: 5, outputPerMillion: 25 }
+];
 
 function safeNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -1169,4 +1199,707 @@ function buildHeatmapTakeaway(rows, legend) {
   }
 
   return `${topRow.supplierName} shows the strongest concentration: ${topCell.count} ${pluralize(topCell.count, "row")} for ${topCell.code} (${topLegend.label}).`;
+}
+
+function titleCaseWords(text) {
+  return String(text)
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`)
+    .join(" ");
+}
+
+function formatGovernanceStageName(stage) {
+  const value = String(stage ?? "").trim();
+  if (!value) return "Not available";
+  return GOVERNANCE_STAGE_LABELS[value] ?? titleCaseWords(value.replace(/[-_]/g, " "));
+}
+
+function formatGovernanceModelName(model) {
+  const value = String(model ?? "").trim();
+  if (!value) return "Not available";
+  if (MODEL_LABELS[value]) return MODEL_LABELS[value];
+
+  const parsed = value.match(/^claude-([a-z]+)-(\d+)-(\d+)/i);
+  if (parsed) return `Claude ${titleCaseWords(parsed[1])} ${parsed[2]}.${parsed[3]}`;
+
+  return titleCaseWords(value.replace(/[-_]/g, " "));
+}
+
+function getTokenValue(tokenUsage, keys) {
+  for (const key of keys) {
+    const value = tokenUsage?.[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+
+  return 0;
+}
+
+function getTokenPricing(model = "") {
+  const normalized = String(model).toLowerCase();
+  return MODEL_TOKEN_PRICING.find((pricing) => normalized.includes(pricing.match)) ?? MODEL_TOKEN_PRICING[1];
+}
+
+function normalizeAuditEntries(entries = []) {
+  return Array.isArray(entries) ? entries.filter(Boolean) : [];
+}
+
+function getEntryStage(entry) {
+  return entry?.step || "other";
+}
+
+function getEntryChunkKey(entry) {
+  if (!entry?.chunk) return null;
+  const chunk = entry.chunk;
+  return [chunk.index, chunk.total, chunk.invoice_range].filter((value) => value !== undefined && value !== null).join(":");
+}
+
+function summarizeChunkRange(entries = []) {
+  const chunks = entries.map((entry) => entry.chunk).filter(Boolean);
+  if (!chunks.length) return "Not available";
+
+  const first = chunks[0];
+  const last = chunks[chunks.length - 1];
+  if (chunks.length === 1) return `Chunk ${first.index}/${first.total}`;
+  return `Chunks ${first.index}-${last.index} of ${last.total}`;
+}
+
+function statusForAuditEntries(entries = []) {
+  if (!entries.length) return { id: "pending", label: "Pending", tone: "neutral" };
+  if (entries.some((entry) => entry.status === "failed")) {
+    return { id: "failed", label: "Failed", tone: "escalate" };
+  }
+  return { id: "captured", label: "Captured", tone: "clean" };
+}
+
+function totalLatency(entries = []) {
+  return entries.reduce((sum, entry) => sum + safeNumber(entry?.latency_ms), 0);
+}
+
+function totalTokenUsage(entries = [], keys) {
+  return entries.reduce((sum, entry) => sum + getTokenValue(entry?.token_usage, keys), 0);
+}
+
+function buildUploadedDataSummary(parsedFiles) {
+  const summaries = parsedFiles?.summaries ?? [];
+  const files = summaries.map((file) => ({
+    key: file.key,
+    name: file.originalName || file.key || "Uploaded file",
+    rowCount: safeNumber(file.rowCount)
+  }));
+  const invoiceCount = safeNumber(parsedFiles?.invoices?.length);
+
+  return {
+    hasFiles: files.length > 0,
+    files,
+    invoiceCount,
+    purchaseOrderCount: safeNumber(parsedFiles?.purchase_orders?.length),
+    goodsReceiptCount: safeNumber(parsedFiles?.goods_receipts?.length),
+    summary: files.length
+      ? `${files.length} ${pluralize(files.length, "file")} parsed with ${invoiceCount} ${pluralize(invoiceCount, "invoice")}.`
+      : "Uploaded file summary is available after CSV validation."
+  };
+}
+
+function getGovernanceRunState({ isAnalysisRunning, runningStep, failedStep, error, auditEntries, analytics }) {
+  if (isAnalysisRunning) {
+    return {
+      id: "running",
+      label: "Analysis in progress",
+      tone: "info",
+      detail: runningStep
+        ? `${formatGovernanceStageName(runningStep)} is running. Completed governance claims are withheld until the prompt chain finishes.`
+        : "The prompt chain is running. Completed governance claims are withheld until the run finishes."
+    };
+  }
+
+  if (failedStep || error) {
+    return {
+      id: "failed",
+      label: "Run failed",
+      tone: "escalate",
+      detail: failedStep
+        ? `${formatGovernanceStageName(failedStep)} did not complete. Stale completed analytics are not shown as final.`
+        : "The latest run did not complete. Stale completed analytics are not shown as final."
+    };
+  }
+
+  if (analytics?.hasData && auditEntries.length) {
+    return {
+      id: "complete",
+      label: "Audit-supporting run captured",
+      tone: "clean",
+      detail: "Audit entries, review outputs, and DRAFT-only controls are available for human review."
+    };
+  }
+
+  return {
+    id: "empty",
+    label: "Awaiting analysis",
+    tone: "neutral",
+    detail: "Audit entries appear after analysis runs from Start."
+  };
+}
+
+export function groupAuditEntriesByStage(entries = []) {
+  const groups = new Map();
+
+  normalizeAuditEntries(entries).forEach((entry) => {
+    const stage = getEntryStage(entry);
+    if (!groups.has(stage)) {
+      groups.set(stage, {
+        id: stage,
+        stage,
+        label: formatGovernanceStageName(stage),
+        entries: [],
+        count: 0,
+        successCount: 0,
+        failedCount: 0,
+        chunkKeys: new Set(),
+        chunkCount: 0,
+        chunkRangeLabel: "Not available",
+        totalLatencyMs: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        models: [],
+        rawModels: [],
+        promptVersions: [],
+        status: { id: "pending", label: "Pending", tone: "neutral" }
+      });
+    }
+
+    const group = groups.get(stage);
+    const chunkKey = getEntryChunkKey(entry);
+    group.entries.push(entry);
+    group.count += 1;
+    if (entry.status === "failed") group.failedCount += 1;
+    else group.successCount += 1;
+    if (chunkKey) group.chunkKeys.add(chunkKey);
+    group.totalLatencyMs += safeNumber(entry.latency_ms);
+    group.inputTokens += getTokenValue(entry.token_usage, ["input_tokens", "prompt_tokens"]);
+    group.outputTokens += getTokenValue(entry.token_usage, ["output_tokens", "completion_tokens"]);
+    if (entry.model && !group.rawModels.includes(entry.model)) group.rawModels.push(entry.model);
+    if (entry.prompt_version && !group.promptVersions.includes(entry.prompt_version)) group.promptVersions.push(entry.prompt_version);
+  });
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      chunkKeys: undefined,
+      chunkCount: group.chunkKeys.size,
+      chunkRangeLabel: summarizeChunkRange(group.entries),
+      totalTokens: group.inputTokens + group.outputTokens,
+      models: group.rawModels.map(formatGovernanceModelName),
+      status: statusForAuditEntries(group.entries)
+    }))
+    .sort((left, right) => (
+      (GOVERNANCE_STAGE_ORDER[left.stage] ?? GOVERNANCE_STAGE_ORDER.other) -
+      (GOVERNANCE_STAGE_ORDER[right.stage] ?? GOVERNANCE_STAGE_ORDER.other)
+    ));
+}
+
+export function buildTokenCostSummary({ auditEntries = [], analytics = {}, totalInvoices = 0 } = {}) {
+  const entries = normalizeAuditEntries(auditEntries);
+  const governance = analytics?.auditGovernance ?? {};
+  const tokenDataReported = Boolean(governance.tokenDataReported || entries.some((entry) => entry.token_usage));
+  const inputTokens = safeNumber(governance.inputTokens) || totalTokenUsage(entries, ["input_tokens", "prompt_tokens"]);
+  const outputTokens = safeNumber(governance.outputTokens) || totalTokenUsage(entries, ["output_tokens", "completion_tokens"]);
+  const estimatedFullPriceCost = typeof governance.estimatedFullPriceCost === "number"
+    ? governance.estimatedFullPriceCost
+    : entries.reduce((sum, entry) => {
+      const input = getTokenValue(entry.token_usage, ["input_tokens", "prompt_tokens"]);
+      const output = getTokenValue(entry.token_usage, ["output_tokens", "completion_tokens"]);
+      const pricing = getTokenPricing(entry.model);
+      return sum + ((input / 1_000_000) * pricing.inputPerMillion) + ((output / 1_000_000) * pricing.outputPerMillion);
+    }, 0);
+  const estimatedPromptCacheCost = typeof governance.estimatedPromptCacheCost === "number"
+    ? governance.estimatedPromptCacheCost
+    : null;
+
+  return {
+    tokenDataReported,
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    estimatedFullPriceCost,
+    estimatedPromptCacheCost,
+    costPerInvoice: totalInvoices > 0 ? estimatedFullPriceCost / totalInvoices : null,
+    emptyMessage: "Token usage not available for this run."
+  };
+}
+
+export function buildLatencySummary(auditEntries = []) {
+  const entries = normalizeAuditEntries(auditEntries).filter((entry) => safeNumber(entry.latency_ms) > 0);
+  const totalLatencyMs = totalLatency(entries);
+  const slowestEntry = [...entries].sort((left, right) => safeNumber(right.latency_ms) - safeNumber(left.latency_ms))[0] ?? null;
+
+  return {
+    hasLatency: entries.length > 0,
+    totalLatencyMs,
+    averageLatencyMs: entries.length ? Math.round(totalLatencyMs / entries.length) : null,
+    slowest: slowestEntry
+      ? {
+        stage: formatGovernanceStageName(slowestEntry.step),
+        latencyMs: safeNumber(slowestEntry.latency_ms),
+        chunkLabel: slowestEntry.chunk ? `Chunk ${slowestEntry.chunk.index}/${slowestEntry.chunk.total}` : "Not available",
+        invoiceRange: slowestEntry.chunk?.invoice_range || "Not available"
+      }
+      : null,
+    emptyMessage: "Latency not available for this run."
+  };
+}
+
+export function buildModelRoutingSummary(auditGroups = []) {
+  const rows = auditGroups
+    .filter((group) => group.rawModels?.length || group.models?.length)
+    .map((group) => ({
+      stage: group.stage,
+      stageLabel: group.label,
+      models: group.models?.length ? group.models : (group.rawModels ?? []).map(formatGovernanceModelName),
+      chunkCount: safeNumber(group.chunkCount),
+      status: group.status
+    }));
+  const modelsUsed = [...new Set(rows.flatMap((row) => row.models))];
+
+  return {
+    hasData: rows.length > 0,
+    rows,
+    modelsUsed,
+    summary: modelsUsed.length
+      ? `${modelsUsed.length} ${pluralize(modelsUsed.length, "Claude model")} used across captured stages.`
+      : "Model usage not available for this run."
+  };
+}
+
+export function buildValidationGateSummary({
+  parsedFiles,
+  matchResults,
+  classificationResults,
+  actionResults,
+  auditGroups,
+  isAnalysisRunning,
+  failedStep
+} = {}) {
+  const hasFiles = Boolean(parsedFiles?.summaries?.length);
+  const hasChunkMetadata = auditGroups.some((group) => group.chunkCount > 0);
+  const hasMergedResults = Boolean(matchResults && classificationResults && actionResults);
+  const failedStageLabel = failedStep ? formatGovernanceStageName(failedStep) : null;
+
+  return {
+    hasValidationDetail: hasChunkMetadata || hasMergedResults,
+    unavailableMessage: "Validation detail not available for this run.",
+    gates: [
+      {
+        id: "data-inputs",
+        label: "Data input validation",
+        status: hasFiles ? "available" : "pending",
+        statusLabel: hasFiles ? "Available" : "Pending",
+        tone: hasFiles ? "clean" : "neutral",
+        detail: hasFiles ? "Required CSV inputs were parsed before analysis." : "CSV validation appears after files are uploaded."
+      },
+      {
+        id: "chunk-trace",
+        label: "Chunk trace metadata",
+        status: hasChunkMetadata ? "available" : "unavailable",
+        statusLabel: hasChunkMetadata ? "Available" : "Not available",
+        tone: hasChunkMetadata ? "info" : "neutral",
+        detail: hasChunkMetadata ? "Captured audit entries include chunk count and invoice-range metadata." : "Validation detail not available for this run."
+      },
+      {
+        id: "result-alignment",
+        label: "Result alignment",
+        status: hasMergedResults ? "available" : failedStep ? "failed" : isAnalysisRunning ? "running" : "unavailable",
+        statusLabel: hasMergedResults ? "Available" : failedStep ? "Failed" : isAnalysisRunning ? "In progress" : "Not available",
+        tone: hasMergedResults ? "clean" : failedStep ? "escalate" : isAnalysisRunning ? "info" : "neutral",
+        detail: hasMergedResults
+          ? "Merged matching, classification, and draft outputs are available to review surfaces."
+          : failedStageLabel
+            ? `${failedStageLabel} did not complete, so result alignment is not shown as complete.`
+            : "Validation detail not available for this run."
+      },
+      {
+        id: "api-key-guard",
+        label: "Secret exposure guard",
+        status: "active",
+        statusLabel: "Active",
+        tone: "clean",
+        detail: "Audit records exclude raw API keys and request payloads."
+      },
+      {
+        id: "draft-only-controls",
+        label: "DRAFT-only controls",
+        status: "active",
+        statusLabel: "Active",
+        tone: "clean",
+        detail: "Generated communications remain marked DRAFT and require human review."
+      }
+    ]
+  };
+}
+
+function buildTraceStep({ id, stage, status, statusLabel, tone, detail, group, model, latencyMs, chunkCount }) {
+  return {
+    id,
+    stage,
+    stageLabel: formatGovernanceStageName(stage),
+    status,
+    statusLabel,
+    tone,
+    detail,
+    chunkCount: typeof chunkCount === "number" ? chunkCount : safeNumber(group?.chunkCount),
+    model: model || group?.models?.join(", ") || "Not available",
+    latencyMs: typeof latencyMs === "number" ? latencyMs : group?.totalLatencyMs ?? null
+  };
+}
+
+function traceStepForStage({ stage, group, result, isAnalysisRunning, runningStep, failedStep }) {
+  if (failedStep === stage) {
+    return buildTraceStep({
+      id: stage,
+      stage,
+      status: "failed",
+      statusLabel: "Failed",
+      tone: "escalate",
+      detail: `${formatGovernanceStageName(stage)} did not complete.`
+    });
+  }
+
+  if (isAnalysisRunning && runningStep === stage) {
+    return buildTraceStep({
+      id: stage,
+      stage,
+      status: "running",
+      statusLabel: "In progress",
+      tone: "info",
+      detail: `${formatGovernanceStageName(stage)} is running.`,
+      group
+    });
+  }
+
+  if (result || group?.count) {
+    return buildTraceStep({
+      id: stage,
+      stage,
+      status: "captured",
+      statusLabel: "Captured",
+      tone: group?.status?.tone ?? "clean",
+      detail: group?.count
+        ? `${group.count} ${pluralize(group.count, "audit entry")} captured.`
+        : `${formatGovernanceStageName(stage)} output is available.`,
+      group
+    });
+  }
+
+  return buildTraceStep({
+    id: stage,
+    stage,
+    status: "pending",
+    statusLabel: "Pending",
+    tone: "neutral",
+    detail: `${formatGovernanceStageName(stage)} appears after analysis reaches this step.`
+  });
+}
+
+export function buildWorkflowTraceSummary({
+  parsedFiles,
+  auditGroups = [],
+  analytics,
+  isAnalysisRunning,
+  runningStep,
+  failedStep,
+  matchResults,
+  classificationResults,
+  actionResults
+} = {}) {
+  const groupByStage = new Map(auditGroups.map((group) => [group.stage, group]));
+  const hasFiles = Boolean(parsedFiles?.summaries?.length);
+  const hasReviewSurface = Boolean(analytics?.hasData && actionResults);
+  const hasExport = auditGroups.length > 0;
+  const steps = [
+    buildTraceStep({
+      id: "upload",
+      stage: "upload",
+      status: hasFiles ? "captured" : "pending",
+      statusLabel: hasFiles ? "Captured" : "Pending",
+      tone: hasFiles ? "clean" : "neutral",
+      detail: hasFiles ? buildUploadedDataSummary(parsedFiles).summary : "Upload validated CSV files from Start."
+    }),
+    traceStepForStage({
+      stage: "matching",
+      group: groupByStage.get("matching"),
+      result: matchResults,
+      isAnalysisRunning,
+      runningStep,
+      failedStep
+    }),
+    traceStepForStage({
+      stage: "classification",
+      group: groupByStage.get("classification"),
+      result: classificationResults,
+      isAnalysisRunning,
+      runningStep,
+      failedStep
+    }),
+    traceStepForStage({
+      stage: "action_generation",
+      group: groupByStage.get("action_generation"),
+      result: actionResults,
+      isAnalysisRunning,
+      runningStep,
+      failedStep
+    }),
+    buildTraceStep({
+      id: "alignment",
+      stage: "alignment",
+      status: matchResults && classificationResults && actionResults ? "available" : failedStep ? "failed" : "unavailable",
+      statusLabel: matchResults && classificationResults && actionResults ? "Available" : failedStep ? "Failed" : "Not available",
+      tone: matchResults && classificationResults && actionResults ? "clean" : failedStep ? "escalate" : "neutral",
+      detail: matchResults && classificationResults && actionResults
+        ? "Merged outputs are available for review surfaces."
+        : "Validation detail not available for this run."
+    }),
+    buildTraceStep({
+      id: "review-surface",
+      stage: "review_surface",
+      status: hasReviewSurface ? "available" : isAnalysisRunning ? "pending" : "unavailable",
+      statusLabel: hasReviewSurface ? "Available" : isAnalysisRunning ? "Pending" : "Not available",
+      tone: hasReviewSurface ? "clean" : "neutral",
+      detail: hasReviewSurface ? "Human review surfaces have current run data." : "Review queue appears after successful analysis."
+    }),
+    buildTraceStep({
+      id: "audit-export",
+      stage: "export",
+      status: hasExport ? "ready" : "pending",
+      statusLabel: hasExport ? "Ready" : "Pending",
+      tone: hasExport ? "info" : "neutral",
+      detail: hasExport ? "Audit-supporting export can be generated from captured entries." : "Audit export appears after entries are captured."
+    })
+  ];
+
+  return {
+    steps,
+    completedCount: steps.filter((step) => ["captured", "available", "ready"].includes(step.status)).length,
+    chunkCount: auditGroups.reduce((sum, group) => sum + safeNumber(group.chunkCount), 0),
+    stageCount: auditGroups.length
+  };
+}
+
+export function getApiExposureStatus({ isDev, apiKey } = {}) {
+  if (isDev) {
+    const hasLocalKey = Boolean(apiKey);
+    return {
+      modeLabel: "Local development",
+      serviceStatus: hasLocalKey ? "Local Claude key provided" : "Local Claude key not provided",
+      serviceTone: hasLocalKey ? "info" : "review",
+      clientKeyExposure: hasLocalKey ? "Session-only local key" : "No local key currently present",
+      exposureTone: hasLocalKey ? "review" : "neutral",
+      detail: hasLocalKey
+        ? "Local development uses the browser session key only for the Vite proxy header."
+        : "Local development requires a session-only Claude key before analysis can call the local proxy.",
+      allowLocalKeyInput: true
+    };
+  }
+
+  return {
+    modeLabel: "Production",
+    serviceStatus: "Server-side Claude service",
+    serviceTone: "clean",
+    clientKeyExposure: "None",
+    exposureTone: "clean",
+    detail: "Production uses the server-side ANTHROPIC_API_KEY. Public users are not asked for API keys.",
+    allowLocalKeyInput: false
+  };
+}
+
+export function buildAuditExportSummary(auditEntries = []) {
+  const entries = normalizeAuditEntries(auditEntries);
+  const failedCount = entries.filter((entry) => entry.status === "failed").length;
+  const ready = entries.length > 0;
+
+  return {
+    ready,
+    entryCount: entries.length,
+    failedCount,
+    statusLabel: ready ? "Ready to export" : "No audit entries captured yet",
+    tone: ready ? "info" : "neutral",
+    safetyText: "Audit export contains run metadata and AI decision records. It excludes raw API keys and raw request payloads, and supports review without acting as a legal compliance certification."
+  };
+}
+
+export function buildAiReliabilitySummary({
+  runState,
+  auditGroups = [],
+  auditEntries = [],
+  tokenCost,
+  latency,
+  modelRouting,
+  auditExport,
+  apiExposure
+} = {}) {
+  const stageCount = auditGroups.length;
+  const chunkCount = auditGroups.reduce((sum, group) => sum + safeNumber(group.chunkCount), 0);
+
+  return {
+    runState,
+    cards: [
+      {
+        id: "pipeline-health",
+        label: "Pipeline health",
+        value: runState?.label ?? "Awaiting analysis",
+        tone: runState?.tone ?? "neutral",
+        helper: runState?.detail ?? "Run state not available.",
+        format: "text"
+      },
+      {
+        id: "stage-completion",
+        label: "Stages captured",
+        value: stageCount,
+        tone: stageCount > 0 ? "info" : "neutral",
+        helper: `${chunkCount} ${pluralize(chunkCount, "chunk")} captured`,
+        format: "integer"
+      },
+      {
+        id: "audit-entries",
+        label: "Audit entries",
+        value: auditEntries.length,
+        tone: auditEntries.length > 0 ? "info" : "neutral",
+        helper: auditExport?.statusLabel ?? "No audit entries captured yet",
+        format: "integer"
+      },
+      {
+        id: "latency",
+        label: "Total latency",
+        value: latency?.totalLatencyMs ?? null,
+        tone: latency?.hasLatency ? "neutral" : "neutral",
+        helper: latency?.hasLatency ? "Captured API response timing" : "Latency not available for this run.",
+        format: "duration"
+      },
+      {
+        id: "token-usage",
+        label: "Token usage",
+        value: tokenCost?.totalTokens ?? null,
+        tone: tokenCost?.tokenDataReported ? "neutral" : "neutral",
+        helper: tokenCost?.tokenDataReported ? "Input and output tokens reported" : "Token usage not available for this run.",
+        format: "integer-optional"
+      },
+      {
+        id: "model-routing",
+        label: "Model usage",
+        value: modelRouting?.modelsUsed?.length ?? 0,
+        tone: modelRouting?.modelsUsed?.length ? "neutral" : "neutral",
+        helper: modelRouting?.summary ?? "Model usage not available for this run.",
+        format: "integer"
+      },
+      {
+        id: "draft-controls",
+        label: "Draft-only controls",
+        value: "Active",
+        tone: "clean",
+        helper: "No communication action is available from this product surface.",
+        format: "text"
+      },
+      {
+        id: "client-key-exposure",
+        label: "Client key exposure",
+        value: apiExposure?.clientKeyExposure ?? "Not available",
+        tone: apiExposure?.exposureTone ?? "neutral",
+        helper: apiExposure?.detail ?? "API exposure detail not available.",
+        format: "text"
+      }
+    ]
+  };
+}
+
+function buildGovernanceHeaderTakeaway({ runState, auditEntries, auditGroups, auditExport }) {
+  if (runState?.id === "running") return runState.detail;
+  if (runState?.id === "failed") return runState.detail;
+  if (auditEntries.length) {
+    return `${auditEntries.length} ${pluralize(auditEntries.length, "audit entry")} captured across ${auditGroups.length} ${pluralize(auditGroups.length, "stage")}; ${auditExport.statusLabel.toLowerCase()} for audit-supporting review.`;
+  }
+  return "Run analysis from Start to populate AI reliability, workflow trace, token usage, latency, and audit export readiness.";
+}
+
+export function buildGovernanceViewModel({
+  parsedFiles,
+  auditEntries = [],
+  analytics = {},
+  isDev = false,
+  apiKey = "",
+  isAnalysisRunning = false,
+  runningStep = "",
+  failedStep = "",
+  error = "",
+  matchResults,
+  classificationResults,
+  actionResults
+} = {}) {
+  const entries = normalizeAuditEntries(auditEntries);
+  const uploadedData = buildUploadedDataSummary(parsedFiles);
+  const runState = getGovernanceRunState({
+    isAnalysisRunning,
+    runningStep,
+    failedStep,
+    error,
+    auditEntries: entries,
+    analytics
+  });
+  const apiExposure = getApiExposureStatus({ isDev, apiKey });
+  const auditGroups = groupAuditEntriesByStage(entries);
+  const totalInvoices = safeNumber(analytics?.totalInvoices) || uploadedData.invoiceCount;
+  const tokenCost = buildTokenCostSummary({ auditEntries: entries, analytics, totalInvoices });
+  const latency = buildLatencySummary(entries);
+  const modelRouting = buildModelRoutingSummary(auditGroups);
+  const validationGates = buildValidationGateSummary({
+    parsedFiles,
+    matchResults,
+    classificationResults,
+    actionResults,
+    auditGroups,
+    isAnalysisRunning,
+    failedStep
+  });
+  const workflowTrace = buildWorkflowTraceSummary({
+    parsedFiles,
+    auditGroups,
+    analytics,
+    isAnalysisRunning,
+    runningStep,
+    failedStep,
+    matchResults,
+    classificationResults,
+    actionResults
+  });
+  const auditExport = buildAuditExportSummary(entries);
+  const reliabilitySummary = buildAiReliabilitySummary({
+    runState,
+    auditGroups,
+    auditEntries: entries,
+    tokenCost,
+    latency,
+    modelRouting,
+    auditExport,
+    apiExposure
+  });
+
+  return {
+    hasData: Boolean(uploadedData.hasFiles || entries.length || analytics?.hasData || isAnalysisRunning || failedStep || error),
+    header: {
+      eyebrow: "Audit & Governance",
+      title: "Can we trust, explain, and export this AI-assisted review process?",
+      takeaway: buildGovernanceHeaderTakeaway({ runState, auditEntries: entries, auditGroups, auditExport })
+    },
+    runState,
+    uploadedData,
+    apiExposure,
+    reliabilitySummary,
+    validationGates,
+    workflowTrace,
+    tokenCost,
+    latency,
+    modelRouting,
+    auditExport,
+    auditGroups,
+    rawAuditEntries: entries
+  };
 }

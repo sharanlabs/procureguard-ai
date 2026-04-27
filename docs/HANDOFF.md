@@ -1376,3 +1376,102 @@ Rework only the Supplier & Policy Analytics page into a procurement management s
 
 ### Next step
 Chunk 2A.5 Audit & Governance / AI Reliability Center
+
+## Chunk 2A.5 Audit & Governance / AI Reliability Center handoff — April 27, 2026
+
+### Purpose
+Rework only the Audit & Governance page into an AI reliability, governance, and audit surface that answers whether the AI-assisted review process can be trusted, explained, and exported.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- app/lib/audit.js
+- app/lib/dashboard.js
+- app/lib/format.js
+- app/lib/rootCause.js
+- app/lib/uiModels.js
+- app/lib/claude.js
+- app/lib/pipeline.js
+- api/messages.js
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/lib/uiModels.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T16-43-56-129Z.json
+- evals/results/eval_results_2026-04-27T16-53-52-288Z.json
+
+### View-model/helper changes
+- Added buildGovernanceViewModel and related pure helpers in app/lib/uiModels.js for reliability summary, workflow trace, validation gates, model routing, token/cost summary, latency summary, API exposure status, audit export readiness, and grouped audit entries.
+- Governance UI now consumes derived run state, uploaded data summary, audit groups, model labels, telemetry, export state, and guarded empty values instead of calculating governance logic in JSX.
+
+### AI Reliability Center changes
+- Added an AI Reliability Center section with pipeline health, captured stages, chunk count, audit entries, total latency, token availability, model usage, draft-only controls, and client key exposure.
+- Validation gates show current-run detail when available and use "Validation detail not available for this run." when metadata is not present.
+- Running and failed states avoid presenting stale completed claims.
+
+### API/service status changes
+- Added service mode and data input grouping for local development versus production behavior.
+- Local development keeps the existing session-only Claude key input.
+- Production presents server-side Claude service status and client key exposure as none; public users are not asked for API keys.
+
+### Workflow trace changes
+- Added trace steps for Data setup, Matching, Classification, Draft generation, Result alignment, Review surface, and Audit export.
+- Steps show captured/running/failed/pending status, chunk count when available, humanized Claude model labels, and latency when available.
+- Primary UI uses humanized model names instead of raw model IDs.
+
+### Runtime/cost telemetry changes
+- Added grouped telemetry for input tokens, output tokens, estimated cost, cost per invoice, total latency, average latency, slowest chunk, and models used.
+- Token, cost, latency, and model sections render explicit unavailable states when the current run lacks metadata.
+
+### Audit grouping/export changes
+- Replaced the top-level raw audit wall with an audit trail summary and export readiness panel.
+- Grouped raw audit entries by stage lower on the page using collapsible sections.
+- Export wording states that the audit CSV contains run metadata and AI decision records, excludes raw API keys and raw request payloads, and is audit-supporting rather than a legal compliance certification.
+
+### Empty/loading/failure state changes
+- Before analysis, the page points users back to Start and explains that audit entries appear after analysis.
+- While analysis runs, the page shows in-progress reliability and trace state without stale final claims.
+- After failed analysis, the page shows failed-run state and does not show completed analytics as final.
+- No audit, token, latency, and model data states now render calm fallback text.
+
+### Visual/UI changes
+- Added a stronger page header, calmer reliability cards, grouped service/input state, trace cards, compact telemetry, export readiness, grouped raw details, tabular numbers, and readable dark-mode treatment.
+- No global app shell redesign, new dependencies, icon libraries, animation libraries, or chart work were added.
+
+### Backend files protected or touched
+- No backend files were touched.
+- app/lib/pipeline.js, app/lib/claude.js, api/messages.js, and app/lib/schemas.js were protected and unchanged.
+- prompts/, data/, evals/run_evals.js, and evals/golden_dataset.json were protected and unchanged.
+
+### Verification commands and results
+- Pre-edit git status --short: clean.
+- Pre-edit git branch -vv: main at 9b986ec, ahead of origin/main.
+- Pre-edit git log --oneline -10: confirmed 9b986ec, bc2aff5, e670075, a6236f6, and fe8e374 at the top of recent history.
+- Pre-edit npm run build: passed with existing Vite chunk-size warning.
+- Pre-edit node evals/run_evals.js: passed 25/25, 100%.
+- Post-edit npm run build: passed with existing Vite chunk-size warning.
+- Post-edit node evals/run_evals.js: passed 25/25, 100%.
+- node --check api/messages.js: passed.
+- grep -R "console.log" app api || true: no matches.
+- grep -R "localStorage" app api || true: no matches.
+- grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true: no matches.
+- grep -R "Send" app || true: no matches.
+- git diff --check: passed.
+- git status --short: modified governance UI files, progress/handoff, and generated eval results before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T16-53-52-288Z.json
+- Also generated evals/results/eval_results_2026-04-27T16-43-56-129Z.json during the required pre-edit eval gate.
+
+### Known issues
+- The existing Vite production chunk-size warning remains.
+- No live Claude API call was run during this pass.
+
+### Next step
+Chunk 2A.6 Visual consistency, spacing, and responsive polish
