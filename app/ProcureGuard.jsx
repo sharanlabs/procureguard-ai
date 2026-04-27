@@ -2,7 +2,11 @@ import { useMemo, useState } from "react";
 import matchingPrompt from "../prompts/01_matching.md?raw";
 import classificationPrompt from "../prompts/02_classification.md?raw";
 import actionPrompt from "../prompts/03_action_generation.md?raw";
-import ExecutiveDashboard, { RootCauseAnalysisPanel } from "./ProcureGuardDashboard.jsx";
+import ExecutiveDashboard, {
+  RootCauseAnalysisPanel,
+  SessionGovernancePanel,
+  SupplierAnalyticsPanel
+} from "./ProcureGuardDashboard.jsx";
 import { createAuditEntry, exportAuditCsv } from "./lib/audit.js";
 import { callClaudeAPI } from "./lib/claude.js";
 import { normalizeProcurementFiles } from "./lib/csv.js";
@@ -833,6 +837,7 @@ function ReviewQueueControls({
 
 function SupplierPolicyAnalyticsPanel({
   dashboardReady,
+  analytics,
   tolerances,
   onTolerancesChange,
   toleranceSimulation,
@@ -844,10 +849,11 @@ function SupplierPolicyAnalyticsPanel({
         <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Supplier & Policy Analytics</h2>
         <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
           {dashboardReady
-            ? "Supplier scorecard and exception heatmap remain in Executive Summary during this shell update."
+            ? "Supplier concentration, policy simulation, and root-cause views for analyst follow-through."
             : "Run analysis to populate supplier, policy, and root-cause views."}
         </p>
       </section>
+      <SupplierAnalyticsPanel analytics={analytics} />
       <ToleranceSimulator
         tolerances={tolerances}
         onTolerancesChange={onTolerancesChange}
@@ -1569,7 +1575,11 @@ export default function App() {
         ) : null}
 
         {activeWorkspace === "executive" ? (
-          <ExecutiveDashboard analytics={dashboardAnalytics} isDarkMode={isDarkMode} />
+          <ExecutiveDashboard
+            analytics={dashboardAnalytics}
+            isDarkMode={isDarkMode}
+            isAnalysisRunning={Boolean(runningStep)}
+          />
         ) : null}
 
         {activeWorkspace === "workbench" ? (
@@ -1623,6 +1633,7 @@ export default function App() {
         {activeWorkspace === "analytics" ? (
           <SupplierPolicyAnalyticsPanel
             dashboardReady={Boolean(classificationResults)}
+            analytics={dashboardAnalytics}
             tolerances={tolerances}
             onTolerancesChange={setTolerances}
             toleranceSimulation={toleranceSimulation}
@@ -1631,7 +1642,10 @@ export default function App() {
         ) : null}
 
         {activeWorkspace === "governance" ? (
-          <AuditPanel entries={auditEntries} onExport={exportAuditTrail} />
+          <section className="grid gap-4">
+            <SessionGovernancePanel analytics={dashboardAnalytics} />
+            <AuditPanel entries={auditEntries} onExport={exportAuditTrail} />
+          </section>
         ) : null}
       </section>
     </main>

@@ -20,7 +20,8 @@ Local Claude API contract stabilization — COMPLETE — April 26, 2026
 Claude API contract stabilization pass 2 (numeric constraints) — COMPLETE — April 26, 2026
 Chunk 1 backend Analyze reliability pass — COMPLETE — April 26, 2026
 Chunk 2A.1 Product IA shell and safe wording completed.
-Next: Chunk 2A.2 Executive Summary decision-first page
+Chunk 2A.2 Executive Summary decision-first page completed.
+Next: Chunk 2A.3 Exception Workbench scanability
 
 ## Stage log
 
@@ -89,6 +90,11 @@ Next: Chunk 2A.2 Executive Summary decision-first page
   - Workspace navigation now uses Start, Executive Summary, Exception Workbench, Supplier & Policy Analytics, and Audit & Governance surfaces
   - Visible high-risk review wording was replaced with safer human-review language
   - Chunk 2A.2 Executive Summary decision-first page is the next micro-chunk
+  - Chunk 2A.2 Executive Summary decision-first page completed
+  - Executive Summary now starts with outcome, exposure, top drivers, and deterministic next actions
+  - Supplier scorecard and supplier exception heatmap moved into Supplier & Policy Analytics
+  - Session token/model trace moved into Audit & Governance
+  - Chunk 2A.3 Exception Workbench scanability is the next micro-chunk
 
 ## Decisions pending
 

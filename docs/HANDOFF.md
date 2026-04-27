@@ -1070,3 +1070,107 @@ Make the top-level product structure and visible wording safer and more enterpri
 
 ### Next step
 Chunk 2A.2 Executive Summary decision-first page
+
+## Chunk 2A.2 Executive Summary decision-first page handoff — April 27, 2026
+
+### Purpose
+Rework the Executive Summary into a decision-first page that answers what happened, what is at risk, and what the team should do next, without changing the Claude runtime stack or backend pipeline.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- app/lib/dashboard.js
+- app/lib/format.js
+- app/lib/rootCause.js
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/lib/uiModels.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T15-57-23-536Z.json
+- evals/results/eval_results_2026-04-27T16-04-21-984Z.json
+- evals/results/eval_results_2026-04-27T16-05-18-464Z.json
+
+### View-model/helper changes
+- Added app/lib/uiModels.js with pure helpers for buildExecutiveSummaryViewModel, getBatchOutcome, getExecutiveHeroMetrics, buildTopExceptionDrivers, and buildRecommendedNextActions.
+- The Executive Summary now consumes a derived view model instead of scattering outcome, driver, and action calculations through JSX.
+- Recommended actions are deterministic and based only on current exception mix and tier counts.
+
+### Executive Summary structure changes
+- Replaced the dashboard-first page with a decision-first flow: header, decision card, four hero metrics, top drivers, next actions, then compact chart detail.
+- Removed supplier heatmap, supplier scorecard, token/cost detail, and long technical panels from the Executive Summary render path.
+- Added guarded empty and in-progress states so the page avoids stale or incomplete summaries.
+
+### Decision card changes
+- Top card now shows Batch review complete, outcome, invoices analyzed, exceptions found, escalations recommended, exposure identified, estimated recoverable exposure, and recommended next action.
+- Outcomes are Clean batch, Human review required, and Escalation recommended with semantic green, amber, and red treatment.
+
+### Hero metric changes
+- Hero metrics are limited to Invoices analyzed, Exceptions requiring review, Exposure identified, and Estimated recoverable exposure.
+- Counts, money, percentages, latency, and token values use tabular number styling where displayed.
+
+### Top driver changes
+- Added a top-three business driver section powered by exception analytics.
+- Each driver shows exception code, human-readable label, count, exposure, and concise business meaning.
+
+### Recommended action changes
+- Added compact recommended actions for escalation, supplier pricing and PO amendment validation, invoice control exceptions, receiving records, and clean-batch follow-up.
+- Wording remains human-review oriented and avoids autonomous approval, payment release, fraud, or sent-email language.
+
+### Chart and empty-state cleanup
+- Executive charts now sit below the decision/top-driver section.
+- Every chart panel includes a one-sentence takeaway.
+- Sparse chart data falls back to compact ranked rows instead of blank chart containers.
+- Clean batches show a calm empty chart state.
+
+### Non-executive modules moved or deferred
+- Supplier scorecard and supplier exception heatmap moved to Supplier & Policy Analytics.
+- Root cause analysis and the tolerance simulator remain in Supplier & Policy Analytics.
+- Session token/model trace moved to Audit & Governance above the audit trail.
+- Deeper Supplier & Policy Analytics redesign is deferred.
+
+### Visual/UI changes
+- Executive Summary now uses a calmer hierarchy, clearer section rhythm, semantic color usage, compact decision card treatment, and cleaner dark-mode card states.
+- No global visual redesign, new dependencies, icon libraries, or animation libraries were added.
+
+### Backend files protected or touched
+- No backend files were touched.
+- app/lib/pipeline.js, app/lib/claude.js, api/messages.js, and app/lib/schemas.js were protected and unchanged.
+- prompts/, data/, evals/run_evals.js, and evals/golden_dataset.json were protected and unchanged.
+
+### Verification commands and results
+- Pre-edit git status --short: clean.
+- Pre-edit git branch -vv: main at a6236f6, ahead of origin/main.
+- Pre-edit git log --oneline -10: confirmed a6236f6 and fe8e374 at the top of recent history.
+- Pre-edit npm run build: passed with existing Vite chunk-size warning.
+- Pre-edit node evals/run_evals.js: passed 25/25, 100%.
+- Post-edit npm run build: passed with existing Vite chunk-size warning.
+- Post-edit node evals/run_evals.js: passed 25/25, 100%.
+- Final npm run build: passed with existing Vite chunk-size warning.
+- Final node evals/run_evals.js: passed 25/25, 100%.
+- node --check api/messages.js: passed.
+- grep -R "console.log" app api || true: no matches.
+- grep -R "localStorage" app api || true: no matches.
+- grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true: no matches.
+- grep -R "Send" app || true: no matches.
+- git diff --check: passed.
+- git status --short: modified Executive Summary files, progress/handoff, new uiModels helper, and generated eval results before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T16-05-18-464Z.json
+- Also generated evals/results/eval_results_2026-04-27T15-57-23-536Z.json during the required pre-edit eval gate.
+- Also generated evals/results/eval_results_2026-04-27T16-04-21-984Z.json during the first post-edit eval run.
+
+### Known issues
+- The existing Vite production chunk-size warning remains.
+- Supplier & Policy Analytics now owns supplier concentration modules, but the deeper analytics-page redesign is deferred.
+- No live Claude API call was run during this pass.
+
+### Next step
+Chunk 2A.3 Exception Workbench scanability
