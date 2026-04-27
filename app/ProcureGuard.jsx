@@ -128,7 +128,7 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
             Add purchase_orders.csv, invoices.csv, and goods_receipts.csv before analysis.
           </p>
         </div>
-        <label className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white">
+        <label className="pg-button pg-button-primary cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600">
           Choose files
           <input
             className="sr-only"
@@ -165,14 +165,14 @@ function ApiKeyPanel({ apiKey, onApiKeyChange }) {
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card p-4">
       <label className="text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="anthropic-key">
         Local Claude API key
       </label>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <input
           id="anthropic-key"
-          className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-blue-950"
+          className="pg-control min-w-0 flex-1"
           type="password"
           autoComplete="off"
           value={apiKey}
@@ -195,7 +195,7 @@ function ProgressPanel({ runningStep, statusMessage, hasMatchResults, hasClassif
   ];
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap gap-2">
           {steps.map(([key, label, complete]) => (
@@ -422,10 +422,10 @@ function routeLabelForAction(action) {
 function SummaryMetric({ metric }) {
   const value = metric.format === "money" ? formatMoney(metric.value) : formatInteger(metric.value);
   return (
-    <article className={`rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 ${toneBorderClass(metric.tone)}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{metric.label}</p>
-      <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-slate-950 dark:text-slate-100">{value}</p>
-      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{metric.helper}</p>
+    <article className={`pg-card-compact ${toneBorderClass(metric.tone)}`}>
+      <p className="pg-meta font-semibold uppercase tracking-wide">{metric.label}</p>
+      <p className="pg-tabular mt-2 font-mono text-xl font-semibold leading-tight text-slate-950 dark:text-slate-100">{value}</p>
+      <p className="pg-meta mt-1">{metric.helper}</p>
     </article>
   );
 }
@@ -442,13 +442,13 @@ function WorkbenchSummaryStrip({ summary }) {
 
 function WorkbenchEmptyState({ eyebrow, title, body, actionLabel, onAction, tone = "neutral" }) {
   return (
-    <section className={`rounded-2xl border bg-white p-6 shadow-sm dark:bg-slate-900 ${toneBorderClass(tone)}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{eyebrow}</p>
-      <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{title}</h2>
-      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">{body}</p>
+    <section className={`pg-empty-panel ${toneBorderClass(tone)}`}>
+      <p className="pg-kicker pg-kicker-neutral">{eyebrow}</p>
+      <h2 className="pg-section-title">{title}</h2>
+      <p className="pg-copy mt-2 max-w-3xl">{body}</p>
       {actionLabel && onAction ? (
         <button
-          className="mt-4 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-blue-600 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="pg-button pg-button-secondary mt-4"
           type="button"
           onClick={onAction}
         >
@@ -461,14 +461,14 @@ function WorkbenchEmptyState({ eyebrow, title, body, actionLabel, onAction, tone
 
 function WorkbenchHeader({ hasData, isAnalysisRunning }) {
   return (
-    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <header className="pg-page-header">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Exception Workbench</p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+          <p className="pg-kicker">Exception Workbench</p>
+          <h2 className="pg-page-title">
             Which invoices need human review now?
           </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+          <p className="pg-copy mt-2 max-w-3xl">
             Analyst queue for triaging invoice exceptions, validating evidence, and reviewing DRAFT-only follow-up material.
           </p>
         </div>
@@ -738,8 +738,8 @@ function InvoiceCard({
 }) {
   const simulationChanged = row.simulation?.changed;
   const cardClass = simulationChanged
-    ? "rounded-2xl border border-blue-300 bg-blue-50 p-5 shadow-sm dark:border-blue-700 dark:bg-blue-950/40"
-    : "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900";
+    ? "pg-card border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40"
+    : "pg-card";
 
   return (
     <article className={cardClass}>
@@ -831,26 +831,26 @@ function governanceMetricValue(metric) {
 
 function GovernanceMetric({ label, value, helper, tone = "neutral", isNumber = true }) {
   return (
-    <article className={`rounded-xl border bg-white p-4 shadow-sm dark:bg-slate-900 ${toneBorderClass(tone)}`}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
-      <p className={`${isNumber ? "font-mono tabular-nums" : ""} mt-2 text-lg font-semibold leading-6 text-slate-950 dark:text-slate-100`}>
+    <article className={`pg-card-compact ${toneBorderClass(tone)}`}>
+      <p className="pg-meta font-semibold uppercase tracking-wide">{label}</p>
+      <p className={`${isNumber ? "font-mono pg-tabular" : ""} mt-2 text-lg font-semibold leading-6 text-slate-950 dark:text-slate-100`}>
         {value}
       </p>
-      {helper ? <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">{helper}</p> : null}
+      {helper ? <p className="pg-meta mt-2">{helper}</p> : null}
     </article>
   );
 }
 
 function GovernanceHeader({ viewModel }) {
   return (
-    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <header className="pg-page-header">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">{viewModel.header.eyebrow}</p>
-          <h2 className="mt-1 max-w-5xl text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+          <p className="pg-kicker pg-kicker-governance">{viewModel.header.eyebrow}</p>
+          <h2 className="pg-page-title">
             {viewModel.header.title}
           </h2>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+          <p className="pg-copy mt-2 max-w-4xl">
             {viewModel.header.takeaway}
           </p>
         </div>
@@ -921,7 +921,7 @@ function ApiServiceAndDataInputs({ viewModel, apiKey, onApiKeyChange }) {
   const uploaded = viewModel.uploadedData;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">AI service and data inputs</p>
@@ -988,7 +988,7 @@ function ApiServiceAndDataInputs({ viewModel, apiKey, onApiKeyChange }) {
 
 function WorkflowTraceSummary({ trace }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Workflow trace summary</p>
         <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Prompt-chain trace from data setup to export</h3>
@@ -997,7 +997,7 @@ function WorkflowTraceSummary({ trace }) {
         </p>
       </div>
 
-      <div className="mt-5 grid gap-3 lg:grid-cols-7">
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
         {trace.steps.map((step) => (
           <article className={`rounded-xl border bg-slate-50 p-3 dark:bg-slate-800 ${toneBorderClass(step.tone)}`} key={step.id}>
             <div className="flex flex-col gap-2">
@@ -1032,7 +1032,7 @@ function RuntimeCostTelemetry({ viewModel }) {
   const modelRouting = viewModel.modelRouting;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Runtime and cost telemetry</p>
@@ -1100,7 +1100,7 @@ function RuntimeCostTelemetry({ viewModel }) {
       </div>
 
       {modelRouting.rows.length ? (
-        <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="pg-table-wrap mt-5">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
@@ -1135,7 +1135,7 @@ function AuditTrailSummaryAndExport({ viewModel, onExport }) {
   const auditExport = viewModel.auditExport;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Audit trail summary and export</p>
@@ -1218,7 +1218,7 @@ function AuditEntryRow({ entry, index }) {
 
 function AuditStageGroups({ groups }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Grouped audit entries</p>
         <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Raw audit records by stage</h3>
@@ -1261,7 +1261,7 @@ function AuditStageGroups({ groups }) {
 function GovernancePanel({ viewModel, apiKey, onApiKeyChange, onExport, onStart }) {
   if (!viewModel.hasData) {
     return (
-      <section className="grid gap-4">
+      <section className="pg-page-stack">
         <GovernanceHeader viewModel={viewModel} />
         <ApiServiceAndDataInputs viewModel={viewModel} apiKey={apiKey} onApiKeyChange={onApiKeyChange} />
         <WorkbenchEmptyState
@@ -1277,7 +1277,7 @@ function GovernancePanel({ viewModel, apiKey, onApiKeyChange, onExport, onStart 
   }
 
   return (
-    <section className="grid gap-4">
+    <section className="pg-page-stack">
       <GovernanceHeader viewModel={viewModel} />
       <AiReliabilityCenter viewModel={viewModel} />
       <ApiServiceAndDataInputs viewModel={viewModel} apiKey={apiKey} onApiKeyChange={onApiKeyChange} />
@@ -1293,38 +1293,36 @@ function WorkspaceTabs({ activeWorkspace, onChange, dashboardReady, reviewCount,
   return (
     <nav
       aria-label="Workspace navigation"
-      className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+      className="pg-card p-2"
     >
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-        {WORKSPACE_TABS.map((tab) => {
-          const isActive = activeWorkspace === tab.id;
-          const helper = {
-            start: "Upload and analyze",
-            executive: dashboardReady ? "Batch summary" : "Appears after analysis",
-            workbench: `${reviewCount} invoice cards`,
-            analytics: "Supplier and policy views",
-            governance: `${auditEntryCount} audit entries`
-          }[tab.id];
+      <div className="pg-tabs">
+        <div className="pg-tabs-list">
+          {WORKSPACE_TABS.map((tab) => {
+            const isActive = activeWorkspace === tab.id;
+            const helper = {
+              start: "Upload and analyze",
+              executive: dashboardReady ? "Batch summary" : "Appears after analysis",
+              workbench: `${reviewCount} invoice cards`,
+              analytics: "Supplier and policy views",
+              governance: `${auditEntryCount} audit entries`
+            }[tab.id];
 
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              className={`rounded-xl px-3 py-3 text-left transition focus-visible:outline-blue-600 ${
-                isActive
-                  ? "bg-slate-950 text-white dark:bg-slate-100 dark:text-slate-950"
-                  : "text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
-              }`}
-              aria-pressed={isActive}
-              onClick={() => onChange(tab.id)}
-            >
-              <span className="block text-sm font-semibold">{tab.label}</span>
-              <span className={`mt-1 block text-xs ${isActive ? "opacity-80" : "text-slate-500 dark:text-slate-400"}`}>
-                {helper}
-              </span>
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                className={`pg-tab ${isActive ? "pg-tab-active" : ""}`}
+                aria-pressed={isActive}
+                onClick={() => onChange(tab.id)}
+              >
+                <span className="block text-sm font-semibold">{tab.label}</span>
+                <span className="pg-tab-helper">
+                  {helper}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
@@ -1344,7 +1342,7 @@ function ReviewQueueControls({
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-950 dark:text-slate-100">Filter and sort queue</h3>
@@ -1354,7 +1352,7 @@ function ReviewQueueControls({
           </p>
         </div>
         <button
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-blue-600 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="pg-button pg-button-secondary"
           type="button"
           onClick={onReset}
         >
@@ -1369,7 +1367,7 @@ function ReviewQueueControls({
           </label>
           <input
             id="queue-search"
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-blue-950"
+            className="pg-control mt-1"
             type="search"
             value={filters.search}
             onChange={(event) => updateFilter("search", event.target.value)}
@@ -1382,7 +1380,7 @@ function ReviewQueueControls({
           </label>
           <select
             id="tier-filter"
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950"
+            className="pg-control mt-1"
             value={filters.tier}
             onChange={(event) => updateFilter("tier", event.target.value)}
           >
@@ -1399,7 +1397,7 @@ function ReviewQueueControls({
           </label>
           <select
             id="supplier-filter"
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950"
+            className="pg-control mt-1"
             value={filters.supplier}
             onChange={(event) => updateFilter("supplier", event.target.value)}
           >
@@ -1415,7 +1413,7 @@ function ReviewQueueControls({
           </label>
           <select
             id="exception-filter"
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950"
+            className="pg-control mt-1"
             value={filters.exception}
             onChange={(event) => updateFilter("exception", event.target.value)}
           >
@@ -1431,7 +1429,7 @@ function ReviewQueueControls({
           </label>
           <select
             id="queue-sort"
-            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-blue-950"
+            className="pg-control mt-1"
             value={filters.sort}
             onChange={(event) => updateFilter("sort", event.target.value)}
           >
@@ -1464,7 +1462,7 @@ function ExceptionWorkbenchPanel({
 }) {
   if (isAnalysisRunning) {
     return (
-      <section className="grid gap-4">
+      <section className="pg-page-stack">
         <WorkbenchHeader hasData={false} isAnalysisRunning />
         <WorkbenchEmptyState
           eyebrow="Analysis in progress"
@@ -1478,7 +1476,7 @@ function ExceptionWorkbenchPanel({
 
   if (hasAnalysisFailure) {
     return (
-      <section className="grid gap-4">
+      <section className="pg-page-stack">
         <WorkbenchHeader hasData={false} isAnalysisRunning={false} />
         <WorkbenchEmptyState
           eyebrow="Analysis failed"
@@ -1494,7 +1492,7 @@ function ExceptionWorkbenchPanel({
 
   if (!viewModel.hasData) {
     return (
-      <section className="grid gap-4">
+      <section className="pg-page-stack">
         <WorkbenchHeader hasData={false} isAnalysisRunning={false} />
         <WorkbenchEmptyState
           eyebrow="Awaiting analysis"
@@ -1509,7 +1507,7 @@ function ExceptionWorkbenchPanel({
   }
 
   return (
-    <section className="grid gap-4">
+    <section className="pg-page-stack">
       <WorkbenchHeader hasData={viewModel.hasData} isAnalysisRunning={false} />
       <WorkbenchSummaryStrip summary={viewModel.summary} />
       <ReviewQueueControls
@@ -1522,7 +1520,7 @@ function ExceptionWorkbenchPanel({
         totalCount={viewModel.rows.length}
       />
       {viewModel.visibleRows.length ? (
-        <div className="grid gap-4">
+        <div className="pg-page-stack">
           {viewModel.visibleRows.map((row) => (
             <InvoiceCard
               key={row.id}
@@ -1559,14 +1557,14 @@ function analyticsHeatCellClass(count) {
 
 function SupplierPolicyHeader({ viewModel }) {
   return (
-    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <header className="pg-page-header">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">{viewModel.header.eyebrow}</p>
-          <h2 className="mt-1 max-w-5xl text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+          <p className="pg-kicker">{viewModel.header.eyebrow}</p>
+          <h2 className="pg-page-title">
             {viewModel.header.title}
           </h2>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+          <p className="pg-copy mt-2 max-w-4xl">
             {viewModel.header.takeaway}
           </p>
         </div>
@@ -1580,7 +1578,7 @@ function SupplierPolicyHeader({ viewModel }) {
 
 function SupplierRiskCard({ supplier }) {
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <article className="pg-card-compact">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{supplier.supplierName}</p>
@@ -1614,7 +1612,7 @@ function SupplierRiskCard({ supplier }) {
 
 function SupplierRiskSummary({ suppliers }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Supplier risk summary</p>
         <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Top supplier follow-through candidates</h3>
@@ -1639,7 +1637,7 @@ function SupplierRiskSummary({ suppliers }) {
 
 function SupplierScorecard({ rows }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Supplier scorecard</p>
         <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Batch-based operational risk by supplier</h3>
@@ -1648,7 +1646,7 @@ function SupplierScorecard({ rows }) {
         </p>
       </div>
       {rows.length ? (
-        <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="pg-table-wrap mt-5">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
@@ -1718,7 +1716,7 @@ function ExceptionLegend({ legend }) {
 
 function ExceptionHeatmap({ rows, legend, takeaway }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Exception concentration heatmap</p>
@@ -1729,7 +1727,7 @@ function ExceptionHeatmap({ rows, legend, takeaway }) {
       </div>
 
       {rows.length && legend.length ? (
-        <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="pg-table-wrap mt-5">
           <table className="min-w-full text-center text-sm">
             <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
               <tr>
@@ -1795,7 +1793,7 @@ function PolicySimulatorSection({ policySummary, tolerances, onTolerancesChange,
 
 function RootCausePatternCard({ pattern }) {
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <article className="pg-card-compact">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Badge className={toneBadgeClass(pattern.displayType === "Supplier concentration" ? "review" : pattern.displayType === "Policy sensitivity" ? "info" : "neutral")}>
@@ -1893,7 +1891,7 @@ function SupplierPolicyAnalyticsPanel({
 }) {
   if (isAnalysisRunning) {
     return (
-      <section className="grid gap-4">
+      <section className="pg-page-stack">
         <SupplierPolicyHeader viewModel={viewModel} />
         <WorkbenchEmptyState
           eyebrow="Analysis in progress"
@@ -1907,7 +1905,7 @@ function SupplierPolicyAnalyticsPanel({
 
   if (hasAnalysisFailure) {
     return (
-      <section className="grid gap-4">
+      <section className="pg-page-stack">
         <SupplierPolicyHeader viewModel={viewModel} />
         <WorkbenchEmptyState
           eyebrow="Analysis failed"
@@ -1923,7 +1921,7 @@ function SupplierPolicyAnalyticsPanel({
 
   if (!viewModel.hasData) {
     return (
-      <section className="grid gap-4">
+      <section className="pg-page-stack">
         <SupplierPolicyHeader viewModel={viewModel} />
         <WorkbenchEmptyState
           eyebrow="Awaiting analysis"
@@ -1938,7 +1936,7 @@ function SupplierPolicyAnalyticsPanel({
   }
 
   return (
-    <section className="grid gap-4">
+    <section className="pg-page-stack">
       <SupplierPolicyHeader viewModel={viewModel} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {viewModel.summaryCards.map((metric) => (
@@ -2562,16 +2560,16 @@ export default function App() {
   }
 
   return (
-    <main className={`${isDarkMode ? "dark" : ""} min-h-screen bg-slate-50 px-4 py-6 text-slate-950 transition-colors sm:px-6 lg:px-8 dark:bg-slate-950 dark:text-slate-100`}>
-      <section className="mx-auto flex max-w-7xl flex-col gap-6">
-        <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <main className={`${isDarkMode ? "dark" : ""} pg-shell px-4 py-5 sm:px-6 lg:px-8`}>
+      <section className="pg-container">
+        <header className="pg-topbar">
           <div>
-            <h1 className="mt-2 text-4xl font-semibold tracking-tight">ProcureGuard AI</h1>
-            <p className="mt-2 text-lg text-slate-600 dark:text-slate-400">AP Exception Control Tower</p>
+            <h1 className="pg-app-title">ProcureGuard AI</h1>
+            <p className="pg-app-subtitle">AP Exception Control Tower</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
-              className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-blue-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="pg-button pg-button-secondary"
               type="button"
               aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
               aria-pressed={isDarkMode}
@@ -2580,7 +2578,7 @@ export default function App() {
               {isDarkMode ? "Light mode" : "Dark mode"}
             </button>
             <button
-              className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-700"
+              className="pg-button pg-button-primary"
               type="button"
               disabled={!parsedFiles || Boolean(runningStep)}
               onClick={runPipeline}
@@ -2601,7 +2599,7 @@ export default function App() {
         />
 
         {activeWorkspace === "start" ? (
-          <section className="grid gap-6">
+          <section className="pg-page-stack">
             <ApiKeyPanel apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
             <UploadPanel parsedFiles={parsedFiles} onFilesSelected={handleFilesSelected} isBusy={Boolean(runningStep)} />
             <ProgressPanel

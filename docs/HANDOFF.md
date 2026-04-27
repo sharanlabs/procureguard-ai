@@ -1475,3 +1475,105 @@ Rework only the Audit & Governance page into an AI reliability, governance, and 
 
 ### Next step
 Chunk 2A.6 Visual consistency, spacing, and responsive polish
+
+## Chunk 2A.6 Visual consistency, spacing, and responsive polish handoff — April 27, 2026
+
+### Purpose
+Polish the existing five-page product so ProcureGuard AI feels like one coherent AP Exception Control Tower: modern, calm, premium, enterprise-grade, analyst-usable, executive-readable, and governance-aware.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- app/lib/format.js
+- app/lib/uiModels.js
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T19-25-53-543Z.json
+- evals/results/eval_results_2026-04-27T19-33-00-224Z.json
+- evals/results/eval_results_2026-04-27T19-34-28-259Z.json
+
+### Visual rhythm changes
+- Added shared app-level CSS classes for the shell, container, page stacks, page headers, cards, compact cards, empty panels, buttons, controls, tabs, table wrappers, metadata, and tabular numbers.
+- Applied the shared visual rhythm to the app frame, Start controls, Executive Summary header and metric cards, Exception Workbench header and empty states, Supplier & Policy Analytics header/cards/tables, and Audit & Governance reliability/export sections.
+- Kept enterprise detail intact while using consistent gaps, card padding, border radius, and calmer card surfaces.
+
+### Typography/numeric presentation changes
+- Standardized page title, section title, kicker, body copy, and metadata treatments.
+- Reduced oversized executive metric typography and kept decision content prominent without becoming a marketing-style hero.
+- Reinforced tabular numeric presentation for metrics, counts, money, tokens, latency, and table cells through shared numeric styling.
+
+### Navigation polish
+- Reworked the five-surface workspace navigation into a reusable tab treatment with a clearer but calmer active state.
+- Added graceful smaller-screen behavior through wrapping/scrolling tabs and stable minimum tab widths.
+- Preserved all IA labels: Start, Executive Summary, Exception Workbench, Supplier & Policy Analytics, Audit & Governance.
+
+### Semantic color changes
+- Added shared semantic tone handling for clean/completed, review, escalation, insight, governance, and neutral card borders/backgrounds.
+- Kept green reserved for clean/completed/healthy states, amber for review, red for escalation, blue for insight, indigo for governance, and slate for structure.
+- Muted zero heatmap values with em dashes in the legacy supplier analytics export surface for consistency.
+
+### Responsive layout changes
+- Added shared responsive page and tab behavior for mobile/tablet/desktop widths.
+- Improved audit trace wrapping so trace cards move from two columns to four and then seven columns instead of becoming cramped too early.
+- Table-like sections continue to scroll horizontally where needed without hiding critical controls.
+
+### Empty/loading/failure state consistency changes
+- Unified empty-state presentation through shared empty panel styling and consistent page-stack spacing.
+- Preserved existing loading/failure behavior: in-progress pages avoid stale final claims and failed analysis does not look completed.
+- Empty states remain calm and point users back to Start where appropriate.
+
+### Dark mode changes
+- Added calmer dark-mode surfaces, borders, text contrast, controls, tabs, and semantic tone backgrounds.
+- Improved dark-mode focus, selection, summary marker, buttons, inputs, cards, table wrappers, and muted metadata contrast.
+
+### Focus/accessibility polish
+- Added consistent focus-visible behavior for controls and summaries.
+- Added disabled cursor/opacity treatment for buttons and inputs.
+- Preserved labels for filters and form controls.
+- Navigation active state uses text and surface treatment, not color alone.
+
+### Prototype roughness removed
+- Replaced lingering technical/prototype-facing labels in legacy UI surfaces: Supplier Exception Heatmap, Supplier Name, Risk Level, and Root Cause Analysis.
+- Kept raw technical details lower on Audit & Governance and preserved grouped disclosure patterns.
+- Did not add decorative gradients, animation libraries, icon libraries, new dependencies, or new product features.
+
+### Backend files protected or touched
+- No backend files were touched.
+- app/lib/pipeline.js, app/lib/claude.js, api/messages.js, app/lib/schemas.js, app/lib/audit.js, app/lib/dashboard.js, and app/lib/rootCause.js were protected and unchanged.
+- prompts/, data/, evals/run_evals.js, and evals/golden_dataset.json were protected and unchanged.
+
+### Verification commands and results
+- Pre-edit git status --short: clean.
+- Pre-edit git branch -vv: main at 1263aa8, ahead of origin/main.
+- Pre-edit git log --oneline -10: confirmed 1263aa8, 9b986ec, bc2aff5, e670075, a6236f6, and fe8e374 at the top of recent history.
+- Pre-edit npm run build: passed with existing Vite chunk-size warning.
+- Pre-edit node evals/run_evals.js: passed 25/25, 100%.
+- Post-edit npm run build: passed with existing Vite chunk-size warning.
+- Post-edit node evals/run_evals.js: passed 25/25, 100%.
+- node --check api/messages.js: passed.
+- grep -R "console.log" app api || true: no matches.
+- grep -R "localStorage" app api || true: no matches.
+- grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true: no matches.
+- grep -R "Send" app || true: no matches.
+- git diff --check: passed.
+- git status --short: modified visual UI files, progress/handoff, and generated eval results before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T19-34-28-259Z.json
+- Also generated evals/results/eval_results_2026-04-27T19-25-53-543Z.json during the required pre-edit eval gate and evals/results/eval_results_2026-04-27T19-33-00-224Z.json during the post-code eval check.
+
+### Known issues
+- The existing Vite production chunk-size warning remains.
+- No live Claude API call was run during this pass.
+
+### Next step
+Manual screenshot review across all five pages, then Chunk 2B planning

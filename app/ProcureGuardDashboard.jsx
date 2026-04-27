@@ -126,9 +126,9 @@ function Metric({ label, value }) {
 
 function EmptyState({ eyebrow = "No data", title, body, tone = "neutral" }) {
   return (
-    <section className={`rounded-2xl border p-6 shadow-sm ${toneClasses(tone)}`}>
+    <section className={`pg-empty-panel ${toneClasses(tone)}`}>
       <p className="text-xs font-semibold uppercase tracking-wide opacity-75">{eyebrow}</p>
-      <h2 className="mt-2 text-2xl font-semibold tracking-tight">{title}</h2>
+      <h2 className="mt-2 text-xl font-semibold tracking-tight">{title}</h2>
       <p className="mt-2 max-w-3xl text-sm leading-6 opacity-80">{body}</p>
     </section>
   );
@@ -172,12 +172,12 @@ function DashboardSection({ title, helper, children, action }) {
 
 function ExecutiveHeader() {
   return (
-    <header className="flex flex-col gap-2">
-      <p className="text-sm font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Executive Summary</p>
-      <h2 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 md:text-3xl">
+    <header className="pg-page-header">
+      <p className="pg-kicker">Executive Summary</p>
+      <h2 className="pg-page-title">
         What happened, what is at risk, and what to do next
       </h2>
-      <p className="max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+      <p className="pg-copy mt-2 max-w-3xl">
         Decision view for AP leaders, with exception exposure, routing pressure, and deterministic next actions.
       </p>
     </header>
@@ -221,7 +221,7 @@ function DecisionCard({ viewModel, analytics }) {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-wide opacity-75">{viewModel.decision.eyebrow}</p>
-          <h3 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{outcome.label}</h3>
+          <h3 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">{outcome.label}</h3>
           <p className="mt-3 text-sm leading-6 opacity-85">{outcome.summary}</p>
           <p className="mt-4 text-sm font-semibold">
             Recommended next action: <span className="font-normal">{viewModel.decision.recommendedNextAction}</span>
@@ -243,9 +243,9 @@ function DecisionCard({ viewModel, analytics }) {
 
 function HeroMetricCard({ metric }) {
   return (
-    <article className={`rounded-2xl border p-4 shadow-sm ${toneClasses(metric.tone)}`}>
+    <article className={`pg-card-compact ${toneClasses(metric.tone)}`}>
       <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{metric.label}</p>
-      <p className="mt-3 font-mono text-3xl font-semibold tracking-tight tabular-nums">{formatMetricValue(metric)}</p>
+      <p className="mt-3 font-mono text-2xl font-semibold tracking-tight tabular-nums">{formatMetricValue(metric)}</p>
       <p className="mt-2 text-sm leading-5 opacity-80">{metric.helper}</p>
     </article>
   );
@@ -253,7 +253,7 @@ function HeroMetricCard({ metric }) {
 
 function TopDrivers({ drivers }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Top drivers</p>
         <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Largest business drivers</h3>
@@ -301,7 +301,7 @@ function TopDrivers({ drivers }) {
 
 function RecommendedActions({ actions }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <section className="pg-card">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Next actions</p>
         <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Recommended review sequence</h3>
@@ -370,7 +370,7 @@ function ExceptionBarChart({ data, dataKey, valueName, valueFormatter, isDarkMod
 
 function ExecutiveChartPanel({ title, takeaway, children }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <article className="pg-card">
       <h3 className="text-base font-semibold text-slate-950 dark:text-slate-100">{title}</h3>
       <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{takeaway}</p>
       <div className="mt-5">{children}</div>
@@ -447,7 +447,7 @@ export default function ExecutiveDashboard({ analytics, isDarkMode, isAnalysisRu
   }
 
   return (
-    <section className="grid gap-5">
+    <section className="pg-page-stack">
       <ExecutiveHeader />
       <DecisionCard viewModel={viewModel} analytics={analytics} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -477,13 +477,13 @@ export function SupplierAnalyticsPanel({ analytics }) {
   }
 
   return (
-    <section className="grid gap-6">
+    <section className="pg-page-stack">
       <DashboardSection
-        title="Supplier Exception Heatmap"
+        title="Supplier exception concentration"
         helper="Which suppliers are connected to which exception types?"
       >
         {analytics.supplierExceptionHeatmap.length && analytics.heatmapCodes.length ? (
-          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="pg-table-wrap">
             <table className="min-w-full text-center text-sm">
               <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                 <tr>
@@ -504,7 +504,7 @@ export function SupplierAnalyticsPanel({ analytics }) {
                       return (
                         <td className="px-2 py-3" key={`${row.key}-${code}`}>
                           <span className={`inline-flex min-w-8 justify-center rounded-md border px-2 py-1 font-mono tabular-nums ${heatCellClass(count)}`}>
-                            {count}
+                            {count > 0 ? count : "—"}
                           </span>
                         </td>
                       );
@@ -526,18 +526,18 @@ export function SupplierAnalyticsPanel({ analytics }) {
         helper="Which suppliers show review load, match quality, diversity status, and exposure?"
       >
         {analytics.supplierScorecard.length ? (
-          <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="pg-table-wrap">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
                 <tr>
-                  <th className="px-3 py-2" scope="col">Supplier Name</th>
+                  <th className="px-3 py-2" scope="col">Supplier</th>
                   <th className="px-3 py-2 text-right" scope="col">Total Invoices</th>
                   <th className="px-3 py-2 text-right" scope="col">Clean Matches</th>
                   <th className="px-3 py-2 text-right" scope="col">Exceptions</th>
                   <th className="px-3 py-2 text-right" scope="col">Match Rate</th>
                   <th className="px-3 py-2 text-right" scope="col">Total Exposure</th>
                   <th className="px-3 py-2" scope="col">Diversity Certification</th>
-                  <th className="px-3 py-2" scope="col">Risk Level</th>
+                  <th className="px-3 py-2" scope="col">Risk</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
@@ -664,7 +664,7 @@ export function RootCauseAnalysisPanel({ analysis }) {
     <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm dark:border-indigo-800 dark:bg-indigo-950/40">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Root Cause Analysis</h2>
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Pattern signals</h2>
           <p className="mt-1 text-sm leading-6 text-indigo-900 dark:text-indigo-200">
             Browser-only pattern review across {analysis.exceptionRowCount} exception rows. Patterns suggest where to
             review controls without assigning responsibility.

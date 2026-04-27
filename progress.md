@@ -23,7 +23,9 @@ Chunk 2A.1 Product IA shell and safe wording completed.
 Chunk 2A.2 Executive Summary decision-first page completed.
 Chunk 2A.3 Exception Workbench scanability completed.
 Chunk 2A.4 Supplier & Policy Analytics grouping completed.
-Next: Chunk 2A.5 Audit & Governance / AI Reliability Center
+Chunk 2A.5 Audit & Governance / AI Reliability Center completed.
+Chunk 2A.6 Visual consistency, spacing, and responsive polish completed.
+Next: Manual screenshot review across all five pages, then Chunk 2B planning
 
 ## Stage log
 
@@ -102,7 +104,9 @@ Next: Chunk 2A.5 Audit & Governance / AI Reliability Center
   - Supplier & Policy Analytics now uses derived supplier/policy view models, supplier risk explanations, deterministic procurement actions, cleaner exception concentration, policy simulator framing, and grouped browser-only pattern signals
   - Chunk 2A.5 Audit & Governance / AI Reliability Center completed
   - Audit & Governance now uses a derived governance view model, AI Reliability Center, API/service status, workflow trace, runtime/cost telemetry, grouped audit entries, and audit-supporting export readiness
-  - Chunk 2A.6 Visual consistency, spacing, and responsive polish is the next micro-chunk
+  - Chunk 2A.6 Visual consistency, spacing, and responsive polish completed
+  - Shared visual rhythm, typography, navigation, semantic color, responsive wrapping, dark mode, focus states, and empty-state treatment now align across the five product surfaces
+  - Manual screenshot review across all five pages, then Chunk 2B planning is the next step
 
 ## Decisions pending
 
