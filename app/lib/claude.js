@@ -1,7 +1,15 @@
 import { buildStructuredOutputConfig } from "./schemas.js";
 
 const API_URL = "/api/messages";
-const REQUEST_TIMEOUT_MS = 60000;
+const MATCHING_TIMEOUT_MS = 60000;
+const CLASSIFICATION_TIMEOUT_MS = 120000;
+const ACTION_GENERATION_TIMEOUT_MS = 120000;
+const DEFAULT_CLAUDE_TIMEOUT_MS = 120000;
+const CLAUDE_TIMEOUTS_BY_STAGE = {
+  matching: MATCHING_TIMEOUT_MS,
+  classification: CLASSIFICATION_TIMEOUT_MS,
+  action_generation: ACTION_GENERATION_TIMEOUT_MS
+};
 const MAX_ATTEMPTS = 3;
 export const DEFAULT_MAX_TOKENS = 8192;
 const MIN_SAFE_MAX_TOKENS = 256;
@@ -48,13 +56,44 @@ function userFacingApiError(message) {
   return text;
 }
 
-function timeoutSignal() {
+function normalizeTimeoutMs(timeoutMs) {
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    return Math.round(timeoutMs);
+  }
+  return DEFAULT_CLAUDE_TIMEOUT_MS;
+}
+
+function resolveClaudeTimeoutMs({ stage, timeoutMs } = {}) {
+  if (CLAUDE_TIMEOUTS_BY_STAGE[stage]) {
+    return CLAUDE_TIMEOUTS_BY_STAGE[stage];
+  }
+  if (timeoutMs !== undefined) {
+    return normalizeTimeoutMs(timeoutMs);
+  }
+  return DEFAULT_CLAUDE_TIMEOUT_MS;
+}
+
+function stageTimeoutLabel(stage) {
+  return {
+    matching: "matching",
+    classification: "classification",
+    action_generation: "action generation"
+  }[stage] ?? "the request";
+}
+
+function timeoutMessage(stage, timeoutMs) {
+  const seconds = Math.ceil(normalizeTimeoutMs(timeoutMs) / 1000);
+  return `Claude timed out while processing ${stageTimeoutLabel(stage)} after ${seconds} seconds. Retry the analysis. If this repeats, reduce batch size or try again later.`;
+}
+
+function timeoutSignal(timeoutMs) {
+  const safeTimeoutMs = normalizeTimeoutMs(timeoutMs);
   if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) {
-    return AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    return AbortSignal.timeout(safeTimeoutMs);
   }
 
   const controller = new AbortController();
-  window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  window.setTimeout(() => controller.abort(), safeTimeoutMs);
   return controller.signal;
 }
 
@@ -137,6 +176,8 @@ export async function callClaudeAPI({
   schema,
   apiKey,
   maxTokens = DEFAULT_MAX_TOKENS,
+  stage,
+  timeoutMs,
   onRetry
 }) {
   const startedAt = performance.now();
@@ -150,6 +191,7 @@ export async function callClaudeAPI({
   }
 
   const body = buildClaudeRequestBody({ systemPrompt, userMessage, model, schema, maxTokens });
+  const requestTimeoutMs = resolveClaudeTimeoutMs({ stage, timeoutMs });
 
   let lastError;
 
@@ -159,7 +201,7 @@ export async function callClaudeAPI({
         method: "POST",
         headers,
         body: JSON.stringify(body),
-        signal: timeoutSignal()
+        signal: timeoutSignal(requestTimeoutMs)
       });
 
       const responseText = await response.text();
@@ -217,7 +259,7 @@ export async function callClaudeAPI({
       const errorName = String(error?.name ?? "");
       const errorMessage = String(error?.message ?? "").toLowerCase();
       if (errorName === "AbortError" || errorName === "TimeoutError" || errorMessage.includes("timeout")) {
-        throw new Error("Claude API request timed out after 60 seconds");
+        throw new Error(timeoutMessage(stage, requestTimeoutMs));
       }
       if (attempt === MAX_ATTEMPTS || !String(error?.message).includes("429")) {
         break;

@@ -2337,6 +2337,7 @@ export default function App() {
           model: MODELS.matching,
           schema: matchingOutputSchema,
           maxTokens: STAGE_MAX_TOKENS.matching,
+          stage: "matching",
           apiKey,
           onRetry: ({ attempt }) => setStatusMessage(`Rate limited during matching chunk ${chunkMeta.index}/${chunkMeta.total}. Retry ${attempt + 1} of 3...`)
         });
@@ -2398,6 +2399,7 @@ export default function App() {
           model: MODELS.classification,
           schema: classificationOutputSchema,
           maxTokens: STAGE_MAX_TOKENS.classification,
+          stage: "classification",
           apiKey,
           onRetry: ({ attempt }) => setStatusMessage(`Rate limited during classification chunk ${chunkMeta.index}/${chunkMeta.total}. Retry ${attempt + 1} of 3...`)
         });
@@ -2459,6 +2461,7 @@ export default function App() {
           model: MODELS.action_generation,
           schema: actionOutputSchema,
           maxTokens: STAGE_MAX_TOKENS.action_generation,
+          stage: "action_generation",
           apiKey,
           onRetry: ({ attempt }) => setStatusMessage(`Rate limited during drafting chunk ${chunkMeta.index}/${chunkMeta.total}. Retry ${attempt + 1} of 3...`)
         });

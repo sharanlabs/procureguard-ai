@@ -1577,3 +1577,113 @@ Polish the existing five-page product so ProcureGuard AI feels like one coherent
 
 ### Next step
 Manual screenshot review across all five pages, then Chunk 2B planning
+
+## Production Rework Chunk 1.1 Timeout fix handoff — April 27, 2026
+
+### Purpose
+Fix the live local timeout observed during the completed chunked Claude pipeline by making Claude request timeouts stage-aware without changing prompts, models, schemas, chunking, retries, validation, UI design, or the Claude runtime architecture.
+
+### Live failure observed
+- Local Analyze failed on invoices 21-25 with: `Claude API request timed out after 60 seconds`.
+- Audit context indicated the chunked pipeline, validation, audit trail, and UI partial-result protection were already working.
+- Matching uses Claude Haiku and remains at 60 seconds.
+- Classification and action generation use Claude Sonnet and now receive longer 120-second request windows.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/lib/claude.js
+- app/lib/pipeline.js
+- app/lib/audit.js
+- api/messages.js
+- package.json
+- vite.config.js
+
+### Files changed
+- app/lib/claude.js
+- app/ProcureGuard.jsx
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T21-01-27-034Z.json
+- evals/results/eval_results_2026-04-27T21-04-05-041Z.json
+
+### Timeout constant changes
+- Added `MATCHING_TIMEOUT_MS = 60000`.
+- Added `CLASSIFICATION_TIMEOUT_MS = 120000`.
+- Added `ACTION_GENERATION_TIMEOUT_MS = 120000`.
+- Added `DEFAULT_CLAUDE_TIMEOUT_MS = 120000`.
+- Removed the single hardcoded 60-second request timeout from the Claude wrapper.
+
+### Stage-aware timeout behavior
+- `callClaudeAPI` now accepts `stage` and `timeoutMs`.
+- Known stages resolve to fixed stage timeout constants:
+  - `matching` → 60 seconds.
+  - `classification` → 120 seconds.
+  - `action_generation` → 120 seconds.
+- Missing or unknown stage without a direct `timeoutMs` falls back to `DEFAULT_CLAUDE_TIMEOUT_MS`.
+- Direct `timeoutMs` remains supported for future non-stage callers and is normalized to a safe positive timeout or the default.
+- Abort behavior is preserved through `AbortSignal.timeout(...)` with the existing `AbortController` fallback.
+- The three existing analyze chunk runners now pass stage identifiers into `callClaudeAPI`.
+
+### API contract preservation
+- `/api/messages` was not modified.
+- The app still calls only the local `/api/messages` path, not `https://api.anthropic.com` directly.
+- `output_config.format` remains the structured-output request shape.
+- No `output_format` usage was introduced.
+- No old `output_config.type` request shape was introduced.
+- Model routing remains unchanged: matching uses Haiku, classification and action generation use Sonnet.
+- Schemas, prompts, chunk size, retry behavior, result validation, and output payload content were not changed.
+
+### Security behavior
+- No API key logging was added.
+- No `console.log` usage was added in app or api files.
+- No `localStorage` usage was added.
+- Audit export behavior remains hash-and-metadata based and does not write raw invoice payloads or API keys.
+- Timeout messages include only the stage and duration. The existing chunk error wrapper safely adds invoice range metadata without exposing prompts, raw request bodies, invoice payloads, API keys, or stack traces.
+
+### Verification commands and results
+- Pre-edit `git status --short`: clean.
+- Pre-edit `git branch -vv`: `main` at `a29bf82`, ahead of `origin/main` by 11.
+- Pre-edit `git log --oneline -10`: confirmed `a29bf82` and `fe8e374` in recent history.
+- Pre-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Pre-edit `node evals/run_evals.js`: passed 25/25, 100%.
+- Post-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Post-edit `node evals/run_evals.js`: passed 25/25, 100%.
+- `node --check api/messages.js`: passed.
+- `grep -R "console.log" app api || true`: no matches.
+- `grep -R "localStorage" app api || true`: no matches.
+- `grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api || true`: no matches.
+- `grep -R "output_format" app api vite.config.js || true`: no matches.
+- `grep -R "output_config:.*type" app api vite.config.js || true`: no matches.
+- `grep -R "additionalProperties: true" app api || true`: no matches.
+- `grep -R '"additionalProperties": true' app api || true`: no matches.
+- `grep -R "https://api.anthropic.com" app || true`: no matches.
+- `grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true`: no matches.
+- `grep -R "Send" app || true`: no matches.
+- `git diff --check`: passed.
+- `git status --short`: showed only intended code/docs changes and the two generated eval result files before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T21-04-05-041Z.json
+- Also generated during the required pre-edit eval gate: evals/results/eval_results_2026-04-27T21-01-27-034Z.json
+
+### Known issues
+- No live Claude API retest was run during this code change.
+- The existing Vite production large-chunk warning remains.
+- If invoices 21-25 still time out during live retest, capture the exact stage and chunk before deciding whether Chunk 1.2 prompt caching or a later retry strategy is needed.
+
+### Manual retest steps
+1. Restart Vite dev server.
+2. Open local app.
+3. Upload purchase_orders.csv, invoices.csv, goods_receipts.csv.
+4. Enter local Anthropic API key.
+5. Click Analyze.
+6. Confirm all chunks complete, especially invoices 21-25.
+7. If timeout happens again, capture exact stage and chunk.
+8. Confirm Executive Summary, Exception Workbench, Supplier & Policy Analytics, and Audit & Governance render.
+9. Export audit CSV and confirm no raw payloads or API keys appear.
+
+### Next step
+Live local API retest, then Chunk 1.2 Prompt caching if timeout is resolved.
