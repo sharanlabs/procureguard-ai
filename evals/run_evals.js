@@ -190,7 +190,8 @@ export function detectExceptions(invoice, index, context) {
       grn.grn_date < earliest ? grn.grn_date : earliest
     ), grns[0].grn_date);
    if (!hasE02 && comparableQty > grnTotal) exceptions.add("E03");
-    if (invoice.invoice_date < earliestGrn && comparableQty > grnTotal) exceptions.add("E12");
+    // E12 is a date-sequencing exception. It does not require quantity over-delivery.
+    if (invoice.invoice_date < earliestGrn) exceptions.add("E12");
     if (grnTotal > po.quantity) exceptions.add("E13");
     if (comparableQty < po.quantity && closeMoney(comparableQty, grnTotal)) exceptions.add("E14");
     if (grns.length > 1 && grns.some((grn) => grn.grn_date > invoice.invoice_date)) exceptions.add("E15");

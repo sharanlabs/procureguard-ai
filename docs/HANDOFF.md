@@ -1958,3 +1958,82 @@ Harden the runtime pipeline so completed chunk outputs are retained in memory wh
 
 ### Next step
 Live local API retest, then Chunk 1.4 E12 eval fix.
+
+## Production Rework Chunk 1.4A E12 TC-23 data reconciliation handoff — April 27, 2026
+
+### Purpose
+Resolve the intentional data/eval conflict exposed by the corrected E12 harness rule, while preserving the prompt-specified E12 behavior and keeping TC-23 as the E10-only tax mismatch test.
+
+### Failed Chunk 1.4 result
+- The Chunk 1.4 E12 harness fix changed E12 to fire on date sequencing alone.
+- Post-fix evals failed 24/25 because TC-23 / INV-0023 returned `["E10", "E12"]` instead of expected `["E10"]`.
+- Failed eval artifact already present from the failed attempt: evals/results/eval_results_2026-04-27T22-54-35-598Z.json
+
+### Conflict confirmed
+- INV-0023 invoice date was 2026-04-27.
+- INV-0023 links to PO-023 / SAFE-GOG-ANSI.
+- Linked GRN-026 was dated 2026-04-28, which made the invoice predate the earliest linked GRN.
+- prompts/01_matching.md Rule 7 specifies E12 as invoice date preceding earliest GRN date.
+- evals/golden_dataset.json TC-23 intentionally expects only E10.
+
+### Decision made
+TC-23 is the E10 tax-rate mismatch test only. INV-0013 remains the intended E03 + E12 dual-exception case. Correct source CSV data for GRN-026 so TC-23 no longer accidentally triggers E12; preserve the golden dataset expectation.
+
+### Files reviewed
+- progress.md
+- docs/HANDOFF.md
+- evals/run_evals.js
+- evals/golden_dataset.json
+- prompts/01_matching.md
+- data/invoices.csv
+- data/goods_receipts.csv
+- data/purchase_orders.csv
+- data/DATA_DICTIONARY.md
+
+### Files changed
+- evals/run_evals.js
+- data/goods_receipts.csv
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T22-53-44-880Z.json
+- evals/results/eval_results_2026-04-27T22-54-35-598Z.json
+- evals/results/eval_results_2026-04-27T23-00-22-169Z.json
+
+### E12 behavior after
+- E12 fires when `invoice.invoice_date < earliestGrn`.
+- E12 does not require quantity over-delivery.
+- E03 remains the quantity-over-GRN exception.
+
+### TC-23 data correction
+- Changed GRN-026 from 2026-04-28 to 2026-04-26.
+- INV-0023 remains dated 2026-04-27.
+- PO-023 tax terms remain `Net 30 (Tax 7%)`.
+- INV-0023 total remains 461.13, preserving the 8.5% tax mismatch and $6.38 E10 exposure.
+- data/DATA_DICTIONARY.md was reviewed and did not require changes because it does not record a specific GRN-026 date.
+- evals/golden_dataset.json was not changed.
+
+### Verification commands and results
+- `npm run build`: passed with existing Vite large-chunk warning.
+- `node evals/run_evals.js`: passed 25/25, 100%.
+- TC-13 result check: passed with `["E03","E12"]`.
+- TC-23 result check: passed with `["E10"]`.
+- `node --check evals/run_evals.js`: passed.
+- `node --check api/messages.js`: passed.
+- `grep -R "console.log" app api || true`: no matches.
+- `grep -R "localStorage" app api || true`: no matches.
+- `grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api || true`: no matches.
+- `grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true`: no matches.
+- `grep -R "Send" app || true`: no matches.
+- `git diff --check`: passed.
+- `git diff --name-only`: only allowed files changed.
+- `git status --short`: only intended modified files and generated eval result files before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T23-00-22-169Z.json
+
+### Known issues
+- The existing Vite production large-chunk warning remains.
+- No live Claude API retest was run during this data/eval reconciliation stage.
+
+### Next step
+Production Rework Chunk 1.5 dependency pinning and git hygiene.
