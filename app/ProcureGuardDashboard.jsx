@@ -667,7 +667,7 @@ export function RootCauseAnalysisPanel({ analysis }) {
           <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Root Cause Analysis</h2>
           <p className="mt-1 text-sm leading-6 text-indigo-900 dark:text-indigo-200">
             Browser-only pattern review across {analysis.exceptionRowCount} exception rows. Patterns suggest where to
-            review controls and do not assign blame.
+            review controls without assigning responsibility.
           </p>
         </div>
         <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">

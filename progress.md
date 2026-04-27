@@ -22,7 +22,8 @@ Chunk 1 backend Analyze reliability pass — COMPLETE — April 26, 2026
 Chunk 2A.1 Product IA shell and safe wording completed.
 Chunk 2A.2 Executive Summary decision-first page completed.
 Chunk 2A.3 Exception Workbench scanability completed.
-Next: Chunk 2A.4 Supplier & Policy Analytics grouping
+Chunk 2A.4 Supplier & Policy Analytics grouping completed.
+Next: Chunk 2A.5 Audit & Governance / AI Reliability Center
 
 ## Stage log
 
@@ -97,7 +98,9 @@ Next: Chunk 2A.4 Supplier & Policy Analytics grouping
   - Session token/model trace moved into Audit & Governance
   - Chunk 2A.3 Exception Workbench scanability completed
   - Exception Workbench now uses derived rows, compact queue metrics, clearer filters, stronger invoice hierarchy, structured evidence, quieter confidence metadata, and DRAFT-only action panels
-  - Chunk 2A.4 Supplier & Policy Analytics grouping is the next micro-chunk
+  - Chunk 2A.4 Supplier & Policy Analytics grouping completed
+  - Supplier & Policy Analytics now uses derived supplier/policy view models, supplier risk explanations, deterministic procurement actions, cleaner exception concentration, policy simulator framing, and grouped browser-only pattern signals
+  - Chunk 2A.5 Audit & Governance / AI Reliability Center is the next micro-chunk
 
 ## Decisions pending
 

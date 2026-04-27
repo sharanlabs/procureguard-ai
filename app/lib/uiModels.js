@@ -3,6 +3,7 @@ import { EXCEPTION_NAMES } from "./rootCause.js";
 const PRICE_OR_TARIFF_CODES = new Set(["E01", "E10", "E16", "E17"]);
 const CONTROL_EXCEPTION_CODES = new Set(["E07", "E11"]);
 const RECEIPT_TIMING_CODES = new Set(["E03", "E06", "E12", "E15"]);
+const QUANTITY_OR_DELIVERY_CODES = new Set(["E02", "E05", "E13", "E14"]);
 
 const DRIVER_MEANINGS = {
   E01: "Unit price variance is driving supplier pricing validation work.",
@@ -32,6 +33,14 @@ function safeText(value, fallback = "Not available") {
   if (value === null || value === undefined || value === "") return fallback;
   if (Array.isArray(value)) return value.length ? value.join(", ") : fallback;
   return String(value);
+}
+
+function formatMoneyText(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0
+  }).format(safeNumber(value));
 }
 
 function pluralize(count, singular, plural = `${singular}s`) {
@@ -167,6 +176,13 @@ function getActionTypeRank(actionType) {
     supplier_email: 3,
     approval_note: 4
   }[actionType] ?? 5;
+}
+
+function getExceptionTone(tier) {
+  if (tier === 3) return "escalate";
+  if (tier === 2) return "review";
+  if (tier === 1) return "info";
+  return "neutral";
 }
 
 function routeTone(label) {
@@ -813,4 +829,344 @@ export function buildExceptionWorkbenchViewModel({
     supplierOptions: [...new Set(rows.map((row) => row.supplierName))].sort((left, right) => left.localeCompare(right)),
     exceptionOptions: [...new Set(rows.flatMap((row) => row.exceptionCodes))].sort()
   };
+}
+
+export function getSupplierRiskExplanation(supplier = {}) {
+  const riskLevel = supplier.riskLevel || "Low";
+  const exceptionRows = safeNumber(supplier.exceptionRows);
+  const exposure = safeNumber(supplier.exposure);
+  const escalationCount = safeNumber(supplier.escalateCount);
+  const reviewCount = safeNumber(supplier.reviewCount);
+  const topCodes = supplier.topExceptionCodes ?? [];
+
+  if (!supplier || !supplier.supplierName) return "Risk detail not available.";
+
+  if (!exceptionRows && !exposure) {
+    return "Low — no material exceptions in this batch.";
+  }
+
+  if (riskLevel === "High" && escalationCount > 0) {
+    return `High — ${escalationCount} ${pluralize(escalationCount, "escalation")} and ${formatMoneyText(exposure)} exposure in this batch.`;
+  }
+
+  if (riskLevel === "High") {
+    return `High — ${exceptionRows} ${pluralize(exceptionRows, "exception row")} and ${formatMoneyText(exposure)} exposure in this batch.`;
+  }
+
+  if (riskLevel === "Medium" && topCodes.some((code) => RECEIPT_TIMING_CODES.has(code))) {
+    return `Medium — repeated receiving or timing exceptions with ${formatMoneyText(exposure)} exposure.`;
+  }
+
+  if (riskLevel === "Medium" && reviewCount > 0) {
+    return `Medium — ${reviewCount} ${pluralize(reviewCount, "human review case")} and ${formatMoneyText(exposure)} exposure.`;
+  }
+
+  if (riskLevel === "Medium") {
+    return `Medium — ${exceptionRows} ${pluralize(exceptionRows, "exception row")} in this batch.`;
+  }
+
+  return "Low — no material exceptions in this batch.";
+}
+
+export function getSupplierRecommendedAction(supplier = {}) {
+  const topCodes = supplier.topExceptionCodes ?? [];
+  const exceptionRows = safeNumber(supplier.exceptionRows);
+
+  if (!exceptionRows) return "No supplier follow-up required from this batch.";
+  if (topCodes.some((code) => PRICE_OR_TARIFF_CODES.has(code))) {
+    return "Validate contracted pricing before the next PO cycle.";
+  }
+  if (topCodes.some((code) => RECEIPT_TIMING_CODES.has(code))) {
+    return "Confirm receiving records before supplier dispute.";
+  }
+  if (topCodes.some((code) => CONTROL_EXCEPTION_CODES.has(code))) {
+    return "Clear invoice control exceptions before payment review.";
+  }
+  if (topCodes.some((code) => QUANTITY_OR_DELIVERY_CODES.has(code))) {
+    return "Review quantity and delivery authorization with procurement.";
+  }
+
+  return "Review supplier exception evidence before follow-up.";
+}
+
+export function buildSupplierRiskNarratives(analytics = {}) {
+  return (analytics.supplierScorecard ?? [])
+    .filter((supplier) => safeNumber(supplier.exceptionRows) > 0 || safeNumber(supplier.exposure) > 0)
+    .slice(0, 3)
+    .map((supplier) => ({
+      key: supplier.key,
+      supplierName: supplier.supplierName || "Unknown supplier",
+      riskLevel: supplier.riskLevel || "Low",
+      riskRank: safeNumber(supplier.riskRank),
+      exceptionRows: safeNumber(supplier.exceptionRows),
+      exposure: safeNumber(supplier.exposure),
+      hold: safeNumber(supplier.hold),
+      topExceptionCodes: supplier.topExceptionCodes ?? [],
+      explanation: getSupplierRiskExplanation(supplier),
+      recommendedAction: getSupplierRecommendedAction(supplier)
+    }));
+}
+
+export function buildSupplierScoreRows(analytics = {}) {
+  return (analytics.supplierScorecard ?? []).map((supplier) => ({
+    key: supplier.key,
+    supplierName: supplier.supplierName || "Unknown supplier",
+    diversityCertification: supplier.diversityCertification || "None",
+    invoiceCount: safeNumber(supplier.invoiceCount),
+    exceptionRows: safeNumber(supplier.exceptionRows),
+    reviewCount: safeNumber(supplier.reviewCount),
+    escalateCount: safeNumber(supplier.escalateCount),
+    exposure: safeNumber(supplier.exposure),
+    hold: safeNumber(supplier.hold),
+    matchRate: typeof supplier.matchRate === "number" ? supplier.matchRate : null,
+    riskLevel: supplier.riskLevel || "Low",
+    riskRank: safeNumber(supplier.riskRank),
+    riskExplanation: getSupplierRiskExplanation(supplier),
+    recommendedAction: getSupplierRecommendedAction(supplier),
+    topExceptionCodes: supplier.topExceptionCodes ?? []
+  }));
+}
+
+export function buildExceptionLegend(analytics = {}) {
+  return (analytics.exceptionBreakdown ?? [])
+    .filter((item) => item?.code)
+    .map((item) => ({
+      code: item.code,
+      label: item.name || EXCEPTION_NAMES[item.code] || "Unknown Exception",
+      tier: item.tier ?? null,
+      tone: getExceptionTone(item.tier),
+      count: safeNumber(item.count),
+      exposure: safeNumber(item.exposure)
+    }));
+}
+
+export function buildSupplierHeatmapRows(analytics = {}, legend = []) {
+  const activeCodes = legend.map((item) => item.code);
+
+  return (analytics.supplierExceptionHeatmap ?? [])
+    .map((row) => {
+      const cells = activeCodes.map((code) => ({
+        code,
+        count: safeNumber(row.codes?.[code])
+      }));
+      const totalExceptions = cells.reduce((sum, cell) => sum + cell.count, 0);
+
+      return {
+        key: row.key,
+        supplierName: row.supplierName || "Unknown supplier",
+        exposure: safeNumber(row.exposure),
+        totalExceptions,
+        cells
+      };
+    })
+    .filter((row) => row.totalExceptions > 0)
+    .sort((left, right) => (
+      right.totalExceptions - left.totalExceptions ||
+      right.exposure - left.exposure ||
+      left.supplierName.localeCompare(right.supplierName)
+    ));
+}
+
+export function buildPolicySimulationSummary(toleranceSimulation = {}, tolerances = {}) {
+  if (!toleranceSimulation?.hasClassifications) {
+    return {
+      hasData: false,
+      headline: "Policy simulation is available after analysis.",
+      profileLabel: "Not available",
+      profileTone: "neutral",
+      profiles: ["Conservative", "Balanced", "High-throughput", "Custom"],
+      metrics: []
+    };
+  }
+
+  const pricePct = safeNumber(tolerances.pricePct);
+  const quantityUnits = safeNumber(tolerances.quantityUnits);
+  const dateBusinessDays = safeNumber(tolerances.dateBusinessDays);
+  const profileLabel = pricePct <= 1 && quantityUnits <= 1 && dateBusinessDays <= 1
+    ? "Conservative"
+    : pricePct === 2 && quantityUnits === 1 && dateBusinessDays === 2
+      ? "Balanced"
+      : pricePct >= 5 || quantityUnits >= 3 || dateBusinessDays >= 5
+        ? "High-throughput"
+        : "Custom";
+  const changedCount = safeNumber(toleranceSimulation.changedInvoiceCount);
+  const potentialShift = safeNumber(toleranceSimulation.potentialAutoReviewShift);
+
+  return {
+    hasData: true,
+    headline: changedCount
+      ? `${changedCount} ${pluralize(changedCount, "invoice")} would move review path under this simulated policy.`
+      : "No invoices would change review path under the current tolerance settings.",
+    profileLabel,
+    profileTone: profileLabel === "Balanced" ? "info" : profileLabel === "Conservative" ? "review" : profileLabel === "High-throughput" ? "escalate" : "neutral",
+    profiles: ["Conservative", "Balanced", "High-throughput", "Custom"],
+    potentialShift,
+    metrics: [
+      {
+        id: "price",
+        label: "Price tolerance impact",
+        value: safeNumber(toleranceSimulation.affectedByRule?.price),
+        helper: `${pricePct}% tolerance`
+      },
+      {
+        id: "quantity",
+        label: "Quantity tolerance impact",
+        value: safeNumber(toleranceSimulation.affectedByRule?.quantity),
+        helper: `${quantityUnits} ${pluralize(quantityUnits, "unit")}`
+      },
+      {
+        id: "date",
+        label: "Date tolerance impact",
+        value: safeNumber(toleranceSimulation.affectedByRule?.date),
+        helper: `${dateBusinessDays} ${pluralize(dateBusinessDays, "business day")}`
+      },
+      {
+        id: "review-shift",
+        label: "Potential low-risk review shift",
+        value: potentialShift,
+        format: "money",
+        helper: "Held exposure under simulated policy"
+      }
+    ]
+  };
+}
+
+function displayRootCauseType(type) {
+  if (type === "Supplier concentration") return "Supplier concentration";
+  if (type === "Warehouse correlation" || type === "Timing pattern") return "Receiving timing pattern";
+  if (type === "Price trend" || type === "Exception type concentration") return "Policy sensitivity";
+  return type || "Pattern signal";
+}
+
+export function buildRootCauseSummary(rootCauseAnalysis = {}) {
+  const patterns = (rootCauseAnalysis.patterns ?? []).map((pattern) => ({
+    ...pattern,
+    displayType: displayRootCauseType(pattern.type),
+    totalExposure: safeNumber(pattern.totalExposure),
+    affectedInvoices: pattern.affectedInvoices ?? [],
+    description: pattern.description || "Pattern detail not available.",
+    recommendedAction: pattern.recommendedAction || "Review exception evidence before taking action."
+  }));
+  const supplierConcentrationCount = patterns.filter((pattern) => pattern.displayType === "Supplier concentration").length;
+  const policySensitivityCount = patterns.filter((pattern) => pattern.displayType === "Policy sensitivity").length;
+  const receivingTimingCount = patterns.filter((pattern) => pattern.displayType === "Receiving timing pattern").length;
+
+  return {
+    hasData: Boolean(rootCauseAnalysis.hasData),
+    exceptionRowCount: safeNumber(rootCauseAnalysis.exceptionRowCount),
+    patternCount: patterns.length,
+    supplierConcentrationCount,
+    policySensitivityCount,
+    receivingTimingCount,
+    patterns,
+    takeaway: patterns.length
+      ? `${patterns.length} ${pluralize(patterns.length, "pattern signal")} found across ${safeNumber(rootCauseAnalysis.exceptionRowCount)} exception rows.`
+      : "No supplier concentration detected in this batch."
+  };
+}
+
+export function buildSupplierPolicyAnalyticsViewModel({
+  analytics,
+  rootCauseAnalysis,
+  toleranceSimulation,
+  tolerances
+} = {}) {
+  const hasData = Boolean(analytics?.hasData);
+  const supplierScoreRows = buildSupplierScoreRows(analytics);
+  const supplierRiskNarratives = buildSupplierRiskNarratives(analytics);
+  const exceptionLegend = buildExceptionLegend(analytics);
+  const heatmapRows = buildSupplierHeatmapRows(analytics, exceptionLegend);
+  const policySimulation = buildPolicySimulationSummary(toleranceSimulation, tolerances);
+  const rootCause = buildRootCauseSummary(rootCauseAnalysis);
+  const topSupplier = supplierRiskNarratives[0] ?? supplierScoreRows.find((row) => row.exceptionRows > 0) ?? null;
+  const topException = exceptionLegend[0] ?? null;
+  const topWarehouse = analytics?.warehouseHeatmap?.[0] ?? null;
+
+  return {
+    hasData,
+    header: {
+      eyebrow: "Supplier & Policy Analytics",
+      title: "Which suppliers, warehouses, exception types, or policies are driving repeated operational risk?",
+      takeaway: hasData
+        ? buildSupplierPolicyTakeaway({ topSupplier, topException, topWarehouse, rootCause })
+        : "Run analysis from Start to populate supplier risk, exception concentration, policy simulation, and pattern signals."
+    },
+    summaryCards: [
+      {
+        id: "suppliers",
+        label: "Suppliers analyzed",
+        value: supplierScoreRows.length,
+        format: "integer",
+        tone: "neutral",
+        helper: "Batch supplier rows"
+      },
+      {
+        id: "exception-suppliers",
+        label: "Suppliers with exceptions",
+        value: supplierScoreRows.filter((supplier) => supplier.exceptionRows > 0).length,
+        format: "integer",
+        tone: supplierScoreRows.some((supplier) => supplier.exceptionRows > 0) ? "review" : "clean",
+        helper: "Supplier follow-through candidates"
+      },
+      {
+        id: "supplier-exposure",
+        label: "Supplier exposure",
+        value: safeNumber(analytics?.exposureIdentified),
+        format: "money",
+        tone: safeNumber(analytics?.exposureIdentified) > 0 ? "info" : "neutral",
+        helper: "Batch exposure tied to exceptions"
+      },
+      {
+        id: "pattern-signals",
+        label: "Pattern signals",
+        value: rootCause.patternCount,
+        format: "integer",
+        tone: rootCause.patternCount > 0 ? "indigo" : "neutral",
+        helper: "Browser-only review"
+      }
+    ],
+    supplierRiskNarratives,
+    supplierScoreRows,
+    exceptionLegend,
+    heatmapRows,
+    heatmapTakeaway: buildHeatmapTakeaway(heatmapRows, exceptionLegend),
+    policySimulation,
+    rootCause
+  };
+}
+
+function buildSupplierPolicyTakeaway({ topSupplier, topException, topWarehouse, rootCause }) {
+  if (topSupplier) {
+    return `${topSupplier.supplierName} is the top supplier follow-through candidate with ${topSupplier.exceptionRows} ${pluralize(topSupplier.exceptionRows, "exception row")} and ${formatMoneyText(topSupplier.exposure)} exposure.`;
+  }
+
+  if (topException) {
+    return `${topException.code} is the top exception concentration with ${topException.count} ${pluralize(topException.count, "row")}.`;
+  }
+
+  if (topWarehouse) {
+    return `${topWarehouse.warehouse} has the strongest receiving concentration in this batch.`;
+  }
+
+  if (rootCause.patternCount > 0) {
+    return rootCause.takeaway;
+  }
+
+  return "No repeated supplier, warehouse, exception, or policy concentration is visible in this batch.";
+}
+
+function buildHeatmapTakeaway(rows, legend) {
+  if (!rows.length || !legend.length) return "No exception concentration data available.";
+
+  const topRow = rows[0];
+  const topCell = topRow.cells
+    .filter((cell) => cell.count > 0)
+    .sort((left, right) => right.count - left.count)[0];
+  const topLegend = legend.find((item) => item.code === topCell?.code);
+
+  if (!topCell || !topLegend) {
+    return "No exception concentration data available.";
+  }
+
+  return `${topRow.supplierName} shows the strongest concentration: ${topCell.count} ${pluralize(topCell.count, "row")} for ${topCell.code} (${topLegend.label}).`;
 }

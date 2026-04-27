@@ -3,9 +3,7 @@ import matchingPrompt from "../prompts/01_matching.md?raw";
 import classificationPrompt from "../prompts/02_classification.md?raw";
 import actionPrompt from "../prompts/03_action_generation.md?raw";
 import ExecutiveDashboard, {
-  RootCauseAnalysisPanel,
-  SessionGovernancePanel,
-  SupplierAnalyticsPanel
+  SessionGovernancePanel
 } from "./ProcureGuardDashboard.jsx";
 import { createAuditEntry, exportAuditCsv } from "./lib/audit.js";
 import { callClaudeAPI } from "./lib/claude.js";
@@ -37,7 +35,10 @@ import {
 } from "./lib/pipeline.js";
 import { analyzeRootCauses } from "./lib/rootCause.js";
 import { actionOutputSchema, classificationOutputSchema, matchingOutputSchema } from "./lib/schemas.js";
-import { buildExceptionWorkbenchViewModel } from "./lib/uiModels.js";
+import {
+  buildExceptionWorkbenchViewModel,
+  buildSupplierPolicyAnalyticsViewModel
+} from "./lib/uiModels.js";
 
 const LOCAL_API_KEY_STORAGE = "procureguard_anthropic_session_key";
 const DARK_MODE_STORAGE = "procureguard_dark_mode";
@@ -247,7 +248,7 @@ function ToleranceSlider({ id, label, value, min, max, step, unit, affectedCount
   );
 }
 
-function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
+function ToleranceSimulator({ tolerances, onTolerancesChange, simulation, policySummary }) {
   if (!simulation.hasClassifications) return null;
 
   const changedCount = simulation.changedInvoiceCount;
@@ -259,13 +260,39 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
     <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm dark:border-blue-800 dark:bg-blue-950/40">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">What-If Tolerance Simulator</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Policy simulator</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Tolerance policy sensitivity</h2>
           <p className="mt-1 text-sm text-blue-900 dark:text-blue-200">
-            Adjust policy tolerances locally without changing Claude classifications or audit records.
+            Simulation only. Adjust policy tolerances locally without changing Claude classifications, payment behavior, or audit records.
           </p>
         </div>
         <Badge className="border-blue-300 bg-white text-blue-800">Simulation only</Badge>
       </div>
+
+      {policySummary?.profiles?.length ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {policySummary.profiles.map((profile) => (
+            <Badge
+              className={
+                profile === policySummary.profileLabel
+                  ? toneBadgeClass(policySummary.profileTone)
+                  : toneBadgeClass("neutral")
+              }
+              key={profile}
+            >
+              {profile}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+
+      {policySummary?.metrics?.length ? (
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {policySummary.metrics.map((metric) => (
+            <SummaryMetric metric={{ ...metric, tone: metric.id === "review-shift" ? "info" : "neutral" }} key={metric.id} />
+          ))}
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-3 lg:grid-cols-3">
         <ToleranceSlider
@@ -304,7 +331,7 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation }) {
       </div>
 
       <div className="mt-5 rounded-xl border border-blue-200 bg-white p-4 dark:border-blue-800 dark:bg-slate-900">
-        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{summaryText}</p>
+        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{policySummary?.headline || summaryText}</p>
         <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
           <p>Original {tierLabel(1)}: <span className="font-semibold">{simulation.originalCounts.tier1}</span></p>
           <p>Original {tierLabel(2)}: <span className="font-semibold">{simulation.originalCounts.tier2}</span></p>
@@ -352,6 +379,7 @@ function toneBadgeClass(tone) {
     info: "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-200",
     review: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200",
     escalate: "border-red-200 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950/50 dark:text-red-200",
+    indigo: "border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-200",
     neutral: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
   }[tone] ?? "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300";
 }
@@ -362,6 +390,7 @@ function toneBorderClass(tone) {
     info: "border-blue-200 dark:border-blue-800",
     review: "border-amber-200 dark:border-amber-800",
     escalate: "border-red-200 dark:border-red-800",
+    indigo: "border-indigo-200 dark:border-indigo-800",
     neutral: "border-slate-200 dark:border-slate-700"
   }[tone] ?? "border-slate-200 dark:border-slate-700";
 }
@@ -1072,31 +1101,415 @@ function ExceptionWorkbenchPanel({
   );
 }
 
+function analyticsHeatCellClass(count) {
+  if (count >= 3) return "border-red-200 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950/50 dark:text-red-200";
+  if (count === 2) return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200";
+  if (count === 1) return "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-200";
+  return "border-transparent bg-transparent text-slate-300 dark:text-slate-600";
+}
+
+function SupplierPolicyHeader({ viewModel }) {
+  return (
+    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">{viewModel.header.eyebrow}</p>
+          <h2 className="mt-1 max-w-5xl text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+            {viewModel.header.title}
+          </h2>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+            {viewModel.header.takeaway}
+          </p>
+        </div>
+        <Badge className={toneBadgeClass(viewModel.hasData ? "info" : "neutral")}>
+          Batch-based operational risk
+        </Badge>
+      </div>
+    </header>
+  );
+}
+
+function SupplierRiskCard({ supplier }) {
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{supplier.supplierName}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{supplier.explanation}</p>
+        </div>
+        <Badge className={toneBadgeClass(supplier.riskLevel === "High" ? "escalate" : supplier.riskLevel === "Medium" ? "review" : "clean")}>
+          {supplier.riskLevel}
+        </Badge>
+      </div>
+      <dl className="mt-4 grid gap-3 border-t border-slate-200 pt-4 text-sm sm:grid-cols-3 dark:border-slate-700">
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Exceptions</dt>
+          <dd className="mt-1 font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{formatInteger(supplier.exceptionRows)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Exposure</dt>
+          <dd className="mt-1 font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{formatMoney(supplier.exposure)}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top codes</dt>
+          <dd className="mt-1 text-slate-700 dark:text-slate-300">{supplier.topExceptionCodes.length ? supplier.topExceptionCodes.join(", ") : "Not available"}</dd>
+        </div>
+      </dl>
+      <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+        <span className="font-semibold text-slate-950 dark:text-slate-100">Recommended procurement action: </span>
+        {supplier.recommendedAction}
+      </p>
+    </article>
+  );
+}
+
+function SupplierRiskSummary({ suppliers }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Supplier risk summary</p>
+        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Top supplier follow-through candidates</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+          Ranked by current batch exposure, escalation pressure, and exception concentration.
+        </p>
+      </div>
+      {suppliers.length ? (
+        <div className="mt-5 grid gap-3 xl:grid-cols-3">
+          {suppliers.map((supplier) => (
+            <SupplierRiskCard supplier={supplier} key={supplier.key} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800 dark:border-green-700 dark:bg-green-950/50 dark:text-green-200">
+          No supplier concentration detected in this batch.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function SupplierScorecard({ rows }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Supplier scorecard</p>
+        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Batch-based operational risk by supplier</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+          Risk labels explain the current batch signal only; they do not represent external supplier risk.
+        </p>
+      </div>
+      {rows.length ? (
+        <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <tr>
+                <th className="px-3 py-2" scope="col">Supplier</th>
+                <th className="px-3 py-2" scope="col">Diversity certification</th>
+                <th className="px-3 py-2 text-right" scope="col">Exceptions</th>
+                <th className="px-3 py-2 text-right" scope="col">Exposure</th>
+                <th className="px-3 py-2" scope="col">Risk</th>
+                <th className="px-3 py-2" scope="col">Why</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+              {rows.map((supplier) => (
+                <tr className="align-top hover:bg-slate-50 dark:hover:bg-slate-800" key={supplier.key}>
+                  <td className="px-3 py-3 font-semibold text-slate-900 dark:text-slate-100">{supplier.supplierName}</td>
+                  <td className="px-3 py-3 text-slate-700 dark:text-slate-300">{supplier.diversityCertification}</td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-800 dark:text-slate-200">{formatInteger(supplier.exceptionRows)}</td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-800 dark:text-slate-200">{formatMoney(supplier.exposure)}</td>
+                  <td className="px-3 py-3">
+                    <Badge className={toneBadgeClass(supplier.riskLevel === "High" ? "escalate" : supplier.riskLevel === "Medium" ? "review" : "clean")}>
+                      {supplier.riskLevel}
+                    </Badge>
+                  </td>
+                  <td className="max-w-md px-3 py-3 text-slate-700 dark:text-slate-300">
+                    <p>{supplier.riskExplanation}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{supplier.recommendedAction}</p>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          Supplier scorecard appears after analysis completes.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ExceptionLegend({ legend }) {
+  if (!legend.length) {
+    return (
+      <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+        No exception legend available for this batch.
+      </p>
+    );
+  }
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      {legend.map((item) => (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800" key={item.code}>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{item.code} · {item.label}</p>
+            <Badge className={toneBadgeClass(item.tone)}>{tierLabel(item.tier)}</Badge>
+          </div>
+          <p className="mt-2 font-mono text-xs tabular-nums text-slate-500 dark:text-slate-400">
+            {formatInteger(item.count)} rows · {formatMoney(item.exposure)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExceptionHeatmap({ rows, legend, takeaway }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Exception concentration heatmap</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Supplier by exception type</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">{takeaway}</p>
+        </div>
+        <Badge className={toneBadgeClass(rows.length ? "info" : "neutral")}>Batch exceptions only</Badge>
+      </div>
+
+      {rows.length && legend.length ? (
+        <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+          <table className="min-w-full text-center text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <tr>
+                <th className="px-3 py-2 text-left" scope="col">Supplier</th>
+                <th className="px-3 py-2 text-right" scope="col">Exposure</th>
+                {legend.map((item) => (
+                  <th className="px-3 py-2" key={item.code} scope="col">{item.code}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+              {rows.map((row) => (
+                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800" key={row.key}>
+                  <td className="px-3 py-3 text-left font-semibold text-slate-900 dark:text-slate-100">{row.supplierName}</td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatMoney(row.exposure)}</td>
+                  {row.cells.map((cell) => (
+                    <td className="px-2 py-3" key={`${row.key}-${cell.code}`}>
+                      <span className={`inline-flex min-w-8 justify-center rounded-md border px-2 py-1 font-mono tabular-nums ${analyticsHeatCellClass(cell.count)}`}>
+                        {cell.count > 0 ? cell.count : "—"}
+                      </span>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          No exception concentration data available.
+        </p>
+      )}
+
+      <div className="mt-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Exception legend</p>
+        <ExceptionLegend legend={legend} />
+      </div>
+    </section>
+  );
+}
+
+function PolicySimulatorSection({ policySummary, tolerances, onTolerancesChange, toleranceSimulation }) {
+  if (!policySummary.hasData) {
+    return (
+      <WorkbenchEmptyState
+        eyebrow="Policy simulator"
+        title="Policy simulation is available after analysis."
+        body="Run analysis to enable tolerance sensitivity controls for price, quantity, and receiving timing rules."
+        tone="neutral"
+      />
+    );
+  }
+
+  return (
+    <ToleranceSimulator
+      tolerances={tolerances}
+      onTolerancesChange={onTolerancesChange}
+      simulation={toleranceSimulation}
+      policySummary={policySummary}
+    />
+  );
+}
+
+function RootCausePatternCard({ pattern }) {
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <Badge className={toneBadgeClass(pattern.displayType === "Supplier concentration" ? "review" : pattern.displayType === "Policy sensitivity" ? "info" : "neutral")}>
+            {pattern.displayType}
+          </Badge>
+          <p className="mt-3 text-sm font-semibold leading-6 text-slate-950 dark:text-slate-100">{pattern.description}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Exposure</p>
+          <p className="mt-1 font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{formatMoney(pattern.totalExposure)}</p>
+        </div>
+      </div>
+      <p className="mt-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
+        <span className="font-semibold text-slate-950 dark:text-slate-100">Pattern review: </span>
+        {pattern.recommendedAction}
+      </p>
+      <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+        Affected invoices: {pattern.affectedInvoices.length ? pattern.affectedInvoices.join(", ") : "Not available"}
+      </p>
+    </article>
+  );
+}
+
+function RootCausePatternsSection({ rootCause }) {
+  return (
+    <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm dark:border-indigo-800 dark:bg-indigo-950/40">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Browser-only pattern review</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Pattern signals</h3>
+          <p className="mt-1 text-sm leading-6 text-indigo-900 dark:text-indigo-200">{rootCause.takeaway}</p>
+        </div>
+        <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">
+          Browser-only pattern review
+        </Badge>
+      </div>
+
+      {rootCause.patterns.length ? (
+        <>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <SummaryMetric
+              metric={{
+                id: "supplier-concentration",
+                label: "Supplier concentration",
+                value: rootCause.supplierConcentrationCount,
+                format: "integer",
+                tone: "neutral",
+                helper: "Repeated supplier signals"
+              }}
+            />
+            <SummaryMetric
+              metric={{
+                id: "policy-sensitivity",
+                label: "Policy sensitivity",
+                value: rootCause.policySensitivityCount,
+                format: "integer",
+                tone: "neutral",
+                helper: "Repeated exception rules"
+              }}
+            />
+            <SummaryMetric
+              metric={{
+                id: "receiving-timing",
+                label: "Receiving timing pattern",
+                value: rootCause.receivingTimingCount,
+                format: "integer",
+                tone: "neutral",
+                helper: "Warehouse or timing signals"
+              }}
+            />
+          </div>
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {rootCause.patterns.map((pattern) => (
+              <RootCausePatternCard pattern={pattern} key={pattern.id} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="mt-5 rounded-lg border border-indigo-200 bg-white p-4 text-sm font-semibold text-slate-800 dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200">
+          No supplier concentration detected in this batch.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function SupplierPolicyAnalyticsPanel({
-  dashboardReady,
-  analytics,
+  viewModel,
+  isAnalysisRunning,
+  hasAnalysisFailure,
+  onStart,
   tolerances,
   onTolerancesChange,
-  toleranceSimulation,
-  rootCauseAnalysis
+  toleranceSimulation
 }) {
+  if (isAnalysisRunning) {
+    return (
+      <section className="grid gap-4">
+        <SupplierPolicyHeader viewModel={viewModel} />
+        <WorkbenchEmptyState
+          eyebrow="Analysis in progress"
+          title="Supplier & Policy Analytics will appear after validation completes"
+          body="The Start page is running the prompt-chain workflow. This page avoids showing stale supplier analytics while analysis is in flight."
+          tone="info"
+        />
+      </section>
+    );
+  }
+
+  if (hasAnalysisFailure) {
+    return (
+      <section className="grid gap-4">
+        <SupplierPolicyHeader viewModel={viewModel} />
+        <WorkbenchEmptyState
+          eyebrow="Analysis failed"
+          title="Supplier & Policy Analytics is waiting for a successful run"
+          body="The previous run did not complete, so completed supplier analytics are withheld. Return to Start, resolve the failure, and rerun analysis."
+          actionLabel="Go to Start"
+          onAction={onStart}
+          tone="escalate"
+        />
+      </section>
+    );
+  }
+
+  if (!viewModel.hasData) {
+    return (
+      <section className="grid gap-4">
+        <SupplierPolicyHeader viewModel={viewModel} />
+        <WorkbenchEmptyState
+          eyebrow="Awaiting analysis"
+          title="Run analysis from Start to build supplier and policy analytics"
+          body="Completed results will populate supplier risk explanations, exception concentration, policy simulation, and browser-only pattern signals."
+          actionLabel="Go to Start"
+          onAction={onStart}
+          tone="neutral"
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="grid gap-4">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Supplier & Policy Analytics</h2>
-        <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-          {dashboardReady
-            ? "Supplier concentration, policy simulation, and root-cause views for analyst follow-through."
-            : "Run analysis to populate supplier, policy, and root-cause views."}
-        </p>
-      </section>
-      <SupplierAnalyticsPanel analytics={analytics} />
-      <ToleranceSimulator
+      <SupplierPolicyHeader viewModel={viewModel} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {viewModel.summaryCards.map((metric) => (
+          <SummaryMetric metric={metric} key={metric.id} />
+        ))}
+      </div>
+      <SupplierRiskSummary suppliers={viewModel.supplierRiskNarratives} />
+      <SupplierScorecard rows={viewModel.supplierScoreRows} />
+      <ExceptionHeatmap
+        rows={viewModel.heatmapRows}
+        legend={viewModel.exceptionLegend}
+        takeaway={viewModel.heatmapTakeaway}
+      />
+      <PolicySimulatorSection
+        policySummary={viewModel.policySimulation}
         tolerances={tolerances}
         onTolerancesChange={onTolerancesChange}
-        simulation={toleranceSimulation}
+        toleranceSimulation={toleranceSimulation}
       />
-      <RootCauseAnalysisPanel analysis={rootCauseAnalysis} />
+      <RootCausePatternsSection rootCause={viewModel.rootCause} />
     </section>
   );
 }
@@ -1333,6 +1746,15 @@ export default function App() {
       rootCauseAnalysis
     }),
     [actionResults, auditEntries, classificationResults, matchResults, parsedFiles, rootCauseAnalysis]
+  );
+  const supplierPolicyViewModel = useMemo(
+    () => buildSupplierPolicyAnalyticsViewModel({
+      analytics: dashboardAnalytics,
+      rootCauseAnalysis,
+      toleranceSimulation,
+      tolerances
+    }),
+    [dashboardAnalytics, rootCauseAnalysis, toleranceSimulation, tolerances]
   );
   const workbenchViewModel = useMemo(
     () => buildExceptionWorkbenchViewModel({
@@ -1767,12 +2189,13 @@ export default function App() {
 
         {activeWorkspace === "analytics" ? (
           <SupplierPolicyAnalyticsPanel
-            dashboardReady={Boolean(classificationResults)}
-            analytics={dashboardAnalytics}
+            viewModel={supplierPolicyViewModel}
+            isAnalysisRunning={Boolean(runningStep)}
+            hasAnalysisFailure={Boolean(error && failedStep)}
+            onStart={() => setActiveWorkspace("start")}
             tolerances={tolerances}
             onTolerancesChange={setTolerances}
             toleranceSimulation={toleranceSimulation}
-            rootCauseAnalysis={rootCauseAnalysis}
           />
         ) : null}
 

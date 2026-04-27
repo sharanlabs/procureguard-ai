@@ -1279,3 +1279,100 @@ Rework only the Exception Workbench so an AP analyst can quickly answer which in
 
 ### Next step
 Chunk 2A.4 Supplier & Policy Analytics grouping
+
+## Chunk 2A.4 Supplier & Policy Analytics grouping handoff — April 27, 2026
+
+### Purpose
+Rework only the Supplier & Policy Analytics page into a procurement management surface that answers which suppliers, warehouses, exception types, or policies are driving repeated operational risk, while preserving the Claude prompt-chain runtime and human-in-the-loop workflow.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- app/lib/dashboard.js
+- app/lib/format.js
+- app/lib/rootCause.js
+- app/lib/uiModels.js
+
+### Files changed
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/lib/uiModels.js
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T16-27-50-645Z.json
+- evals/results/eval_results_2026-04-27T16-34-27-469Z.json
+
+### View-model/helper changes
+- Added buildSupplierPolicyAnalyticsViewModel, buildSupplierRiskNarratives, buildSupplierScoreRows, buildExceptionLegend, buildPolicySimulationSummary, buildRootCauseSummary, getSupplierRiskExplanation, and getSupplierRecommendedAction in app/lib/uiModels.js.
+- Supplier and policy UI now consumes derived supplier risk rows, risk explanations, recommended actions, legend rows, heatmap rows, policy summary, and root-cause summary.
+- The helpers use only existing dashboard analytics, tolerance simulation, and root-cause outputs.
+
+### Supplier risk summary changes
+- Added a top supplier follow-through section ranked by batch exposure, escalation pressure, and exception concentration.
+- Each supplier card now includes a batch-based risk explanation and deterministic procurement action.
+
+### Supplier scorecard changes
+- Reworked scorecard columns around supplier, diversity certification, exception count, exposure, risk, and why the risk label was assigned.
+- Risk wording is explicitly batch-based and avoids external supplier-risk claims.
+
+### Heatmap/legend changes
+- Reworked the supplier exception heatmap with muted zero cells shown as em dashes.
+- Added a visible exception-code legend with code, human-readable label, tier label, count, and exposure.
+- Added a concise heatmap takeaway above the table.
+
+### Policy simulator changes
+- Kept the existing tolerance simulator behavior.
+- Improved simulator-only framing and added non-interactive policy profile labels: Conservative, Balanced, High-throughput, and Custom.
+- Preserved potential low-risk review shift wording and avoided any implication that simulation changes payment or approval behavior.
+
+### Root cause grouping changes
+- Grouped browser-only pattern review under Supplier & Policy Analytics.
+- Pattern signals now use concise display types: Supplier concentration, Policy sensitivity, and Receiving timing pattern.
+- Updated leftover root-cause wording in app/ProcureGuardDashboard.jsx to avoid blame-oriented phrasing.
+
+### Empty/loading/failure state changes
+- Before analysis, the page points users back to Start.
+- While analysis runs, the page avoids showing stale supplier analytics.
+- After failed analysis, completed supplier analytics are withheld.
+- No supplier concentration, heatmap data, simulator input, and pattern states now render calm empty messages.
+
+### Visual/UI changes
+- Added a stronger page header, compact analytics cards, clearer section grouping, tighter scorecard and heatmap density, tabular numbers, readable dark mode, and consistent empty states.
+- No global shell redesign, chart work, new dependencies, icon libraries, or animation libraries were added.
+
+### Backend files protected or touched
+- No backend files were touched.
+- app/lib/pipeline.js, app/lib/claude.js, api/messages.js, and app/lib/schemas.js were protected and unchanged.
+- prompts/, data/, evals/run_evals.js, and evals/golden_dataset.json were protected and unchanged.
+
+### Verification commands and results
+- Pre-edit git status --short: clean.
+- Pre-edit git branch -vv: main at bc2aff5, ahead of origin/main.
+- Pre-edit git log --oneline -10: confirmed bc2aff5, e670075, a6236f6, and fe8e374 at the top of recent history.
+- Pre-edit npm run build: passed with existing Vite chunk-size warning.
+- Pre-edit node evals/run_evals.js: passed 25/25, 100%.
+- Post-edit npm run build: passed with existing Vite chunk-size warning.
+- Final npm run build: passed with existing Vite chunk-size warning.
+- Final node evals/run_evals.js: passed 25/25, 100%.
+- node --check api/messages.js: passed.
+- grep -R "console.log" app api || true: no matches.
+- grep -R "localStorage" app api || true: no matches.
+- grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true: no matches.
+- grep -R "Send" app || true: no matches.
+- git diff --check: passed.
+- git status --short: modified supplier/policy UI files, progress/handoff, and generated eval results before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T16-34-27-469Z.json
+- Also generated evals/results/eval_results_2026-04-27T16-27-50-645Z.json during the required pre-edit eval gate.
+
+### Known issues
+- The existing Vite production chunk-size warning remains.
+- No live Claude API call was run during this pass.
+
+### Next step
+Chunk 2A.5 Audit & Governance / AI Reliability Center
