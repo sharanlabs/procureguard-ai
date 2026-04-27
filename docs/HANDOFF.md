@@ -2037,3 +2037,93 @@ TC-23 is the E10 tax-rate mismatch test only. INV-0013 remains the intended E03 
 
 ### Next step
 Production Rework Chunk 1.5 dependency pinning and git hygiene.
+
+## Production Rework Chunk 1.5 dependency pinning and git hygiene handoff — April 27, 2026
+
+### Purpose
+Make the repository dependency and build-artifact hygiene reproducible for production/team handoff without changing app runtime behavior, prompts, CSV data, eval logic, UI, or Claude API architecture.
+
+### Audit issues fixed
+- Replaced `latest` dependency ranges in package.json with exact versions from package-lock.json.
+- Confirmed `dist/` is ignored.
+- Confirmed no `dist/` artifacts are tracked by git.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- .gitignore
+- package.json
+- package-lock.json
+
+### Files changed
+- package.json
+- package-lock.json
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T23-08-26-339Z.json
+- evals/results/eval_results_2026-04-27T23-10-10-420Z.json
+
+### Dependency pinning behavior
+- `@anthropic-ai/sdk`: `0.91.1`
+- `react`: `19.2.5`
+- `react-dom`: `19.2.5`
+- `recharts`: `3.8.1`
+- `@tailwindcss/vite`: `4.2.4`
+- `@vitejs/plugin-react`: `6.0.1`
+- `autoprefixer`: `10.5.0`
+- `tailwindcss`: `4.2.4`
+- `vite`: `8.0.10`
+- No dependencies were added, removed, or upgraded.
+- No scripts were changed.
+
+### package-lock behavior
+- Ran `npm install --package-lock-only`.
+- package-lock.json changed only to replace the root package `latest` constraints with the exact pinned versions already resolved in the lockfile.
+- No resolved package versions or dependency tree entries changed.
+
+### dist/.gitignore behavior
+- .gitignore already contained `dist/`.
+- No .gitignore edit was needed.
+- The existing `.claude/settings.local.json` ignore rule was preserved.
+
+### dist untracking behavior
+- `git ls-files dist` returned no tracked files before edits.
+- `git ls-files dist` returned no tracked files after verification.
+- `git rm -r --cached dist/` was not needed and was not run.
+
+### Verification commands and results
+- Pre-edit `git status --short`: clean.
+- Pre-edit `git branch -vv`: `main` at `a67fcb4`, ahead of `origin/main` by 15.
+- Pre-edit `git log --oneline -10`: confirmed Chunk 1.4A, 1.3, 1.2, and 1.1 commits.
+- Pre-edit `git ls-files dist`: no output.
+- Pre-edit `cat .gitignore`: `dist/` already present.
+- Pre-edit `cat package.json`: all dependencies/devDependencies used `latest`.
+- Pre-edit package-lock root inspection: root constraints used `latest`; resolved package entries had exact versions.
+- Pre-edit `npm run build`: passed with existing Vite large-chunk warning.
+- Pre-edit `node evals/run_evals.js`: passed 25/25, 100%.
+- `npm install --package-lock-only`: passed; 0 vulnerabilities.
+- Final `npm run build`: passed with existing Vite large-chunk warning.
+- Final `node evals/run_evals.js`: passed 25/25, 100%.
+- `node --check api/messages.js`: passed.
+- `grep -R '"latest"' package.json || true`: no matches.
+- `grep -R "console.log" app api || true`: no matches.
+- `grep -R "localStorage" app api || true`: no matches.
+- `grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api || true`: no matches.
+- `grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true`: no matches.
+- `grep -R "Send" app || true`: no matches.
+- `git ls-files dist`: no output.
+- `git diff --check`: passed.
+- `git diff --name-only`: only allowed files changed.
+- `git status --short`: only intended modified files and generated eval result before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T23-10-10-420Z.json
+- Also generated during the required pre-edit eval gate: evals/results/eval_results_2026-04-27T23-08-26-339Z.json
+
+### Known issues
+- The existing Vite production large-chunk warning remains.
+- No live Claude API retest was run during this repo hygiene stage.
+
+### Next step
+Production Rework Chunk 1.6 documentation fixes.

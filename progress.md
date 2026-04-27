@@ -29,7 +29,8 @@ Production Rework Chunk 1.1 Timeout fix completed after live timeout on invoices
 Production Rework Chunk 1.2 Prompt caching completed.
 Production Rework Chunk 1.3 Partial result saving and chunk-level retry completed.
 Production Rework Chunk 1.4A resolved the TC-23/E12 data conflict and completed the E12 eval fix.
-Next: Production Rework Chunk 1.5 dependency pinning and git hygiene
+Production Rework Chunk 1.5 dependency pinning and git hygiene completed.
+Next: Production Rework Chunk 1.6 documentation fixes
 
 ## Stage log
 
@@ -118,7 +119,8 @@ Next: Production Rework Chunk 1.5 dependency pinning and git hygiene
   - Analyze now retains successful chunk outputs in in-memory run state, records failed stage/chunk/range metadata, and can retry only safe failed chunks before continuing the prompt chain
   - Partial runs keep completed chunks visible only as clearly marked partial data; final dashboard state remains withheld until all stages complete and merge validation passes
   - Production Rework Chunk 1.4A resolved the TC-23/E12 data conflict and completed the E12 eval fix
-  - Production Rework Chunk 1.5 dependency pinning and git hygiene is the next step
+  - Production Rework Chunk 1.5 dependency pinning and git hygiene completed
+  - Production Rework Chunk 1.6 documentation fixes is the next step
 
 ## Decisions pending
 
