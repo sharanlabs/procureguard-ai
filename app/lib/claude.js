@@ -26,6 +26,7 @@ const NUMERIC_CONSTRAINT_ERROR_HELP =
   "Anthropic rejected the schema because number types do not support minimum/maximum/multipleOf constraints. The app now strips these automatically. Restart the dev server and try again.";
 const MAX_TOKENS_HELP =
   "Claude reached the output token limit before completing structured JSON. The app analyzes invoices in smaller chunks to reduce output size. Retry the analysis.";
+const EPHEMERAL_CACHE_CONTROL = { type: "ephemeral" };
 
 function wait(ms) {
   return new Promise((resolve) => {
@@ -159,11 +160,21 @@ function normalizeMaxTokens(maxTokens = DEFAULT_MAX_TOKENS) {
   return maxTokens;
 }
 
+function buildCachedSystemBlocks(systemPrompt) {
+  return [
+    {
+      type: "text",
+      text: String(systemPrompt ?? ""),
+      cache_control: EPHEMERAL_CACHE_CONTROL
+    }
+  ];
+}
+
 export function buildClaudeRequestBody({ systemPrompt, userMessage, model, schema, maxTokens = DEFAULT_MAX_TOKENS }) {
   return {
     model,
     max_tokens: normalizeMaxTokens(maxTokens),
-    system: systemPrompt,
+    system: buildCachedSystemBlocks(systemPrompt),
     messages: [{ role: "user", content: userMessage }],
     output_config: buildStructuredOutputConfig(schema)
   };

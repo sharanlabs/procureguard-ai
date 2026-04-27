@@ -1687,3 +1687,145 @@ Fix the live local timeout observed during the completed chunked Claude pipeline
 
 ### Next step
 Live local API retest, then Chunk 1.2 Prompt caching if timeout is resolved.
+
+## Production Rework Chunk 1.2 Prompt caching handoff — April 27, 2026
+
+### Purpose
+Enable Anthropic 5-minute ephemeral prompt caching for repeated chunk calls so the static stage prompt content can be reused across matching, classification, and action-generation chunks without changing prompts, schemas, model routing, chunk size, retry behavior, validation, or UI structure.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/ProcureGuard.jsx
+- app/lib/claude.js
+- app/lib/pipeline.js
+- app/lib/audit.js
+- app/lib/schemas.js
+- api/messages.js
+- package.json
+- vite.config.js
+- app/lib/dashboard.js
+- app/lib/uiModels.js
+- app/ProcureGuardDashboard.jsx
+
+### Files changed
+- app/lib/claude.js
+- app/ProcureGuard.jsx
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-27T21-08-40-006Z.json
+- evals/results/eval_results_2026-04-27T21-10-50-144Z.json
+- evals/results/eval_results_2026-04-27T21-11-46-620Z.json
+
+### Prompt caching implementation
+- Added `EPHEMERAL_CACHE_CONTROL = { type: "ephemeral" }` in `app/lib/claude.js`.
+- Added a small `buildCachedSystemBlocks` helper that wraps each stage prompt as an Anthropic system text block with `cache_control`.
+- Cached only the stable system prompt text loaded from the existing prompt files.
+- Left dynamic chunk payloads in the user message uncached.
+- Did not alter prompt text, prompt files, chunk payload construction, schemas, output parsing, retries, stage timeouts, or result validation.
+
+### Request body structure changes
+- Before this chunk, `buildClaudeRequestBody` sent `system` as a plain string.
+- It now sends:
+  ```
+  system: [
+    {
+      type: "text",
+      text: systemPrompt,
+      cache_control: { type: "ephemeral" }
+    }
+  ]
+  ```
+- `messages` remains `[{ role: "user", content: userMessage }]`.
+- `userMessage` continues to hold the dynamic current chunk data.
+- `output_config.format` remains unchanged and still comes from `buildStructuredOutputConfig(schema)`.
+- A request-body smoke check confirmed `system` is a cached text block, dynamic message content remains in `messages[0].content`, and `output_config.format.type` remains `json_schema`.
+
+### Beta header decision
+- No `anthropic-beta` prompt-caching header was added.
+- Reason: current Anthropic prompt caching guidance supports `cache_control: { type: "ephemeral" }` directly on cacheable content blocks, with a default 5-minute lifetime.
+- No extended 1-hour cache TTL or extended-cache beta header was added.
+
+### Proxy compatibility changes
+- `api/messages.js` was inspected and did not require modification.
+- `cache_control` fields are outside the schema normalization path and are not stripped.
+- System array blocks pass through because the production proxy validates required model/messages/max_tokens/output_config fields and does not reject `system` arrays.
+- `output_config.format` normalization remains unchanged.
+- Production API key remains server-side through `process.env.ANTHROPIC_API_KEY`.
+- Local development still uses the Vite `/api/messages` proxy with the session-only `x-api-key` header.
+
+### Cache usage/token handling
+- `callClaudeAPI` already returns `raw.usage` as `token_usage`, preserving unknown usage fields.
+- Anthropic cache fields such as `cache_creation_input_tokens` and `cache_read_input_tokens` remain preserved in audit entries through the existing `token_usage` object.
+- Added a small Audit & Governance audit-row display for cache write/read token fields when returned.
+- Audit CSV export remains unchanged and does not include raw prompts, raw invoice payloads, or API keys.
+- No new cache pricing was added. Existing cost calculations were not expanded or relabeled in this chunk.
+
+### API contract preservation
+- `/api/messages` remains the only app-facing Claude endpoint.
+- No direct app call to `https://api.anthropic.com` was introduced.
+- `output_config.format` remains the structured-output request shape.
+- No `output_format` usage was introduced.
+- No old `output_config.type` request shape was introduced.
+- No `additionalProperties: true` was introduced.
+- Current model routing, `max_tokens` behavior, and stage-aware timeout behavior are preserved.
+- Strict result count/order validation and partial-result protection are unchanged.
+
+### Security behavior
+- No API key logging was added.
+- No `console.log` usage was added.
+- No `localStorage` usage was added.
+- No raw invoice payloads are written into audit export.
+- Cacheable content is not logged or exported.
+- No autonomous approval, payment release, fraud accusation, AI-decided wording, real email sending, or Send button was added.
+
+### Verification commands and results
+- Pre-edit `git status --short`: clean before the required eval generated `evals/results/eval_results_2026-04-27T21-08-40-006Z.json`.
+- Pre-edit `git branch -vv`: `main` at `9745ca5`, ahead of `origin/main` by 12.
+- Pre-edit `git log --oneline -10`: confirmed `9745ca5`, `a29bf82`, and `fe8e374` in recent history.
+- Pre-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Pre-edit `node evals/run_evals.js`: passed 25/25, 100%.
+- Request-body smoke check: passed; cached system block and `output_config.format.type = json_schema` confirmed.
+- Post-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Post-edit `node evals/run_evals.js`: passed 25/25, 100%.
+- Final `npm run build`: passed with the existing Vite large-chunk warning.
+- Final `node evals/run_evals.js`: passed 25/25, 100%.
+- `node --check api/messages.js`: passed.
+- `grep -R "console.log" app api || true`: no matches.
+- `grep -R "localStorage" app api || true`: no matches.
+- `grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api || true`: no matches.
+- `grep -R "output_format" app api vite.config.js || true`: no matches.
+- `grep -R "output_config:.*type" app api vite.config.js || true`: no matches.
+- `grep -R "additionalProperties: true" app api || true`: no matches.
+- `grep -R '"additionalProperties": true' app api || true`: no matches.
+- `grep -R "https://api.anthropic.com" app || true`: no matches.
+- `grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true`: no matches.
+- `grep -R "Send" app || true`: no matches.
+- `git diff --check`: passed.
+- `git diff --name-only`: only app/ProcureGuard.jsx, app/lib/claude.js, docs/HANDOFF.md, and progress.md.
+- `git status --short`: showed only intended modified files and generated eval result files before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-27T21-11-46-620Z.json
+- Also generated during verification: evals/results/eval_results_2026-04-27T21-10-50-144Z.json
+- Also generated during the required pre-edit eval gate: evals/results/eval_results_2026-04-27T21-08-40-006Z.json
+
+### Known issues
+- No live Claude API retest was run during this code change.
+- The existing Vite production large-chunk warning remains.
+- Existing cost panels still use the repository's prior cost model; this chunk preserves cache usage fields and does not add new cache pricing.
+
+### Manual live retest steps
+1. Restart Vite dev server.
+2. Open local app.
+3. Upload purchase_orders.csv, invoices.csv, goods_receipts.csv.
+4. Enter local Anthropic API key.
+5. Click Analyze.
+6. Confirm all chunks complete.
+7. Confirm token usage includes normal usage and cache usage fields if Anthropic returns them.
+8. Confirm Executive Summary, Exception Workbench, Supplier & Policy Analytics, and Audit & Governance render.
+9. Export audit CSV and confirm no raw payloads or API keys appear.
+
+### Next step
+Live local API retest, then Chunk 1.3 partial result saving and chunk-level retry.

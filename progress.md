@@ -26,7 +26,8 @@ Chunk 2A.4 Supplier & Policy Analytics grouping completed.
 Chunk 2A.5 Audit & Governance / AI Reliability Center completed.
 Chunk 2A.6 Visual consistency, spacing, and responsive polish completed.
 Production Rework Chunk 1.1 Timeout fix completed after live timeout on invoices 21-25.
-Next: Live local API retest, then Chunk 1.2 Prompt caching if timeout is resolved
+Production Rework Chunk 1.2 Prompt caching completed.
+Next: Live local API retest, then Chunk 1.3 partial result saving and chunk-level retry
 
 ## Stage log
 
@@ -109,7 +110,9 @@ Next: Live local API retest, then Chunk 1.2 Prompt caching if timeout is resolve
   - Shared visual rhythm, typography, navigation, semantic color, responsive wrapping, dark mode, focus states, and empty-state treatment now align across the five product surfaces
   - Production Rework Chunk 1.1 Timeout fix completed after live timeout on invoices 21-25
   - Claude API timeouts are now stage-aware: matching remains 60 seconds, classification is 120 seconds, and action generation is 120 seconds
-  - Live local API retest, then Chunk 1.2 Prompt caching if timeout is resolved is the next step
+  - Production Rework Chunk 1.2 Prompt caching completed
+  - Claude request bodies now mark stable stage system prompts with 5-minute ephemeral prompt caching while keeping dynamic chunk data uncached
+  - Live local API retest, then Chunk 1.3 partial result saving and chunk-level retry is the next step
 
 ## Decisions pending
 

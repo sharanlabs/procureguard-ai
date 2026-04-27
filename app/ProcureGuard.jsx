@@ -1187,6 +1187,8 @@ function AuditTrailSummaryAndExport({ viewModel, onExport }) {
 function AuditEntryRow({ entry, index }) {
   const inputTokens = entry.token_usage?.input_tokens ?? entry.token_usage?.prompt_tokens;
   const outputTokens = entry.token_usage?.output_tokens ?? entry.token_usage?.completion_tokens;
+  const cacheCreationTokens = entry.token_usage?.cache_creation_input_tokens;
+  const cacheReadTokens = entry.token_usage?.cache_read_input_tokens;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800">
@@ -1205,6 +1207,7 @@ function AuditEntryRow({ entry, index }) {
         <FieldRow label="Invoice range" value={entry.chunk?.invoice_range || "Not available"} />
         <FieldRow label="Latency" value={formatTelemetryDuration(entry.latency_ms)} />
         <FieldRow label="Tokens" value={`In ${formatOptionalInteger(inputTokens)} · Out ${formatOptionalInteger(outputTokens)}`} />
+        <FieldRow label="Cache tokens" value={`Write ${formatOptionalInteger(cacheCreationTokens)} · Read ${formatOptionalInteger(cacheReadTokens)}`} />
         <FieldRow label="Output summary" value={`${entry.output_summary?.invoice_count ?? 0} invoices · ${entry.output_summary?.exception_count ?? 0} exceptions`} />
       </dl>
       {entry.error_message ? (
