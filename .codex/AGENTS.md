@@ -1,10 +1,13 @@
-# ProcureGuard Codex Workflow Guard
+# ProcureGuard AI — Codex Workflow Guard
 
-- Use GSD-style staged execution: confirm scope, read the listed files, implement narrowly, verify, then commit only after checks pass.
-- Use Superpowers-style verification before completion: test the claimed behavior, inspect diffs, and report any unverified risk plainly.
-- Run PEEC/Observer-style gotcha checks for protected files, hidden product behavior changes, unsafe wording, secret exposure, and scope drift.
-- Respect each stage's protected files. Do not touch `app/`, `api/`, `prompts/`, `data/`, eval harness/data, package files, Vite config, or docs outside scope unless the stage explicitly allows it.
-- Preserve ProcureGuard invariants: Claude runtime stack, Anthropic Messages API, Vercel `/api/messages`, current prompt chain, prompt caching, strict evals at 25/25, and human-in-the-loop review labels.
-- Preserve HITL constraints: DRAFT-only communications, no Send button, no autonomous approval/payment language, and no fraud accusation language.
-- Keep unexpected repo findings separate as Known issues instead of silently fixing them.
-- Before committing, verify product checks requested by the stage and confirm no runtime product files changed during tooling-only work.
+- Confirm scope before editing.
+- Read the listed files before making changes.
+- Keep each stage narrow and avoid unrelated fixes.
+- Respect protected files from the prompt.
+- Preserve HITL constraints: DRAFT-only communications, no Send button, no automatic approval/payment language, and no fraud accusation language.
+- Preserve Claude as the runtime AI stack.
+- Preserve the Vercel /api/messages path and server-side production API key handling.
+- Preserve 25/25 evals unless the stage explicitly updates test expectations.
+- Run required verification before committing.
+- Report unexpected repo findings, scope drift risks, and protected-file changes.
+- Do not override Codex IDE model, reasoning, sandbox, approval, or execution settings.
