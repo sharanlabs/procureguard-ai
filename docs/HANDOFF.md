@@ -2536,3 +2536,98 @@ Create a professional typography foundation for ProcureGuard AI without changing
 
 ### Next step
 Production Rework Chunk 2.2 Icon system
+
+## Production Rework Chunk 2.1R reference-backed typography audit handoff — April 28, 2026
+
+### Purpose
+Inspect selected dashboard and invoice UI references after Chunk 2.1, compare their typography and hierarchy patterns against ProcureGuard, and make only narrow typography refinements that improve clarity without changing product structure or runtime behavior.
+
+### Files reviewed
+- AGENTS.md
+- .codex/AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- index.html
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- package.json
+- package-lock.json
+
+### Reference repos inspected
+- /Users/sharan_98/Desktop/procureguard-references/free-react-tailwind-admin-dashboard
+  - src/index.css
+  - src/components/ecommerce/EcommerceMetrics.tsx
+  - src/components/common/ComponentCard.tsx
+  - src/components/tables/BasicTables/BasicTableOne.tsx
+- /Users/sharan_98/Desktop/procureguard-references/shadcnspace
+  - src/app/globals.css
+  - src/components/common/typography.tsx
+  - src/components/shadcn-space/blocks/dashboard-shell-01/page.tsx
+  - src/components/shadcn-space/blocks/dashboard-shell-01/statistics.tsx
+  - src/components/shadcn-space/blocks/dashboard-shell-01/top-product-table.tsx
+- /Users/sharan_98/Desktop/procureguard-references/tailwindcss-invoice-dashboard
+  - index.html
+  - style/tailwind.css
+
+### Reference principles adapted
+- Keep dashboard labels quiet, compact, and secondary to the metric value.
+- Preserve dense 13px-14px body/table readability for invoice and review workflows.
+- Use 16px card or section headings and 20px-32px metric values only where hierarchy needs it.
+- Keep numeric displays stable and aligned with tabular treatment.
+- Avoid negative tight letter-spacing on metric values and operational identifiers.
+- Maintain muted dark-mode metadata so raw technical details do not dominate decision surfaces.
+
+### Reference ideas rejected
+- Did not adopt icon-heavy navigation, decorative imagery, or sidebar-driven dashboard structure.
+- Did not adopt oversized 30px+ card metrics for ordinary ProcureGuard panels.
+- Did not adopt alternate font families, shadcn component imports, Tailwind theme rewrites, or any dependency changes.
+- Did not adopt broad color palette changes, marketing-style hero typography, animations, or card layout redesigns.
+- Did not copy code directly from any reference repo.
+
+### Files changed
+- app/styles.css
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-28T03-33-36-294Z.json
+- evals/results/eval_results_2026-04-28T03-37-42-544Z.json
+
+### Typography refinements made
+- Added an app-scoped `.pg-shell .tracking-tight` override so existing tight tracking utility usage resolves to zero letter spacing inside ProcureGuard.
+- Added explicit zero letter spacing to `pg-metric-value` and `pg-hero-value`.
+- Kept the Chunk 2.1 Inter import, type tokens, tabular number treatment, and line-height hierarchy intact.
+- Did not change JSX structure, layout grids, navigation, content order, values, calculations, or pipeline state.
+
+### Product structure preservation
+- Preserved the five-surface IA: Start, Executive Summary, Exception Workbench, Supplier & Policy Analytics, and Audit & Governance.
+- Did not add icons, animations, command strip, scroll briefing architecture, Verdict/Evidence/Pattern/Proof sections, Send controls, or new pipeline states.
+- Did not modify app/lib, api, prompts, data, eval harness logic, golden dataset, package files, or .codex.
+
+### Verification commands and results
+- Pre-edit `git status --short`: clean before the required baseline eval generated an eval artifact.
+- Pre-edit `git branch -vv`: `main` at `4093ae2`, ahead of `origin/main` by 25.
+- Pre-edit `git log --oneline -10`: confirmed Chunk 2.1 typography foundation commit at HEAD.
+- Pre-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Pre-edit `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- Post-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Post-edit `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- `node --check api/messages.js`: passed.
+- `grep -R '"latest"' package.json || true`: no matches.
+- `grep -R "console.log" app api || true`: no matches.
+- `grep -R "localStorage" app api || true`: no matches.
+- `grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api || true`: no matches.
+- `grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true`: no matches.
+- `grep -R "Send" app || true`: no matches.
+- `grep -R -n "GSD\|gsd\|get-shit-done\|auto_advance\|--auto\|autonomous\|model_reasoning_effort\|reasoning_effort\|approval_policy\|sandbox_mode" .codex 2>/dev/null || true`: no matches.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-28T03-33-36-294Z.json
+- evals/results/eval_results_2026-04-28T03-37-42-544Z.json
+
+### Known issues
+- The existing Vite production large-chunk warning remains.
+- No live Claude API retest was run during this reference-backed typography audit.
+- Some legacy JSX utility class names remain by design; app-scoped CSS normalizes the typography output without widening the stage.
+
+### Next step
+Production Rework Chunk 2.2 Icon system

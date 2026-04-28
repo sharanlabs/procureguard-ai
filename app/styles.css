@@ -147,6 +147,10 @@ summary::marker {
   line-height: var(--leading-body);
 }
 
+.pg-shell .tracking-tight {
+  letter-spacing: 0;
+}
+
 .dark.pg-shell,
 .dark .pg-shell {
   background:
@@ -321,11 +325,13 @@ summary::marker {
 .pg-metric-value {
   font-size: var(--text-xl);
   line-height: var(--leading-tight);
+  letter-spacing: 0;
 }
 
 .pg-hero-value {
   font-size: var(--text-hero);
   line-height: var(--leading-tight);
+  letter-spacing: 0;
 }
 
 .pg-button {

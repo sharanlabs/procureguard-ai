@@ -34,6 +34,7 @@ Production Rework Chunk 1.5 dependency pinning and git hygiene completed.
 Production Rework Chunk 1.6 documentation fixes completed.
 Production Rework Chunk 1.3 structured outputs beta header cleanup completed.
 Production Rework Chunk 2.1 Typography foundation completed.
+Production Rework Chunk 2.1R reference-backed typography audit completed.
 Next: Production Rework Chunk 2.2 Icon system
 
 ## Stage log
@@ -132,6 +133,8 @@ Next: Production Rework Chunk 2.2 Icon system
   - Structured output request construction already used `output_config.format`; no obsolete structured-output beta header was present in the inspected app/API/Vite path
   - Production Rework Chunk 2.1 Typography foundation completed
   - Added Google-hosted Inter, shared typography tokens, app-scoped type scale normalization, shared tabular metric styles, and calmer body/metadata line-height treatment without changing product structure
+  - Production Rework Chunk 2.1R reference-backed typography audit completed
+  - Reference dashboard typography confirmed the compact label/body/title hierarchy, tabular metric treatment, and dense invoice/table readability; ProcureGuard now neutralizes negative tight letter-spacing inside the app shell without changing product structure
 
 ## Decisions pending
 
