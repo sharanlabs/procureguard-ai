@@ -538,7 +538,7 @@ function SummaryMetric({ metric }) {
   return (
     <article className={`pg-card-compact ${toneBorderClass(metric.tone)}`}>
       <p className="pg-meta font-semibold uppercase tracking-wide">{metric.label}</p>
-      <p className="pg-tabular mt-2 font-mono text-xl font-semibold leading-tight text-slate-950 dark:text-slate-100">{value}</p>
+      <p className="pg-metric-value mt-2 font-mono font-semibold text-slate-950 dark:text-slate-100">{value}</p>
       <p className="pg-meta mt-1">{metric.helper}</p>
     </article>
   );
@@ -980,7 +980,7 @@ function GovernanceMetric({ label, value, helper, tone = "neutral", isNumber = t
   return (
     <article className={`pg-card-compact ${toneBorderClass(tone)}`}>
       <p className="pg-meta font-semibold uppercase tracking-wide">{label}</p>
-      <p className={`${isNumber ? "font-mono pg-tabular" : ""} mt-2 text-lg font-semibold leading-6 text-slate-950 dark:text-slate-100`}>
+      <p className={`${isNumber ? "font-mono pg-metric-value" : "text-lg leading-6"} mt-2 font-semibold text-slate-950 dark:text-slate-100`}>
         {value}
       </p>
       {helper ? <p className="pg-meta mt-2">{helper}</p> : null}

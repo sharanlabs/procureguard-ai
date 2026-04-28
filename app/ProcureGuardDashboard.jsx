@@ -117,7 +117,7 @@ function Metric({ label, value }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-2 font-mono text-2xl font-semibold tabular-nums text-slate-950 dark:text-slate-100">
+      <p className="pg-metric-value mt-2 font-mono font-semibold text-slate-950 dark:text-slate-100">
         {value}
       </p>
     </div>
@@ -233,7 +233,7 @@ function DecisionCard({ viewModel, analytics }) {
         {stats.map((stat) => (
           <div key={stat.label}>
             <dt className="text-xs font-semibold uppercase tracking-wide opacity-70">{stat.label}</dt>
-            <dd className="mt-1 font-mono text-lg font-semibold tabular-nums">{stat.value}</dd>
+            <dd className="pg-metric-value mt-1 font-mono font-semibold">{stat.value}</dd>
           </div>
         ))}
       </dl>
@@ -245,7 +245,7 @@ function HeroMetricCard({ metric }) {
   return (
     <article className={`pg-card-compact ${toneClasses(metric.tone)}`}>
       <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{metric.label}</p>
-      <p className="mt-3 font-mono text-2xl font-semibold tracking-tight tabular-nums">{formatMetricValue(metric)}</p>
+      <p className="pg-hero-value mt-3 font-mono font-semibold tracking-tight">{formatMetricValue(metric)}</p>
       <p className="mt-2 text-sm leading-5 opacity-80">{metric.helper}</p>
     </article>
   );

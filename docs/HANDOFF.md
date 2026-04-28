@@ -2425,3 +2425,114 @@ Inspect and clean structured-output beta header usage while preserving the curre
 
 ### Next step
 Production Rework Chunk 2.1 Typography foundation.
+
+## Production Rework Chunk 2.1 Typography foundation handoff — April 28, 2026
+
+### Purpose
+Create a professional typography foundation for ProcureGuard AI without changing product structure, layout architecture, pipeline behavior, prompts, data, eval logic, API behavior, dependencies, or Codex tooling.
+
+### Files reviewed
+- AGENTS.md
+- .codex/AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- index.html
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/styles.css
+- app/lib/format.js
+- app/lib/uiModels.js
+- package.json
+- package-lock.json
+
+### Files changed
+- index.html
+- app/styles.css
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-28T03-20-38-774Z.json
+- evals/results/eval_results_2026-04-28T03-25-12-195Z.json
+
+### Inter font behavior
+- Added the Google Fonts CDN Inter stylesheet in index.html.
+- Did not add font files, dependencies, or build-tooling changes.
+- app/styles.css now applies the shared Inter font stack through `--font-sans` on `:root`, `body`, and `.pg-shell`.
+
+### Typography token changes
+- Added `--font-sans`, `--text-xs`, `--text-sm`, `--text-base`, `--text-lg`, `--text-xl`, `--text-hero`, `--leading-tight`, and `--leading-body`.
+- Replaced rough shared CSS font sizes for page titles, section titles, body copy, metadata, controls, tabs, and table text with token-backed values.
+- Replaced shared `font-weight: 650` usage with imported Inter weights.
+
+### Type scale application
+- Small labels and captions normalize through the app-scoped `text-xs` override and `pg-kicker` / `pg-meta`.
+- Secondary and body text normalize through `text-sm`, `pg-copy`, and table wrappers.
+- UI controls normalize through `pg-button`, `pg-control`, and app-scoped base text.
+- Section subheaders use the 16px token; page titles use the 20px token.
+- Executive hero metric values use the 32px hero token through `pg-hero-value`.
+
+### Tabular number treatment
+- Expanded shared tabular number styling through `pg-tabular`, `pg-number`, `pg-metric-value`, `pg-hero-value`, and existing `tabular-nums` usages inside `.pg-shell`.
+- Applied `pg-metric-value` and `pg-hero-value` to shared metric components in the app and dashboard.
+- Did not change formulas, values, cache-aware cost logic, dashboard calculations, or numeric helpers.
+
+### Line-height/hierarchy changes
+- Large and hero values use `--leading-tight` at 1.1.
+- Body and explanatory copy use `--leading-body` at 1.5.
+- Metadata is quieter through the 11px token and shared metadata color.
+- Page titles and section headings are clearer but smaller and less cluttered than the previous clamped sizing.
+
+### Product structure preservation
+- Preserved the five-surface IA: Start, Executive Summary, Exception Workbench, Supplier & Policy Analytics, and Audit & Governance.
+- Did not add Verdict/Evidence/Pattern/Proof sections, scroll briefing architecture, command strip, icons, animations, Send controls, or pipeline states.
+- Did not change Claude pipeline behavior, prompts, data, API behavior, eval harness logic, golden dataset, or package dependencies.
+
+### Codex tooling preservation
+- .codex/ was read only.
+- No GSD, get-shit-done, auto-advance workflow, hook, model/reasoning/sandbox/approval override, or Codex IDE behavior change was introduced.
+- Codex guard grep returned no matches before and after editing.
+
+### Observer checkpoint findings
+- Stage stayed limited to typography: yes.
+- Layout or product architecture changed: no.
+- Protected files touched: no.
+- Hardcoded typography roughness remains: some legacy Tailwind text utility class names remain in JSX, but they are normalized inside `.pg-shell` through the new app-scoped token overrides.
+- Typography changes make the UI clearer without clutter: yes; titles, labels, controls, body copy, metadata, and metric values now have a tighter shared scale.
+- GSD/get-shit-done references found or reintroduced: no.
+- Gotchas discovered: the required pre-edit eval generated an untracked eval result artifact; the existing Vite large-chunk warning remains.
+- Stage followed the production rework plan: yes.
+
+### Verification commands and results
+- Pre-edit `git status --short`: clean.
+- Pre-edit `git branch -vv`: `main` at `93f72eb`, ahead of `origin/main` by 24.
+- Pre-edit `git log --oneline -10`: confirmed recent accepted tooling/API/cache commits.
+- Pre-edit `git ls-files .codex | sort`: only `.codex/AGENTS.md`.
+- Pre-edit Codex guard grep: no matches.
+- Pre-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Pre-edit `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- Post-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Post-edit `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- `node --check api/messages.js`: passed.
+- `grep -R '"latest"' package.json || true`: no matches.
+- `grep -R "console.log" app api || true`: no matches.
+- `grep -R "localStorage" app api || true`: no matches.
+- `grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api || true`: no matches.
+- `grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true`: no matches.
+- `grep -R "Send" app || true`: no matches.
+- Post-edit Codex guard grep: no matches.
+- `git diff --check`: passed.
+- `git diff --name-only`: only allowed typography/docs files changed.
+- `git status --short`: intended modified files plus generated eval result artifacts before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-28T03-25-12-195Z.json
+- Also generated during the required pre-edit eval gate: evals/results/eval_results_2026-04-28T03-20-38-774Z.json
+
+### Known issues
+- The existing Vite production large-chunk warning remains.
+- No live Claude API retest was run during this typography stage.
+- Some legacy JSX utility class names remain by design; the new foundation normalizes their visual output inside `.pg-shell`.
+
+### Next step
+Production Rework Chunk 2.2 Icon system

@@ -12,9 +12,16 @@
   --color-surface-dark: #1e293b;
   --color-text: #0f172a;
   --color-text-dark: #f1f5f9;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-hero: 2rem;
+  --leading-tight: 1.1;
+  --leading-body: 1.5;
+  font-family: var(--font-sans);
   color: var(--color-text);
   background: var(--color-surface);
 }
@@ -24,6 +31,9 @@ body {
   min-height: 100vh;
   margin: 0;
   background: var(--color-surface);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -92,6 +102,49 @@ summary::marker {
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.05), transparent 24rem),
     #f8fafc;
   color: #0f172a;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+}
+
+.pg-shell .text-xs {
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+
+.pg-shell .text-sm {
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.pg-shell .text-base {
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+}
+
+.pg-shell .text-lg {
+  font-size: var(--text-lg);
+  line-height: 1.35;
+}
+
+.pg-shell .text-xl {
+  font-size: var(--text-xl);
+  line-height: 1.2;
+}
+
+.pg-shell .text-2xl,
+.pg-shell .text-3xl {
+  font-size: var(--text-hero);
+  line-height: var(--leading-tight);
+}
+
+.pg-shell .leading-tight {
+  line-height: var(--leading-tight);
+}
+
+.pg-shell .leading-5,
+.pg-shell .leading-6 {
+  line-height: var(--leading-body);
 }
 
 .dark.pg-shell,
@@ -119,17 +172,17 @@ summary::marker {
 
 .pg-app-title {
   margin: 0;
-  font-size: clamp(2rem, 4vw, 2.625rem);
-  line-height: 1;
+  font-size: var(--text-hero);
+  line-height: var(--leading-tight);
   letter-spacing: 0;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .pg-app-subtitle {
   margin-top: 0.5rem;
   color: #475569;
-  font-size: 1rem;
-  line-height: 1.5;
+  font-size: var(--text-lg);
+  line-height: var(--leading-body);
 }
 
 .dark .pg-app-subtitle {
@@ -185,10 +238,10 @@ summary::marker {
   margin-top: 0.25rem;
   max-width: 72rem;
   color: #020617;
-  font-size: clamp(1.35rem, 2vw, 1.625rem);
+  font-size: var(--text-xl);
   line-height: 1.2;
   letter-spacing: 0;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .dark .pg-page-title {
@@ -198,10 +251,10 @@ summary::marker {
 .pg-section-title {
   margin-top: 0.25rem;
   color: #020617;
-  font-size: 1.0625rem;
+  font-size: var(--text-lg);
   line-height: 1.35;
   letter-spacing: 0;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .dark .pg-section-title {
@@ -210,8 +263,8 @@ summary::marker {
 
 .pg-kicker {
   color: #2563eb;
-  font-size: 0.75rem;
-  line-height: 1rem;
+  font-size: var(--text-xs);
+  line-height: 1.35;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -239,14 +292,14 @@ summary::marker {
 
 .pg-copy {
   color: #475569;
-  font-size: 0.875rem;
-  line-height: 1.65;
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
 }
 
 .pg-meta {
   color: #64748b;
-  font-size: 0.75rem;
-  line-height: 1.45;
+  font-size: var(--text-xs);
+  line-height: var(--leading-body);
 }
 
 .dark .pg-copy {
@@ -257,8 +310,22 @@ summary::marker {
   color: #94a3b8;
 }
 
-.pg-tabular {
+.pg-tabular,
+.pg-number,
+.pg-metric-value,
+.pg-hero-value,
+.pg-shell .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+.pg-metric-value {
+  font-size: var(--text-xl);
+  line-height: var(--leading-tight);
+}
+
+.pg-hero-value {
+  font-size: var(--text-hero);
+  line-height: var(--leading-tight);
 }
 
 .pg-button {
@@ -268,9 +335,9 @@ summary::marker {
   border-radius: 0.625rem;
   min-height: 2.5rem;
   padding: 0.625rem 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-base);
   line-height: 1.25rem;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .pg-button-primary {
@@ -319,7 +386,7 @@ summary::marker {
   background: #ffffff;
   color: #020617;
   padding: 0.625rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-base);
   line-height: 1.25rem;
 }
 
@@ -359,6 +426,8 @@ summary::marker {
 .pg-tab {
   border-radius: 0.875rem;
   padding: 0.75rem;
+  font-size: var(--text-base);
+  line-height: 1.35;
   text-align: left;
   color: #475569;
 }
@@ -378,8 +447,8 @@ summary::marker {
   margin-top: 0.25rem;
   display: block;
   color: #64748b;
-  font-size: 0.75rem;
-  line-height: 1rem;
+  font-size: var(--text-xs);
+  line-height: 1.35;
 }
 
 .pg-tab-active .pg-tab-helper {
@@ -408,6 +477,11 @@ summary::marker {
   overflow-x: auto;
   border: 1px solid #e2e8f0;
   border-radius: 0.75rem;
+}
+
+.pg-table-wrap table {
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
 }
 
 .dark .pg-table-wrap {
