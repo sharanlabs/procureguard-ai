@@ -32,7 +32,8 @@ Production Rework Chunk 1.3 Partial result saving and chunk-level retry complete
 Production Rework Chunk 1.4A resolved the TC-23/E12 data conflict and completed the E12 eval fix.
 Production Rework Chunk 1.5 dependency pinning and git hygiene completed.
 Production Rework Chunk 1.6 documentation fixes completed.
-Next: Production Rework Chunk 1.3 structured outputs beta header cleanup
+Production Rework Chunk 1.3 structured outputs beta header cleanup completed.
+Next: Production Rework Chunk 2.1 Typography foundation
 
 ## Stage log
 
@@ -126,6 +127,8 @@ Next: Production Rework Chunk 1.3 structured outputs beta header cleanup
   - Production Rework Chunk 1.5 dependency pinning and git hygiene completed
   - Production Rework Chunk 1.6 documentation fixes completed
   - CLAUDE.md now matches source model routing and softens planned architecture docs, README.md now reflects the current repo structure, and Prompt 04 now states its tested-but-not-wired status
+  - Production Rework Chunk 1.3 structured outputs beta header cleanup completed
+  - Structured output request construction already used `output_config.format`; no obsolete structured-output beta header was present in the inspected app/API/Vite path
 
 ## Decisions pending
 

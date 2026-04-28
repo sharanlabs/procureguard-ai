@@ -2310,3 +2310,118 @@ Update existing Claude token cost telemetry so prompt cache write/read usage is 
 
 ### Next step
 Production Rework Chunk 1.3 structured outputs beta header cleanup.
+
+## Production Rework Chunk 1.3 structured outputs beta header cleanup handoff — April 28, 2026
+
+### Purpose
+Inspect and clean structured-output beta header usage while preserving the current Claude Messages API request contract, prompt caching, cache-aware cost handling, model routing, and server-side production API key behavior.
+
+### Files reviewed
+- AGENTS.md
+- .codex/AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/lib/claude.js
+- app/lib/schemas.js
+- api/messages.js
+- vite.config.js
+- package.json
+- package-lock.json
+
+### Files changed
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-28T02-53-17-055Z.json
+- evals/results/eval_results_2026-04-28T02-55-49-713Z.json
+- evals/results/eval_results_2026-04-28T02-58-07-891Z.json
+
+### Structured output request shape confirmed
+- app/lib/claude.js builds Claude requests with `output_config: buildStructuredOutputConfig(schema)`.
+- app/lib/schemas.js returns `output_config.format` with `type: "json_schema"` and the normalized schema.
+- api/messages.js passes `output_config.format` through and re-enforces strict schema compatibility before forwarding to Anthropic.
+
+### Beta header cleanup behavior
+- No `anthropic-beta` header was present in app/lib/claude.js, api/messages.js, or vite.config.js.
+- No `structured-outputs-2025-11-13` header value was present in app/lib/claude.js, api/messages.js, or vite.config.js.
+- No beta header was removed because none existed in the inspected request path.
+- No beta header was intentionally kept.
+
+### output_config.format verification
+- `output_config.format` remains the active structured-output request shape.
+- No `output_config.type` old-shape sender was introduced.
+- Existing proxy compatibility normalization remains in api/messages.js and converts accepted legacy shapes to `output_config.format` before upstream forwarding.
+
+### output_format absence
+- No literal `output_format` sender or upstream payload field appears in app, api, or Vite source.
+- api/messages.js keeps a computed legacy-key compatibility path that deletes/translates the legacy key before forwarding; the current app request path does not use it.
+
+### Prompt caching preservation
+- app/lib/claude.js still sends the system prompt as an array of text blocks with `cache_control: { type: "ephemeral" }`.
+- api/messages.js normalization does not strip the `system` array or `cache_control` fields.
+
+### Proxy compatibility behavior
+- api/messages.js request validation allows the current system array blocks by leaving `system` unmodified.
+- `cache_control` is not stripped.
+- `output_config.format` is passed through.
+- Non-2xx Anthropic responses are forwarded with their upstream status and response body.
+
+### API contract preservation
+- Anthropic Messages API remains the application AI stack.
+- The GA structured-output request shape is preserved.
+- Model routing, chunk size, prompt files, CSV data, golden dataset, eval harness logic, prompt caching behavior, and cache-aware cost calculation were not changed.
+
+### Security behavior
+- Production api/messages.js still uses `process.env.ANTHROPIC_API_KEY` for upstream `x-api-key`.
+- The production proxy does not forward a browser-supplied API key upstream.
+- No direct production browser call to Anthropic was introduced.
+- No API key logging was introduced.
+
+### Observer checkpoint findings
+- anthropic-beta headers existed: No.
+- Beta header removed: No, none existed.
+- Beta header intentionally kept: No.
+- `output_config.format` still used: Yes.
+- `output_format` absent from the current app/API/Vite send path: Yes.
+- Prompt caching `cache_control` remains intact: Yes.
+- api/messages.js still preserves server-side production API key behavior: Yes.
+- Stage followed the production rework plan: Yes; the stage stayed narrow and changed only tracking docs plus generated eval artifacts.
+- DECISIONS.md follow-up: None.
+
+### Verification commands and results
+- Pre-edit `git status --short`: clean.
+- Pre-edit `git branch -vv`: `main` at `88a380b`, ahead of `origin/main` by 20.
+- Pre-edit `git log --oneline -10`: confirmed Chunk 1.2B cache-aware cost calculation and repo-local Codex helper commits in recent history.
+- Pre-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Pre-edit `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- Final `npm run build`: passed with the existing Vite large-chunk warning.
+- Final `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- `node --check api/messages.js`: passed.
+- `node --check app/lib/claude.js`: passed.
+- `node --check app/lib/schemas.js`: passed.
+- `grep -R "structured-outputs-2025-11-13" app api vite.config.js || true`: no matches.
+- `grep -R "anthropic-beta" app api vite.config.js || true`: no matches.
+- `grep -R "output_format" app api vite.config.js || true`: no matches.
+- `grep -R "output_config:.*type" app api vite.config.js || true`: no matches.
+- `grep -R "output_config" app api vite.config.js || true`: confirmed `output_config` usage in app/lib/claude.js and api/messages.js.
+- `grep -R '"latest"' package.json || true`: no matches.
+- `grep -R "console.log" app api || true`: no matches.
+- `grep -R "localStorage" app api || true`: no matches.
+- `grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api || true`: no matches.
+- `grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true`: no matches.
+- `grep -R "Send" app || true`: no matches.
+- `git diff --check`: passed.
+- `git diff --name-only`: only docs/HANDOFF.md and progress.md.
+- Final `git status --short` before staging: only intended tracking docs and generated eval results.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-28T02-53-17-055Z.json
+- evals/results/eval_results_2026-04-28T02-55-49-713Z.json
+- evals/results/eval_results_2026-04-28T02-58-07-891Z.json
+
+### Known issues
+- The existing Vite production large-chunk warning remains.
+- No live Claude API retest was run during this header-cleanup stage.
+- A transient `.codex` staged-deletion status appeared during verification and was absent on rerun; no `.codex` files were staged or committed for this stage.
+
+### Next step
+Production Rework Chunk 2.1 Typography foundation.
