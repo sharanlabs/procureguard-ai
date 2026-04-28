@@ -1207,15 +1207,27 @@ function RuntimeCostTelemetry({ viewModel }) {
           tone="neutral"
         />
         <GovernanceMetric
-          label="Estimated cost"
-          value={tokenCost.tokenDataReported ? formatCostValue(tokenCost.estimatedFullPriceCost) : "Not available"}
-          helper="Full-price estimate from reported token usage"
+          label="Cache write tokens"
+          value={tokenCost.cacheUsageReported ? formatInteger(tokenCost.cacheCreationInputTokens) : "Not available"}
+          helper={tokenCost.cacheUsageReported ? "Prompt cache creation usage" : tokenCost.cacheUsageMessage}
+          tone="neutral"
+        />
+        <GovernanceMetric
+          label="Cache read tokens"
+          value={tokenCost.cacheUsageReported ? formatInteger(tokenCost.cacheReadInputTokens) : "Not available"}
+          helper={tokenCost.cacheUsageReported ? "Prompt cache read usage" : tokenCost.cacheUsageMessage}
+          tone="neutral"
+        />
+        <GovernanceMetric
+          label="Estimated cache-aware cost"
+          value={tokenCost.tokenDataReported ? formatCostValue(tokenCost.estimatedCacheAwareCost) : "Not available"}
+          helper={tokenCost.cacheUsageReported ? "Estimated with cache write/read token rates" : tokenCost.cacheUsageMessage}
           tone="neutral"
         />
         <GovernanceMetric
           label="Cost per invoice"
           value={tokenCost.tokenDataReported ? formatCostValue(tokenCost.costPerInvoice) : "Not available"}
-          helper="Derived from invoice count when available"
+          helper="Derived from estimated cache-aware cost when invoice count is available"
           tone="neutral"
         />
         <GovernanceMetric
@@ -1387,11 +1399,18 @@ function AuditStageGroups({ groups }) {
               <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-100">
                 {group.label} · {formatInteger(group.count)} {group.count === 1 ? "entry" : "entries"}
               </summary>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
                 <GovernanceMetric label="Status" value={group.status.label} helper={group.chunkRangeLabel} tone={group.status.tone} isNumber={false} />
                 <GovernanceMetric label="Chunks" value={formatInteger(group.chunkCount)} helper="Unique chunk records" tone="neutral" />
                 <GovernanceMetric label="Latency" value={formatTelemetryDuration(group.totalLatencyMs)} helper="Total captured latency" tone="neutral" />
                 <GovernanceMetric label="Tokens" value={formatInteger(group.totalTokens)} helper="Input plus output tokens" tone="neutral" />
+                <GovernanceMetric
+                  label="Cache tokens"
+                  value={group.cacheUsageReported ? `${formatInteger(group.cacheCreationInputTokens)} write · ${formatInteger(group.cacheReadInputTokens)} read` : "Not available"}
+                  helper={group.cacheUsageReported ? "Reported cache usage" : "Cache usage not available for this run."}
+                  tone="neutral"
+                  isNumber={false}
+                />
                 <GovernanceMetric label="Models" value={group.models.join(", ") || "Not available"} helper="Humanized model labels" tone="neutral" isNumber={false} />
               </div>
               <div className="mt-4 space-y-2">

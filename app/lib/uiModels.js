@@ -54,6 +54,8 @@ const MODEL_TOKEN_PRICING = [
   { match: "sonnet", inputPerMillion: 3, outputPerMillion: 15 },
   { match: "opus", inputPerMillion: 5, outputPerMillion: 25 }
 ];
+const CACHE_WRITE_INPUT_MULTIPLIER = 1.25;
+const CACHE_READ_INPUT_MULTIPLIER = 0.1;
 
 function safeNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -1240,6 +1242,40 @@ function getTokenPricing(model = "") {
   return MODEL_TOKEN_PRICING.find((pricing) => normalized.includes(pricing.match)) ?? MODEL_TOKEN_PRICING[1];
 }
 
+function hasTokenUsageField(tokenUsage, key) {
+  const value = tokenUsage?.[key];
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function calculateCacheAwareTokenCost(entry) {
+  const tokenUsage = entry?.token_usage;
+  const inputTokens = getTokenValue(tokenUsage, ["input_tokens", "prompt_tokens"]);
+  const outputTokens = getTokenValue(tokenUsage, ["output_tokens", "completion_tokens"]);
+  const cacheCreationInputTokens = getTokenValue(tokenUsage, ["cache_creation_input_tokens"]);
+  const cacheReadInputTokens = getTokenValue(tokenUsage, ["cache_read_input_tokens"]);
+  const normalInputTokens = Math.max(inputTokens - cacheCreationInputTokens - cacheReadInputTokens, 0);
+  const pricing = getTokenPricing(entry?.model);
+  const inputCost = (normalInputTokens / 1_000_000) * pricing.inputPerMillion;
+  const cacheWriteCost = (cacheCreationInputTokens / 1_000_000) * pricing.inputPerMillion * CACHE_WRITE_INPUT_MULTIPLIER;
+  const cacheReadCost = (cacheReadInputTokens / 1_000_000) * pricing.inputPerMillion * CACHE_READ_INPUT_MULTIPLIER;
+  const outputCost = (outputTokens / 1_000_000) * pricing.outputPerMillion;
+
+  return {
+    inputTokens,
+    outputTokens,
+    cacheCreationInputTokens,
+    cacheReadInputTokens,
+    normalInputTokens,
+    inputCost,
+    cacheWriteCost,
+    cacheReadCost,
+    outputCost,
+    totalCost: inputCost + cacheWriteCost + cacheReadCost + outputCost,
+    cacheUsageReported: hasTokenUsageField(tokenUsage, "cache_creation_input_tokens") ||
+      hasTokenUsageField(tokenUsage, "cache_read_input_tokens")
+  };
+}
+
 function normalizeAuditEntries(entries = []) {
   return Array.isArray(entries) ? entries.filter(Boolean) : [];
 }
@@ -1376,6 +1412,9 @@ export function groupAuditEntriesByStage(entries = []) {
         totalLatencyMs: 0,
         inputTokens: 0,
         outputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 0,
+        cacheUsageReported: false,
         totalTokens: 0,
         models: [],
         rawModels: [],
@@ -1394,6 +1433,14 @@ export function groupAuditEntriesByStage(entries = []) {
     group.totalLatencyMs += safeNumber(entry.latency_ms);
     group.inputTokens += getTokenValue(entry.token_usage, ["input_tokens", "prompt_tokens"]);
     group.outputTokens += getTokenValue(entry.token_usage, ["output_tokens", "completion_tokens"]);
+    group.cacheCreationInputTokens += getTokenValue(entry.token_usage, ["cache_creation_input_tokens"]);
+    group.cacheReadInputTokens += getTokenValue(entry.token_usage, ["cache_read_input_tokens"]);
+    if (
+      hasTokenUsageField(entry.token_usage, "cache_creation_input_tokens") ||
+      hasTokenUsageField(entry.token_usage, "cache_read_input_tokens")
+    ) {
+      group.cacheUsageReported = true;
+    }
     if (entry.model && !group.rawModels.includes(entry.model)) group.rawModels.push(entry.model);
     if (entry.prompt_version && !group.promptVersions.includes(entry.prompt_version)) group.promptVersions.push(entry.prompt_version);
   });
@@ -1420,6 +1467,12 @@ export function buildTokenCostSummary({ auditEntries = [], analytics = {}, total
   const tokenDataReported = Boolean(governance.tokenDataReported || entries.some((entry) => entry.token_usage));
   const inputTokens = safeNumber(governance.inputTokens) || totalTokenUsage(entries, ["input_tokens", "prompt_tokens"]);
   const outputTokens = safeNumber(governance.outputTokens) || totalTokenUsage(entries, ["output_tokens", "completion_tokens"]);
+  const cacheCreationInputTokens = safeNumber(governance.cacheCreationInputTokens) || totalTokenUsage(entries, ["cache_creation_input_tokens"]);
+  const cacheReadInputTokens = safeNumber(governance.cacheReadInputTokens) || totalTokenUsage(entries, ["cache_read_input_tokens"]);
+  const cacheUsageReported = Boolean(governance.cacheUsageReported || entries.some((entry) => (
+    hasTokenUsageField(entry.token_usage, "cache_creation_input_tokens") ||
+    hasTokenUsageField(entry.token_usage, "cache_read_input_tokens")
+  )));
   const estimatedFullPriceCost = typeof governance.estimatedFullPriceCost === "number"
     ? governance.estimatedFullPriceCost
     : entries.reduce((sum, entry) => {
@@ -1428,19 +1481,27 @@ export function buildTokenCostSummary({ auditEntries = [], analytics = {}, total
       const pricing = getTokenPricing(entry.model);
       return sum + ((input / 1_000_000) * pricing.inputPerMillion) + ((output / 1_000_000) * pricing.outputPerMillion);
     }, 0);
+  const estimatedCacheAwareCost = typeof governance.estimatedCacheAwareCost === "number"
+    ? governance.estimatedCacheAwareCost
+    : entries.reduce((sum, entry) => sum + calculateCacheAwareTokenCost(entry).totalCost, 0);
   const estimatedPromptCacheCost = typeof governance.estimatedPromptCacheCost === "number"
     ? governance.estimatedPromptCacheCost
-    : null;
+    : estimatedCacheAwareCost;
 
   return {
     tokenDataReported,
     inputTokens,
     outputTokens,
     totalTokens: inputTokens + outputTokens,
+    cacheCreationInputTokens,
+    cacheReadInputTokens,
+    cacheUsageReported,
     estimatedFullPriceCost,
     estimatedPromptCacheCost,
-    costPerInvoice: totalInvoices > 0 ? estimatedFullPriceCost / totalInvoices : null,
-    emptyMessage: "Token usage not available for this run."
+    estimatedCacheAwareCost,
+    costPerInvoice: totalInvoices > 0 ? estimatedCacheAwareCost / totalInvoices : null,
+    emptyMessage: "Token usage not available for this run.",
+    cacheUsageMessage: "Cache usage not available for this run."
   };
 }
 

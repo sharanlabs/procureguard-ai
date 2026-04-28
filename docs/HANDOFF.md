@@ -2217,3 +2217,96 @@ Resolve narrow documentation drift from the Claude Code audit without changing r
 
 ### Next step
 Live local API retest of Chunk 1 changes, then Chunk 2 design system foundation.
+
+## Production Rework Chunk 1.2B cache-aware cost calculation handoff — April 27, 2026
+
+### Purpose
+Update existing Claude token cost telemetry so prompt cache write/read usage is priced from reported usage metadata instead of using the prior flat input/output estimate.
+
+### Files reviewed
+- AGENTS.md
+- progress.md
+- docs/HANDOFF.md
+- app/lib/dashboard.js
+- app/lib/uiModels.js
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- app/lib/audit.js
+- app/lib/format.js
+- app/lib/claude.js
+- package.json
+
+### Files changed
+- app/lib/dashboard.js
+- app/lib/uiModels.js
+- app/ProcureGuard.jsx
+- app/ProcureGuardDashboard.jsx
+- progress.md
+- docs/HANDOFF.md
+- evals/results/eval_results_2026-04-28T02-13-43-133Z.json
+- evals/results/eval_results_2026-04-28T02-20-10-651Z.json
+
+### Cache usage flow confirmed
+- app/lib/claude.js returns `raw.usage` unchanged as `response.token_usage`.
+- app/ProcureGuard.jsx passes `response.token_usage` into `createAuditEntry`.
+- app/lib/audit.js stores the full safe numeric usage metadata on each audit entry.
+- `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens` are preserved when Anthropic returns them.
+- Audit entry rows already surfaced per-entry cache write/read token fields.
+- Aggregate dashboard and governance cost summaries were the stale flat-cost path.
+
+### Cache-aware cost calculation behavior
+- Uses existing model pricing constants only.
+- Normal input tokens are calculated as `max(input_tokens - cache_creation_input_tokens - cache_read_input_tokens, 0)`.
+- Normal input tokens use the base input rate.
+- Cache write tokens use 1.25x the base input rate.
+- Cache read tokens use 0.1x the base input rate.
+- Output tokens use the base output rate.
+- Total estimated cache-aware cost is the sum of normal input, cache write, cache read, and output cost.
+- Legacy flat total remains available internally as `estimatedFullPriceCost`, but visible cost panels now use the cache-aware estimate.
+
+### Token/cost telemetry changes
+- Audit & Governance runtime telemetry now shows:
+  - Cache write tokens
+  - Cache read tokens
+  - Estimated cache-aware cost
+  - Cost per invoice derived from estimated cache-aware cost
+- Executive dashboard governance panel now shows cache write/read token totals and estimated cache-aware cost.
+- Stage-level audit groups show cache token totals when reported.
+- If cache fields are not returned, the UI displays: "Cache usage not available for this run."
+
+### Audit safety behavior
+- No raw prompts, raw request payloads, API keys, or secrets were added to audit export.
+- app/lib/audit.js export headers and rows were not changed.
+- Numeric cache token metadata remains only in in-memory audit entries and UI telemetry, consistent with existing safe usage metadata.
+
+### Verification commands and results
+- Pre-edit `git status --short`: clean.
+- Pre-edit `git branch -vv`: `main` at `0041141`, ahead of `origin/main` by 17.
+- Pre-edit `git log --oneline -10`: confirmed Chunk 1.6, 1.5, 1.4A, 1.3, 1.2, and 1.1 commits.
+- Pre-edit `npm run build`: passed with the existing Vite large-chunk warning.
+- Pre-edit `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- Implementation sanity `npm run build`: passed with the existing Vite large-chunk warning.
+- Final `npm run build`: passed with the existing Vite large-chunk warning.
+- Final `node evals/run_evals.js`: passed 25/25, 100%, with 3 text extraction tests included.
+- `node --check api/messages.js`: passed.
+- `grep -R '"latest"' package.json || true`: no matches.
+- `grep -R "console.log" app api || true`: no matches.
+- `grep -R "localStorage" app api || true`: no matches.
+- `grep -R "x-api-key.*console\|apiKey.*console\|ANTHROPIC_API_KEY.*console" app api || true`: no matches.
+- `grep -R "AUTO-APPROVE\|auto-approve\|auto approve\|automated approval\|AI decided\|fraud detected\|payment released\|email sent" app || true`: no matches.
+- `grep -R "Send" app || true`: no matches.
+- `git diff --check`: passed.
+- `git diff --name-only`: only allowed files changed.
+- `git status --short`: only intended modified files and generated eval result artifacts before staging.
+
+### New eval result file path
+- evals/results/eval_results_2026-04-28T02-20-10-651Z.json
+- Also generated during the required pre-edit eval gate: evals/results/eval_results_2026-04-28T02-13-43-133Z.json
+
+### Known issues
+- The existing Vite production large-chunk warning remains.
+- No live Claude API retest was run during this cost-calculation stage.
+- The handoff heading follows the staged project date requested for this chunk; the generated eval artifacts are timestamped April 28, 2026 UTC.
+
+### Next step
+Production Rework Chunk 1.3 structured outputs beta header cleanup.

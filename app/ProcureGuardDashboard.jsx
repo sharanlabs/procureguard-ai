@@ -587,17 +587,24 @@ export function SessionGovernancePanel({ analytics }) {
       </div>
 
       {governance.tokenDataReported ? (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <Metric label="Input tokens" value={formatInteger(governance.inputTokens)} />
           <Metric label="Output tokens" value={formatInteger(governance.outputTokens)} />
-          <Metric label="Full-price estimate" value={formatCost(governance.estimatedFullPriceCost)} />
-          <Metric label="Prompt-cache estimate" value={formatCost(governance.estimatedPromptCacheCost)} />
+          <Metric label="Cache write tokens" value={governance.cacheUsageReported ? formatInteger(governance.cacheCreationInputTokens) : "Not available"} />
+          <Metric label="Cache read tokens" value={governance.cacheUsageReported ? formatInteger(governance.cacheReadInputTokens) : "Not available"} />
+          <Metric label="Estimated cache-aware cost" value={formatCost(governance.estimatedCacheAwareCost)} />
         </div>
       ) : (
         <p className="mt-5 rounded-lg border border-indigo-200 bg-white p-4 text-sm text-indigo-900 dark:border-indigo-800 dark:bg-slate-900 dark:text-indigo-200">
           Token usage will appear after API responses include usage metadata.
         </p>
       )}
+
+      {governance.tokenDataReported && !governance.cacheUsageReported ? (
+        <p className="mt-3 rounded-lg border border-indigo-200 bg-white p-3 text-sm text-indigo-900 dark:border-indigo-800 dark:bg-slate-900 dark:text-indigo-200">
+          Cache usage not available for this run.
+        </p>
+      ) : null}
 
       <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
         <div className="rounded-lg border border-indigo-200 bg-white p-3 dark:border-indigo-800 dark:bg-slate-900">
