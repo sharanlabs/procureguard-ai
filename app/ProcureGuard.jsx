@@ -49,6 +49,23 @@ import {
   buildGovernanceViewModel,
   buildSupplierPolicyAnalyticsViewModel
 } from "./lib/uiModels.js";
+import {
+  AlertCircle,
+  AlertTriangle,
+  BarChart3,
+  CheckCircle2,
+  Circle,
+  Download,
+  Key,
+  Loader2,
+  Moon,
+  Play,
+  RotateCcw,
+  Shield,
+  Sun,
+  TrendingUp,
+  Upload
+} from "lucide-react";
 
 const LOCAL_API_KEY_STORAGE = "procureguard_anthropic_session_key";
 const DARK_MODE_STORAGE = "procureguard_dark_mode";
@@ -70,11 +87,11 @@ const DEFAULT_TOLERANCES = {
   dateBusinessDays: 2
 };
 const WORKSPACE_TABS = [
-  { id: "start", label: "Start" },
-  { id: "executive", label: "Executive Summary" },
-  { id: "workbench", label: "Exception Workbench" },
-  { id: "analytics", label: "Supplier & Policy Analytics" },
-  { id: "governance", label: "Audit & Governance" }
+  { id: "start", label: "Start", icon: Upload },
+  { id: "executive", label: "Executive Summary", icon: BarChart3 },
+  { id: "workbench", label: "Exception Workbench", icon: AlertTriangle },
+  { id: "analytics", label: "Supplier & Policy Analytics", icon: TrendingUp },
+  { id: "governance", label: "Audit & Governance", icon: Shield }
 ];
 const DEFAULT_QUEUE_FILTERS = {
   search: "",
@@ -98,7 +115,10 @@ function Alert({ message, onRetry }) {
   return (
     <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 shadow-sm dark:border-red-800 dark:bg-red-950/50 dark:text-red-100">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p>{message}</p>
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <p>{message}</p>
+        </div>
         {onRetry ? (
           <button
             className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-red-500 dark:border-red-700 dark:bg-slate-900 dark:text-red-200 dark:hover:bg-red-950"
@@ -139,7 +159,8 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
             Add purchase_orders.csv, invoices.csv, and goods_receipts.csv before analysis.
           </p>
         </div>
-        <label className="pg-button pg-button-primary cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600">
+        <label className="pg-button pg-button-primary flex items-center gap-2 cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600">
+          <Upload className="h-4 w-4" />
           Choose files
           <input
             className="sr-only"
@@ -177,7 +198,8 @@ function ApiKeyPanel({ apiKey, onApiKeyChange }) {
 
   return (
     <section className="pg-card p-4">
-      <label className="text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="anthropic-key">
+      <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="anthropic-key">
+        <Key className="h-4 w-4" />
         Local Claude API key
       </label>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -220,6 +242,11 @@ function ProgressPanel({ runningStep, statusMessage, hasMatchResults, hasClassif
                     : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
               }
             >
+              {complete
+                ? <CheckCircle2 className="h-3.5 w-3.5" />
+                : runningStep === key
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Circle className="h-3.5 w-3.5" />}
               {label}
             </Badge>
           ))}
@@ -1302,11 +1329,12 @@ function AuditTrailSummaryAndExport({ viewModel, onExport }) {
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">{auditExport.safetyText}</p>
         </div>
         <button
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           type="button"
           disabled={!auditExport.ready}
           onClick={onExport}
         >
+          <Download className="h-4 w-4" />
           Export audit CSV
         </button>
       </div>
@@ -1487,7 +1515,10 @@ function WorkspaceTabs({ activeWorkspace, onChange, dashboardReady, reviewCount,
                 aria-pressed={isActive}
                 onClick={() => onChange(tab.id)}
               >
-                <span className="block text-sm font-semibold">{tab.label}</span>
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <tab.icon className="h-4 w-4" />
+                  {tab.label}
+                </span>
                 <span className="pg-tab-helper">
                   {helper}
                 </span>
@@ -1524,10 +1555,11 @@ function ReviewQueueControls({
           </p>
         </div>
         <button
-          className="pg-button pg-button-secondary"
+          className="pg-button pg-button-secondary flex items-center gap-2"
           type="button"
           onClick={onReset}
         >
+          <RotateCcw className="h-4 w-4" />
           Reset filters
         </button>
       </div>
@@ -2987,15 +3019,15 @@ export default function App() {
               aria-pressed={isDarkMode}
               onClick={toggleDarkMode}
             >
-              {isDarkMode ? "Light mode" : "Dark mode"}
+              {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <button
-              className="pg-button pg-button-primary"
+              className="pg-button pg-button-primary flex items-center gap-2"
               type="button"
               disabled={!parsedFiles || Boolean(runningStep)}
               onClick={runPipeline}
             >
-              {runningStep ? "Analyzing..." : "Analyze"}
+              {runningStep ? <><Loader2 className="h-4 w-4 animate-spin" />Analyzing...</> : <><Play className="h-4 w-4" />Analyze</>}
             </button>
           </div>
         </header>
