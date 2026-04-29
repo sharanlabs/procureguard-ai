@@ -2707,3 +2707,61 @@ Production Rework Chunk 2.3 Correctness and accessibility fixes
 
 ### Next step
 Production Rework Chunk 2.4 Premium visual polish
+
+## Production Rework Chunk 2.4 Premium visual polish
+
+### What changed
+
+**Change 1 — Content section entry animations:**
+- Added `@keyframes pg-fade-in` (0.3s ease-out, opacity 0→1, translateY 6px→0)
+- Applied `pg-animate-in` class to all 5 workspace content surfaces (Start, Executive Summary, Exception Workbench, Supplier & Policy Analytics, Audit & Governance)
+- Header, tab bar, and dark mode toggle are NOT animated
+
+**Change 2 — Skeleton loading placeholders:**
+- Added `@keyframes pg-shimmer` and `.pg-skeleton` class with light/dark gradient variants
+- Created `SkeletonCard` component (aria-hidden, pg-card wrapper with 3 shimmer bars)
+- Executive Summary shows 3-card skeleton grid when `runningStep` is truthy and no dashboard data
+- Exception Workbench shows 4-card skeleton stack when `runningStep` is truthy and no rows
+
+**Change 3 — Card hover elevation:**
+- Added `.pg-card-interactive` class (translateY -1px, subtle box-shadow on hover, dark variant)
+- Applied to `InvoiceCard` in Exception Workbench and `HeroMetricCard` in Executive Summary dashboard
+- Not applied to tolerance simulator, audit trail, or form panels
+
+**Change 4 — Tab content crossfade:**
+- Added `.pg-tab-content` class (reuses pg-fade-in at 0.2s)
+- Wrapped workspace content area in `<div className="pg-tab-content" key={activeWorkspace}>` so React remounts on tab switch, retriggering the fade
+
+**Change 5 — Upload zone refinement:**
+- Replaced `border-dashed` with solid `border-slate-200` and subtle `bg-slate-50/50` background
+- Added hover state: `hover:border-slate-300 hover:bg-slate-50` with dark variants
+
+**Change 6 — Topbar bottom border:**
+- Added `border-b border-slate-200/80 dark:border-slate-700/60` to the header element
+
+**All animations honor `prefers-reduced-motion: reduce`** (media query from Chunk 2.3 sets animation-duration and transition-duration to 0.01ms)
+
+### CSS additions
+- `@keyframes pg-fade-in` — entry animation
+- `.pg-animate-in` — 0.3s entry class
+- `.pg-tab-content` — 0.2s crossfade class
+- `@keyframes pg-shimmer` — skeleton loading
+- `.pg-skeleton` / `.dark .pg-skeleton` — shimmer gradient
+- `.pg-card-interactive` / `.dark .pg-card-interactive:hover` — hover elevation
+
+### Files modified
+- app/styles.css (6 new CSS blocks)
+- app/ProcureGuard.jsx (SkeletonCard component, pg-animate-in on surfaces, pg-tab-content wrapper, upload zone, topbar border, pg-card-interactive on InvoiceCard)
+- app/ProcureGuardDashboard.jsx (pg-card-interactive on HeroMetricCard)
+
+### Verification
+- 25/25 evals passing
+- Build succeeds (expected large-chunk warning only)
+- No new dependencies added
+- No console.log, no "Send" buttons, no HITL violations
+
+### Known issues
+- The existing Vite production large-chunk warning remains
+
+### Next step
+Production Rework Chunk 2.5 or final review

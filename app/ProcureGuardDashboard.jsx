@@ -243,7 +243,7 @@ function DecisionCard({ viewModel, analytics }) {
 
 function HeroMetricCard({ metric }) {
   return (
-    <article className={`pg-card-compact ${toneClasses(metric.tone)}`}>
+    <article className={`pg-card-compact pg-card-interactive ${toneClasses(metric.tone)}`}>
       <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{metric.label}</p>
       <p className="pg-hero-value mt-3 font-mono font-semibold tracking-tight">{formatMetricValue(metric)}</p>
       <p className="mt-2 text-sm leading-5 opacity-80">{metric.helper}</p>

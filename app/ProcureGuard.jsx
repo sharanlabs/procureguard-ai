@@ -110,6 +110,16 @@ function Badge({ children, className = "" }) {
   );
 }
 
+function SkeletonCard({ className = "" }) {
+  return (
+    <div className={`pg-card p-5 ${className}`} aria-hidden="true">
+      <div className="pg-skeleton h-4 w-1/3 mb-3" />
+      <div className="pg-skeleton h-3 w-full mb-2" />
+      <div className="pg-skeleton h-3 w-2/3" />
+    </div>
+  );
+}
+
 function Alert({ message, onRetry }) {
   if (!message) return null;
   return (
@@ -144,7 +154,7 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
 
   return (
     <section
-      className={`rounded-2xl border border-dashed p-6 shadow-sm transition-colors ${isDragging ? "border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40" : "border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"}`}
+      className={`rounded-2xl border p-6 shadow-sm transition-colors ${isDragging ? "border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40" : "border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/30 dark:hover:border-slate-600 dark:hover:bg-slate-800/50"}`}
       onDragOver={(event) => {
         event.preventDefault();
         setIsDragging(true);
@@ -913,8 +923,8 @@ function InvoiceCard({
 }) {
   const simulationChanged = row.simulation?.changed;
   const cardClass = simulationChanged
-    ? "pg-card border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40"
-    : "pg-card";
+    ? "pg-card pg-card-interactive border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40"
+    : "pg-card pg-card-interactive";
 
   return (
     <article className={cardClass}>
@@ -3007,7 +3017,7 @@ export default function App() {
   return (
     <main className={`${isDarkMode ? "dark" : ""} pg-shell px-4 py-5 sm:px-6 lg:px-8`}>
       <section className="pg-container">
-        <header className="pg-topbar">
+        <header className="pg-topbar border-b border-slate-200/80 dark:border-slate-700/60">
           <div>
             <h1 className="pg-app-title">ProcureGuard AI</h1>
             <p className="pg-app-subtitle">AP Exception Control Tower</p>
@@ -3043,8 +3053,9 @@ export default function App() {
           auditEntryCount={auditEntries.length}
         />
 
+        <div className="pg-tab-content" key={activeWorkspace}>
         {activeWorkspace === "start" ? (
-          <section className="pg-page-stack">
+          <section className="pg-page-stack pg-animate-in">
             <ApiKeyPanel apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
             <UploadPanel parsedFiles={parsedFiles} onFilesSelected={handleFilesSelected} isBusy={Boolean(runningStep)} />
             <ProgressPanel
@@ -3064,7 +3075,7 @@ export default function App() {
         ) : null}
 
         {activeWorkspace === "executive" && isIncompleteRun(pipelineRunState) ? (
-          <section className="pg-page-stack">
+          <section className="pg-page-stack pg-animate-in">
             <PartialAnalysisNotice
               runState={pipelineRunState}
               onRetry={retryFailedChunk}
@@ -3080,67 +3091,95 @@ export default function App() {
             />
           </section>
         ) : activeWorkspace === "executive" ? (
-          <ExecutiveDashboard
-            analytics={dashboardAnalytics}
-            isDarkMode={isDarkMode}
-            isAnalysisRunning={Boolean(runningStep)}
-          />
+          runningStep && !dashboardAnalytics ? (
+            <section className="pg-page-stack pg-animate-in">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </div>
+            </section>
+          ) : (
+            <div className="pg-animate-in">
+              <ExecutiveDashboard
+                analytics={dashboardAnalytics}
+                isDarkMode={isDarkMode}
+                isAnalysisRunning={Boolean(runningStep)}
+              />
+            </div>
+          )
         ) : null}
 
         {activeWorkspace === "workbench" ? (
-          <ExceptionWorkbenchPanel
-            viewModel={workbenchViewModel}
-            filters={queueFilters}
-            onFiltersChange={setQueueFilters}
-            onResetFilters={() => setQueueFilters(DEFAULT_QUEUE_FILTERS)}
-            isAnalysisRunning={Boolean(runningStep)}
-            hasAnalysisFailure={Boolean(error && failedStep) || isIncompleteRun(pipelineRunState)}
-            partialRunState={isIncompleteRun(pipelineRunState) ? pipelineRunState : null}
-            onRetryPartial={retryFailedChunk}
-            onStart={() => setActiveWorkspace("start")}
-            approvedActions={approvedActions}
-            tier3Notes={tier3Notes}
-            reviewedTier3={reviewedTier3}
-            onApprove={(actionKey) => {
-              setApprovedActions((current) => new Set([...current, actionKey]));
-            }}
-            onTier3NoteChange={(actionKey, value) => {
-              setTier3Notes((current) => ({ ...current, [actionKey]: value }));
-              if (!value.trim()) {
-                setReviewedTier3((current) => {
-                  const next = new Set(current);
-                  next.delete(actionKey);
-                  return next;
-                });
-              }
-            }}
-            onTier3Reviewed={(actionKey) => {
-              setReviewedTier3((current) => new Set([...current, actionKey]));
-            }}
-          />
+          runningStep && !workbenchViewModel.rows.length ? (
+            <section className="pg-page-stack pg-animate-in">
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </section>
+          ) : (
+            <div className="pg-animate-in">
+              <ExceptionWorkbenchPanel
+                viewModel={workbenchViewModel}
+                filters={queueFilters}
+                onFiltersChange={setQueueFilters}
+                onResetFilters={() => setQueueFilters(DEFAULT_QUEUE_FILTERS)}
+                isAnalysisRunning={Boolean(runningStep)}
+                hasAnalysisFailure={Boolean(error && failedStep) || isIncompleteRun(pipelineRunState)}
+                partialRunState={isIncompleteRun(pipelineRunState) ? pipelineRunState : null}
+                onRetryPartial={retryFailedChunk}
+                onStart={() => setActiveWorkspace("start")}
+                approvedActions={approvedActions}
+                tier3Notes={tier3Notes}
+                reviewedTier3={reviewedTier3}
+                onApprove={(actionKey) => {
+                  setApprovedActions((current) => new Set([...current, actionKey]));
+                }}
+                onTier3NoteChange={(actionKey, value) => {
+                  setTier3Notes((current) => ({ ...current, [actionKey]: value }));
+                  if (!value.trim()) {
+                    setReviewedTier3((current) => {
+                      const next = new Set(current);
+                      next.delete(actionKey);
+                      return next;
+                    });
+                  }
+                }}
+                onTier3Reviewed={(actionKey) => {
+                  setReviewedTier3((current) => new Set([...current, actionKey]));
+                }}
+              />
+            </div>
+          )
         ) : null}
 
         {activeWorkspace === "analytics" ? (
-          <SupplierPolicyAnalyticsPanel
-            viewModel={supplierPolicyViewModel}
-            isAnalysisRunning={Boolean(runningStep)}
-            hasAnalysisFailure={Boolean(error && failedStep) || isIncompleteRun(pipelineRunState)}
-            onStart={() => setActiveWorkspace("start")}
-            tolerances={tolerances}
-            onTolerancesChange={setTolerances}
-            toleranceSimulation={toleranceSimulation}
-          />
+          <div className="pg-animate-in">
+            <SupplierPolicyAnalyticsPanel
+              viewModel={supplierPolicyViewModel}
+              isAnalysisRunning={Boolean(runningStep)}
+              hasAnalysisFailure={Boolean(error && failedStep) || isIncompleteRun(pipelineRunState)}
+              onStart={() => setActiveWorkspace("start")}
+              tolerances={tolerances}
+              onTolerancesChange={setTolerances}
+              toleranceSimulation={toleranceSimulation}
+            />
+          </div>
         ) : null}
 
         {activeWorkspace === "governance" ? (
-          <GovernancePanel
-            viewModel={governanceViewModel}
-            apiKey={apiKey}
-            onApiKeyChange={handleApiKeyChange}
-            onExport={exportAuditTrail}
-            onStart={() => setActiveWorkspace("start")}
-          />
+          <div className="pg-animate-in">
+            <GovernancePanel
+              viewModel={governanceViewModel}
+              apiKey={apiKey}
+              onApiKeyChange={handleApiKeyChange}
+              onExport={exportAuditTrail}
+              onStart={() => setActiveWorkspace("start")}
+            />
+          </div>
         ) : null}
+        </div>
       </section>
     </main>
   );
