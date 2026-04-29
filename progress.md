@@ -35,7 +35,9 @@ Production Rework Chunk 1.6 documentation fixes completed.
 Production Rework Chunk 1.3 structured outputs beta header cleanup completed.
 Production Rework Chunk 2.1 Typography foundation completed.
 Production Rework Chunk 2.1R reference-backed typography audit completed.
-Next: Production Rework Chunk 2.2 Icon system
+Production Rework Chunk 2.2 Icon system completed.
+Production Rework Chunk 2.3 Correctness and accessibility fixes completed.
+Next: Production Rework Chunk 2.4 Premium visual polish
 
 ## Stage log
 

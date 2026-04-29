@@ -2631,3 +2631,79 @@ Inspect selected dashboard and invoice UI references after Chunk 2.1, compare th
 
 ### Next step
 Production Rework Chunk 2.2 Icon system
+
+## Production Rework Chunk 2.2 Icon system
+
+### What changed
+- Added lucide-react@1.11.0 as a pinned dependency
+- Imported 15 icons: AlertCircle, AlertTriangle, BarChart3, CheckCircle2, Circle, Download, Key, Loader2, Moon, Play, RotateCcw, Shield, Sun, TrendingUp, Upload
+- Added icons to all 5 WORKSPACE_TABS entries
+- Added icons to ProgressPanel step badges (CheckCircle2 complete, Loader2 spinning, Circle pending)
+- Added Key icon to API key label
+- Added Play/Loader2 to Analyze button states
+- Added Sun/Moon to dark mode toggle
+- Added Download to export button
+- Added RotateCcw to reset button
+- Upload icon to file upload zone
+
+### Files modified
+- app/ProcureGuard.jsx (icon imports + all icon placements)
+- package.json (lucide-react dependency added)
+
+### Verification
+- 25/25 evals passing
+- No linting errors
+- Committed as eff6bbf
+
+### Known issues
+- Badge component missing gap-1.5 class (icon-text spacing bug) — deferred to Chunk 2.3
+- Four badges missing dark mode variants — deferred to Chunk 2.3
+
+### Next step
+Production Rework Chunk 2.3 Correctness and accessibility fixes
+
+## Production Rework Chunk 2.3 Correctness and accessibility fixes
+
+### What changed
+
+**Badge fixes:**
+- Added `gap-1.5` to Badge component in both ProcureGuard.jsx and ProcureGuardDashboard.jsx for icon-text spacing
+- Added dark mode variants to 6 badges: tolerance slider "affected", "Simulation only", "Policy simulation changed", decision card outcome, and ProgressPanel complete/running step badges
+
+**Accessibility:**
+- Added `aria-hidden="true"` to all 15 decorative icons (icons alongside visible text labels); Sun/Moon in dark mode toggle excluded (button has aria-label)
+- Added `role="alert"` and `aria-live="assertive"` to the Alert component for screen reader announcements
+- Added `aria-live="polite"` to ProgressPanel status message
+- Added `prefers-reduced-motion: reduce` media query to styles.css (disables animations and transitions)
+- Added `spellCheck={false}` to API key input
+- Added `color-scheme` and `theme-color` meta tags to index.html
+
+**Polish:**
+- Replaced three-period "Analyzing..." with proper ellipsis character "Analyzing…"
+- Replaced all bare `transition` classes with `transition-colors` (4 instances: retry button, approve button, mark reviewed button, export audit CSV button)
+
+**Documentation:**
+- Wrote Chunk 2.2 Icon system handoff section in HANDOFF.md
+- Wrote Chunk 2.3 handoff section in HANDOFF.md
+- Updated progress.md
+
+### Files modified
+- app/ProcureGuard.jsx (badge gap, dark mode variants, aria attributes, spellCheck, transition-colors, ellipsis)
+- app/ProcureGuardDashboard.jsx (badge gap, dark mode variant on decision card)
+- app/styles.css (prefers-reduced-motion media query)
+- index.html (color-scheme and theme-color meta tags)
+- docs/HANDOFF.md (Chunk 2.2 and 2.3 handoff sections)
+- progress.md (completion status update)
+
+### Verification
+- 25/25 evals passing
+- Build succeeds (expected large-chunk warning only)
+- No bare `transition` classes remaining
+- No console.log, no "Send" buttons, no HITL violations
+- All colored Badge instances have dark mode variants
+
+### Known issues
+- The existing Vite production large-chunk warning remains
+
+### Next step
+Production Rework Chunk 2.4 Premium visual polish

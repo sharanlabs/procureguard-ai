@@ -23,7 +23,7 @@ const CHART_COLORS = {
 
 function Badge({ children, className = "" }) {
   return (
-    <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold ${className}`}>
       {children}
     </span>
   );
@@ -227,7 +227,7 @@ function DecisionCard({ viewModel, analytics }) {
             Recommended next action: <span className="font-normal">{viewModel.decision.recommendedNextAction}</span>
           </p>
         </div>
-        <Badge className={`bg-white/70 ${subtleToneClasses(outcome.tone)}`}>{outcome.label}</Badge>
+        <Badge className={`bg-white/70 dark:bg-slate-800/70 ${subtleToneClasses(outcome.tone)}`}>{outcome.label}</Badge>
       </div>
       <dl className="mt-6 grid gap-4 border-t border-current/15 pt-5 sm:grid-cols-2 lg:grid-cols-5">
         {stats.map((stat) => (

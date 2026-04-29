@@ -104,7 +104,7 @@ const LOCKED_TIER_THREE_CODES = new Set(["E02", "E06", "E07", "E11"]);
 
 function Badge({ children, className = "" }) {
   return (
-    <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-semibold ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold ${className}`}>
       {children}
     </span>
   );
@@ -113,15 +113,15 @@ function Badge({ children, className = "" }) {
 function Alert({ message, onRetry }) {
   if (!message) return null;
   return (
-    <section className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 shadow-sm dark:border-red-800 dark:bg-red-950/50 dark:text-red-100">
+    <section role="alert" aria-live="assertive" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 shadow-sm dark:border-red-800 dark:bg-red-950/50 dark:text-red-100">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <AlertCircle aria-hidden="true" className="h-4 w-4 shrink-0 mt-0.5" />
           <p>{message}</p>
         </div>
         {onRetry ? (
           <button
-            className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100 focus-visible:outline-red-500 dark:border-red-700 dark:bg-slate-900 dark:text-red-200 dark:hover:bg-red-950"
+            className="rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-100 focus-visible:outline-red-500 dark:border-red-700 dark:bg-slate-900 dark:text-red-200 dark:hover:bg-red-950"
             type="button"
             onClick={onRetry}
           >
@@ -160,7 +160,7 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
           </p>
         </div>
         <label className="pg-button pg-button-primary flex items-center gap-2 cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600">
-          <Upload className="h-4 w-4" />
+          <Upload aria-hidden="true" className="h-4 w-4" />
           Choose files
           <input
             className="sr-only"
@@ -199,7 +199,7 @@ function ApiKeyPanel({ apiKey, onApiKeyChange }) {
   return (
     <section className="pg-card p-4">
       <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="anthropic-key">
-        <Key className="h-4 w-4" />
+        <Key aria-hidden="true" className="h-4 w-4" />
         Local Claude API key
       </label>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -208,6 +208,7 @@ function ApiKeyPanel({ apiKey, onApiKeyChange }) {
           className="pg-control min-w-0 flex-1"
           type="password"
           autoComplete="off"
+          spellCheck={false}
           value={apiKey}
           onChange={(event) => onApiKeyChange(event.target.value)}
           placeholder="sk-ant-..."
@@ -236,22 +237,22 @@ function ProgressPanel({ runningStep, statusMessage, hasMatchResults, hasClassif
               key={key}
               className={
                 complete
-                  ? "border-green-200 bg-green-50 text-green-800"
+                  ? "border-green-200 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-950/50 dark:text-green-200"
                   : runningStep === key
-                    ? "border-blue-200 bg-blue-50 text-blue-800"
+                    ? "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-200"
                     : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
               }
             >
               {complete
-                ? <CheckCircle2 className="h-3.5 w-3.5" />
+                ? <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />
                 : runningStep === key
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <Circle className="h-3.5 w-3.5" />}
+                  ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
+                  : <Circle aria-hidden="true" className="h-3.5 w-3.5" />}
               {label}
             </Badge>
           ))}
         </div>
-        <p className="text-sm text-slate-600 dark:text-slate-400">{statusMessage || "Ready to analyze validated files."}</p>
+        <p aria-live="polite" className="text-sm text-slate-600 dark:text-slate-400">{statusMessage || "Ready to analyze validated files."}</p>
       </div>
     </section>
   );
@@ -367,7 +368,7 @@ function ToleranceSlider({ id, label, value, min, max, step, unit, affectedCount
         <label className="text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor={id}>
           {label}
         </label>
-        <Badge className="border-blue-200 bg-blue-50 text-blue-800">{affectedCount} affected</Badge>
+        <Badge className="border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-200">{affectedCount} affected</Badge>
       </div>
       <div className="mt-3 flex items-center gap-4">
         <input
@@ -406,7 +407,7 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation, policy
             Simulation only. Adjust policy tolerances locally without changing Claude classifications, payment behavior, or audit records.
           </p>
         </div>
-        <Badge className="border-blue-300 bg-white text-blue-800">Simulation only</Badge>
+        <Badge className="border-blue-300 bg-white text-blue-800 dark:border-blue-600 dark:bg-blue-950/50 dark:text-blue-200">Simulation only</Badge>
       </div>
 
       {policySummary?.profiles?.length ? (
@@ -808,7 +809,7 @@ function DraftAction({
         </div>
         {tier === 2 ? (
           <button
-            className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-blue-600 disabled:bg-slate-500 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white dark:disabled:bg-slate-700 dark:disabled:text-slate-300"
+            className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-blue-600 disabled:bg-slate-500 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white dark:disabled:bg-slate-700 dark:disabled:text-slate-300"
             type="button"
             disabled={approved}
             onClick={() => onApprove(actionKey)}
@@ -838,7 +839,7 @@ function DraftAction({
             placeholder="Document supervisor escalation, hold recommendation, or procurement action before marking reviewed."
           />
           <button
-            className="mt-3 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-red-600 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-700"
+            className="mt-3 rounded-lg bg-red-700 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-600 focus-visible:outline-red-500 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-700"
             type="button"
             disabled={!actionNote.trim() || reviewed}
             onClick={() => onTier3Reviewed(actionKey)}
@@ -944,7 +945,7 @@ function InvoiceCard({
 
       {simulationChanged ? (
         <section className="mt-4 rounded-xl border border-blue-300 bg-white p-4 text-sm text-blue-950 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100">
-          <Badge className="border-blue-300 bg-blue-50 text-blue-800">Policy simulation changed this review path</Badge>
+          <Badge className="border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-600 dark:bg-blue-950/50 dark:text-blue-200">Policy simulation changed this review path</Badge>
           <p className="mt-3 font-semibold">
             {tierLabel(row.simulation.originalTier)} &rarr; {tierLabel(row.simulation.simulatedTier)}
           </p>
@@ -1329,12 +1330,12 @@ function AuditTrailSummaryAndExport({ viewModel, onExport }) {
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">{auditExport.safetyText}</p>
         </div>
         <button
-          className="flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           type="button"
           disabled={!auditExport.ready}
           onClick={onExport}
         >
-          <Download className="h-4 w-4" />
+          <Download aria-hidden="true" className="h-4 w-4" />
           Export audit CSV
         </button>
       </div>
@@ -1516,7 +1517,7 @@ function WorkspaceTabs({ activeWorkspace, onChange, dashboardReady, reviewCount,
                 onClick={() => onChange(tab.id)}
               >
                 <span className="flex items-center gap-2 text-sm font-semibold">
-                  <tab.icon className="h-4 w-4" />
+                  <tab.icon aria-hidden="true" className="h-4 w-4" />
                   {tab.label}
                 </span>
                 <span className="pg-tab-helper">
@@ -1559,7 +1560,7 @@ function ReviewQueueControls({
           type="button"
           onClick={onReset}
         >
-          <RotateCcw className="h-4 w-4" />
+          <RotateCcw aria-hidden="true" className="h-4 w-4" />
           Reset filters
         </button>
       </div>
@@ -3027,7 +3028,7 @@ export default function App() {
               disabled={!parsedFiles || Boolean(runningStep)}
               onClick={runPipeline}
             >
-              {runningStep ? <><Loader2 className="h-4 w-4 animate-spin" />Analyzing...</> : <><Play className="h-4 w-4" />Analyze</>}
+              {runningStep ? <><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />Analyzing…</> : <><Play aria-hidden="true" className="h-4 w-4" />Analyze</>}
             </button>
           </div>
         </header>
