@@ -175,6 +175,7 @@ Next: Final git hygiene, Vercel environment setup, and production deploy.
 - Public README and screenshot documentation completed: README now uses original live screenshots, explains the product and architecture accurately, highlights the DRAFT-only workflow, and `public/live-screenshots/README.md` documents which assets to use for GitHub, LinkedIn, and portfolio posts.
 - Publication and deployment readiness cleanup completed: added `.env.example`, `DEPLOYMENT.md`, README-focused screenshot crops, and a current Gemini runtime snapshot in `docs/HANDOFF.md`. GitHub CI remains deferred because the current push token lacks workflow permission.
 - README end-to-end architecture diagram completed: added a Mermaid diagram covering browser upload, CSV parsing, prompt chain, Gemini routing, structured output validation, view models, review surfaces, evals, and screenshot demo seed.
+- README architecture diagram simplified for public viewing: reduced the diagram to the main product flow and trust boundaries instead of implementation-level detail.
 
 ## Decisions pending
 

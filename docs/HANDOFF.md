@@ -3607,3 +3607,6 @@ Add a clear end-to-end architecture diagram for public reviewers, interview read
 - `git diff --check`: passed.
 - `node evals/run_evals.js`: passed, 25/25.
 - `npm run build`: passed. Vite emitted a plugin timing warning only; build exit code was 0.
+
+### Follow-up simplification
+- Replaced the first detailed Mermaid diagram with a simpler public README diagram covering only the main flow: procurement CSVs, React browser app, Gemini analysis pipeline, API/proxy boundary, Gemini structured JSON, review surfaces, and human approval.
