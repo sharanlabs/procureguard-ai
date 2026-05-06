@@ -44,6 +44,7 @@ Production Rework Chunk 4.1 Design system replacement (foundation) completed.
 Production Rework Chunk 4.2 Executive Summary rebuild completed.
 Public README and screenshot documentation completed.
 Publication and deployment readiness cleanup completed.
+README end-to-end architecture diagram completed.
 Next: Final git hygiene, Vercel environment setup, and production deploy.
 
 ## Stage log
@@ -173,6 +174,7 @@ Next: Final git hygiene, Vercel environment setup, and production deploy.
 - Expanded original live screenshot coverage completed: added Start, dark Workbench, dark Analytics, dark Audit & Governance, 1440px desktop captures, and focused live crops for hero, AI checks/evidence, drafts killer feature, Workbench queue, supplier scorecard, and audit governance.
 - Public README and screenshot documentation completed: README now uses original live screenshots, explains the product and architecture accurately, highlights the DRAFT-only workflow, and `public/live-screenshots/README.md` documents which assets to use for GitHub, LinkedIn, and portfolio posts.
 - Publication and deployment readiness cleanup completed: added `.env.example`, `DEPLOYMENT.md`, README-focused screenshot crops, and a current Gemini runtime snapshot in `docs/HANDOFF.md`. GitHub CI remains deferred because the current push token lacks workflow permission.
+- README end-to-end architecture diagram completed: added a Mermaid diagram covering browser upload, CSV parsing, prompt chain, Gemini routing, structured output validation, view models, review surfaces, evals, and screenshot demo seed.
 
 ## Decisions pending
 

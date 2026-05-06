@@ -58,6 +58,50 @@ ProcureGuard AI is intentionally small:
 
 The app does not use LangChain, vector search, autonomous agents, background email sending, or payment execution.
 
+## End-to-end architecture
+
+```mermaid
+flowchart LR
+  reviewer["AP or procurement reviewer"] --> browser["React workspace in the browser"]
+  browser --> upload["CSV upload: purchase orders, invoices, goods receipts"]
+  upload --> parser["Browser CSV parser<br/>app/lib/csv.js"]
+  parser --> state["Session-local run state<br/>no database"]
+  state --> pipeline["Pipeline orchestration<br/>app/lib/pipeline.js"]
+
+  subgraph chain["Three-stage prompt chain"]
+    pipeline --> matching["1. Matching<br/>prompts/01_matching.md"]
+    matching --> classification["2. Classification<br/>prompts/02_classification.md"]
+    classification --> actions["3. Draft generation<br/>prompts/03_action_generation.md"]
+  end
+
+  matching --> schemas["Structured JSON schemas<br/>app/lib/schemas.js"]
+  classification --> schemas
+  actions --> schemas
+  schemas --> client["Gemini client<br/>app/lib/gemini.js"]
+
+  client --> route{"Runtime route"}
+  route --> dev["Local development<br/>Vite proxy uses session key"]
+  route --> prod["Production<br/>api/messages.js uses GEMINI_API_KEY"]
+  dev --> gemini["Gemini 2.5 Flash"]
+  prod --> gemini
+
+  gemini --> output["Structured JSON stage output"]
+  output --> validation["Align, validate, merge chunks"]
+  validation --> models["Analytics and view models<br/>dashboard.js, uiModels.js"]
+  models --> surfaces["Executive Summary, Workbench, Analytics, Audit"]
+  surfaces --> hitl["Human approval only<br/>DRAFT-only, no send, no payment release"]
+
+  evals["Golden dataset and eval runner<br/>evals/run_evals.js"] -.-> pipeline
+  demo["Development screenshot seed<br/>app/lib/demoRun.js"] -.-> surfaces
+```
+
+Operational boundaries:
+
+- Local development can use a session-only browser key through the Vite proxy.
+- Production uses `GEMINI_API_KEY` only on the serverless proxy.
+- The AI path returns structured JSON; the UI renders decisions, evidence, drafts, and audit metadata from validated merged results.
+- The product prepares review material only. It does not send supplier messages, release payment, or write to a database.
+
 ## Repository layout
 
 ```text

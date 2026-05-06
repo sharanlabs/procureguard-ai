@@ -3590,3 +3590,20 @@ Prepare the repository for public review and deployment handoff without pushing,
 - README image reference check: passed; referenced live screenshot PNGs exist.
 - Current public docs scan for stale Claude/Anthropic/Recharts/old-version/generic-marketing wording: passed.
 - Secret-pattern check for committed Gemini key values: passed; only placeholder environment variable names remain.
+
+---
+
+## README Architecture Diagram - May 6, 2026
+
+### Goal
+Add a clear end-to-end architecture diagram for public reviewers, interview readers, and future maintainers.
+
+### What changed
+- Added a GitHub-renderable Mermaid diagram to `README.md`.
+- Diagram covers browser upload, CSV parsing, session-local state, pipeline orchestration, the three prompt stages, structured JSON schemas, Gemini client routing, local Vite proxy, production Vercel proxy, Gemini 2.5 Flash, validation/merge, view models, product surfaces, eval harness, and deterministic screenshot seed.
+- Added operational boundary notes clarifying local session-key behavior, production server-side `GEMINI_API_KEY`, structured JSON validation, DRAFT-only review, no sending, no payment release, and no database.
+
+### Validation
+- `git diff --check`: passed.
+- `node evals/run_evals.js`: passed, 25/25.
+- `npm run build`: passed. Vite emitted a plugin timing warning only; build exit code was 0.
