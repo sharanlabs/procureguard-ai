@@ -45,7 +45,7 @@ Recommended production checks after deployment:
 2. Upload `data/purchase_orders.csv`, `data/invoices.csv`, and `data/goods_receipts.csv`.
 3. Run **Analyze**.
 4. Confirm all tabs populate: Executive Summary, Exception Workbench, Supplier Analytics, and Audit & Governance.
-5. Confirm DRAFT-only language remains visible and no send/payment execution action exists.
+5. Confirm prepared communications remain review-controlled and no send/payment execution action exists.
 6. Confirm `/procureguard-og.png`, `/procureguard-mark.svg`, and `/procureguard-touch-icon.png` return HTTP 200.
 
 ## Failure Checks

@@ -306,7 +306,7 @@ const WORKFLOW_STEPS = [
   { id: "invoice", label: "Invoice", icon: SupplierInvoiceIcon },
   { id: "match", label: "AI Match", icon: MatchScaleIcon },
   { id: "review", label: "Review", icon: ReviewIcon },
-  { id: "draft", label: "Draft", icon: DraftDocumentIcon }
+  { id: "followup", label: "Follow-up", icon: DraftDocumentIcon }
 ];
 
 const AUDIT_ICONS = {
@@ -367,7 +367,7 @@ function ExecutiveHeadline({ headline, runMeta, kpis, onOpenHeldInvoices, onOpen
             Open held invoices
           </button>
           <button className="pg-button pg-button-secondary" type="button" onClick={() => onOpenDrafts?.()}>
-            Review drafts
+            Review follow-ups
           </button>
           <span>Human approval required</span>
         </div>
@@ -563,8 +563,8 @@ function DraftsHero({ vm, onOpenWorkbench }) {
     return (
       <section className="pg-drafts-hero">
         <div className="pg-panel-heading">
-          <p className="pg-kicker">AI-prepared drafts</p>
-          <h2>No drafts needed for this batch</h2>
+          <p className="pg-kicker">Prepared follow-up</p>
+          <h2>No follow-up needed for this batch</h2>
           <p>All invoices matched cleanly. No escalation memos, supplier follow-ups, or approval requests are required.</p>
         </div>
       </section>
@@ -582,27 +582,27 @@ function DraftsHero({ vm, onOpenWorkbench }) {
     <section className="pg-drafts-hero">
       <div className="pg-drafts-head">
         <div className="pg-panel-heading">
-          <p className="pg-kicker">AI-prepared drafts</p>
-          <h2>{formatInteger(vm.totalDrafts)} drafts ready for human review</h2>
+          <p className="pg-kicker">Prepared follow-up</p>
+          <h2>{formatInteger(vm.totalDrafts)} items ready for review</h2>
           <p>
-            DRAFT-only · human approval required. Estimated time saved: {vm.estimatedHoursSaved} hours.
+            Human approval required. Estimated time saved: {vm.estimatedHoursSaved} hours.
             Nothing leaves the system automatically.
           </p>
         </div>
         <div className="pg-drafts-actions">
           <button className="pg-button pg-button-primary" type="button" onClick={() => onOpenWorkbench?.()}>
-            Open drafts in Workbench
+            Open in Workbench
           </button>
           <span>Reviewed by you · actioned by you</span>
         </div>
       </div>
 
-      <div className="pg-draft-table" role="list" aria-label="Draft queue preview">
+      <div className="pg-draft-table" role="list" aria-label="Prepared follow-up queue preview">
         <div className="pg-draft-row pg-draft-row-head" aria-hidden="true">
           <span>Type</span>
           <span>Tier</span>
           <span>Invoice</span>
-          <span>Draft subject</span>
+          <span>Subject</span>
           <span>Supplier</span>
           <span>Held</span>
         </div>
@@ -629,7 +629,7 @@ function DraftsHero({ vm, onOpenWorkbench }) {
         {vm.byCategory.map((category) => (
           <span key={category.id}>{formatInteger(category.count)} {category.label}</span>
         ))}
-        <strong>{formatInteger(vm.totalDrafts)} total · all marked DRAFT</strong>
+        <strong>{formatInteger(vm.totalDrafts)} total · approval required</strong>
       </div>
     </section>
   );

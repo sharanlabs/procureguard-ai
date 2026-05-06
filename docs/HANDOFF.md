@@ -18,7 +18,7 @@ Last updated: May 6, 2026
 |---|---|---|---|
 | Matching | `prompts/01_matching.md` | `matchingOutputSchema` | Exception flags per invoice |
 | Classification | `prompts/02_classification.md` | `classificationOutputSchema` | Severity tiers (1–3) |
-| Action generation | `prompts/03_action_generation.md` | `actionOutputSchema` | DRAFT communications |
+| Action generation | `prompts/03_action_generation.md` | `actionOutputSchema` | Review-ready communications |
 
 An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but is not wired into the production pipeline.
 
@@ -42,3 +42,4 @@ An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but
 - Invoice batches are chunked (default 10 per chunk) with per-chunk retry and partial-result preservation.
 - Token and cost telemetry is visible in the Audit & Governance workspace tab.
 - Before production verification, add `GEMINI_API_KEY` to the Vercel project environments. The key must remain server-side and must not use a `VITE_` prefix.
+- Production UI copy presents generated outputs as review-ready follow-up material rather than internal control labels; the underlying no-send and human-approval controls remain unchanged.

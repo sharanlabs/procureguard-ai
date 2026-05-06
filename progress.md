@@ -8,3 +8,4 @@
 - Vercel project `sharank98-6490s-projects/procureguard-ai` created and linked to `sharanlabs/procureguard-ai`.
 - Vercel build settings pinned in `vercel.json`.
 - Remaining production blocker: add `GEMINI_API_KEY` in Vercel environments before production analysis can run.
+- Production UI copy polished: removed the deployment-key status banner and replaced internal control-label language with professional review-ready follow-up wording while preserving human approval controls.

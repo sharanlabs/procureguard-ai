@@ -28,7 +28,7 @@ const GOVERNANCE_STAGE_LABELS = {
   upload: "Data setup",
   matching: "Matching",
   classification: "Classification",
-  action_generation: "Draft generation",
+  action_generation: "Communication prep",
   alignment: "Result alignment",
   review_surface: "Review surface",
   export: "Audit export",
@@ -247,8 +247,8 @@ function getExceptionTone(tier) {
 
 function routeTone(label) {
   if (label === "AP escalation memo") return "escalate";
-  if (label === "Procurement review draft") return "review";
-  if (label === "Supplier follow-up draft") return "info";
+  if (label === "Procurement review request") return "review";
+  if (label === "Supplier follow-up") return "info";
   return "neutral";
 }
 
@@ -566,7 +566,7 @@ function getRunMetaViewModel(runState = {}, analytics = {}, auditEntries = []) {
   return {
     dateLabel: safeDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     closedTime: safeDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-    pipelineSummary: "AI match → risk route → drafts",
+    pipelineSummary: "AI match → risk route → follow-up",
     latency: formatLatencyText(runState?.totalLatencyMs ?? analytics?.auditGovernance?.totalLatencyMs)
   };
 }
@@ -575,7 +575,7 @@ function getAiLedger(analytics = {}, draftsVm = {}) {
   return [
     { id: "checked", label: "Invoices checked", value: safeNumber(analytics.totalInvoices), tone: "neutral" },
     { id: "routed", label: "Exceptions routed", value: safeNumber(analytics.exceptionRows), tone: safeNumber(analytics.exceptionRows) > 0 ? "review" : "clean" },
-    { id: "drafts", label: "Drafts prepared", value: safeNumber(draftsVm.totalDrafts || analytics.draftActionCount), tone: safeNumber(draftsVm.totalDrafts || analytics.draftActionCount) > 0 ? "review" : "neutral" },
+    { id: "followups", label: "Follow-ups prepared", value: safeNumber(draftsVm.totalDrafts || analytics.draftActionCount), tone: safeNumber(draftsVm.totalDrafts || analytics.draftActionCount) > 0 ? "review" : "neutral" },
     { id: "audit", label: "Audit events", value: safeNumber(analytics.auditGovernance?.auditEntryCount), tone: "neutral" },
     { id: "autonomous", label: "Autonomous actions", value: 0, tone: "clean" }
   ];
@@ -627,7 +627,7 @@ function getAuditReplayViewModel(auditEntries = []) {
     upload: "Upload",
     matching: "Matching",
     classification: "Classification",
-    action_generation: "Drafts",
+    action_generation: "Follow-ups",
     review_surface: "Decision"
   };
 
@@ -857,7 +857,7 @@ export function getRecommendedRouteLabel(actionResult, classification) {
 
   if (primary?.action_type === "po_amendment_request") {
     return {
-      label: "Procurement review draft",
+      label: "Procurement review request",
       tone: "review",
       actionType: primary.action_type
     };
@@ -865,14 +865,14 @@ export function getRecommendedRouteLabel(actionResult, classification) {
 
   if (primary?.action_type === "supplier_email") {
     return {
-      label: "Supplier follow-up draft",
+      label: "Supplier follow-up",
       tone: "info",
       actionType: primary.action_type
     };
   }
 
   return {
-    label: "No draft needed",
+    label: "No follow-up needed",
     tone: "neutral",
     actionType: primary?.action_type ?? null
   };
@@ -882,8 +882,8 @@ export function getDraftStatus(actionResult) {
   if (!actionResult) {
     return {
       id: "unavailable",
-      label: "Draft status not available",
-      detail: "Action generation has not produced a result for this invoice.",
+      label: "Follow-up status not available",
+      detail: "Communication preparation has not produced a result for this invoice.",
       tone: "neutral",
       count: 0,
       hasDraft: false
@@ -896,8 +896,8 @@ export function getDraftStatus(actionResult) {
   if (!draftActions.length) {
     return {
       id: "none",
-      label: "No draft needed",
-      detail: "No draft generated for this invoice.",
+      label: "No follow-up needed",
+      detail: "No follow-up generated for this invoice.",
       tone: "neutral",
       count: 0,
       hasDraft: false
@@ -908,8 +908,8 @@ export function getDraftStatus(actionResult) {
 
   return {
     id: hasEscalationMemo ? "escalation-draft" : "draft-ready",
-    label: `${draftActions.length} ${pluralize(draftActions.length, "draft")} prepared`,
-    detail: "DRAFT-only. Human review is required before any communication.",
+    label: `${draftActions.length} ${pluralize(draftActions.length, "follow-up")} prepared`,
+    detail: "Human review is required before any communication.",
     tone: hasEscalationMemo ? "escalate" : "info",
     count: draftActions.length,
     hasDraft: true
@@ -1088,12 +1088,12 @@ export function buildWorkbenchSummary(rows = []) {
         helper: "AP supervisor route"
       },
       {
-        id: "drafts-prepared",
-        label: "Drafts prepared",
+        id: "followups-prepared",
+        label: "Follow-ups prepared",
         value: draftsPrepared,
         format: "integer",
         tone: draftsPrepared > 0 ? "info" : "neutral",
-        helper: "DRAFT-only"
+        helper: "Approval required"
       },
       {
         id: "exposure-identified",
@@ -1701,7 +1701,7 @@ function getGovernanceRunState({ isAnalysisRunning, runningStep, failedStep, err
       id: "complete",
       label: "Audit-supporting run captured",
       tone: "clean",
-      detail: "Audit entries, review outputs, and DRAFT-only controls are available for human review."
+      detail: "Audit entries, review outputs, and approval controls are available for human review."
     };
   }
 
@@ -1910,7 +1910,7 @@ export function buildValidationGateSummary({
         statusLabel: hasMergedResults ? "Available" : failedStep ? "Failed" : isAnalysisRunning ? "In progress" : "Not available",
         tone: hasMergedResults ? "clean" : failedStep ? "escalate" : isAnalysisRunning ? "info" : "neutral",
         detail: hasMergedResults
-          ? "Merged matching, classification, and draft outputs are available to review surfaces."
+          ? "Merged matching, classification, and communication outputs are available to review surfaces."
           : failedStageLabel
             ? `${failedStageLabel} did not complete, so result alignment is not shown as complete.`
             : "Validation detail not available for this run."
@@ -1924,12 +1924,12 @@ export function buildValidationGateSummary({
         detail: "Audit records exclude service keys and request payloads."
       },
       {
-        id: "draft-only-controls",
-        label: "DRAFT-only controls",
+        id: "review-controls",
+        label: "Review controls",
         status: "active",
         statusLabel: "Active",
         tone: "clean",
-        detail: "Generated communications remain marked DRAFT and require human review."
+        detail: "Generated communications require human review before use."
       }
     ]
   };
@@ -2189,8 +2189,8 @@ export function buildAiReliabilitySummary({
         format: "integer"
       },
       {
-        id: "draft-controls",
-        label: "Draft-only controls",
+        id: "review-controls",
+        label: "Review controls",
         value: "Active",
         tone: "clean",
         helper: "No communication action is available from this product surface.",

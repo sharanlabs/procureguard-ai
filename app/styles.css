@@ -38,7 +38,7 @@
   --color-accent-soft:  oklch(96.6% 0.024 272);
   --color-accent-border:oklch(84.5% 0.052 272);
 
-  /* DRAFT badge — kept neutral so it never reads as a sendable action */
+  /* Review badge — kept neutral so it never reads as a sendable action */
   --color-draft:        oklch(38% 0.022 270);
   --color-draft-soft:   oklch(96% 0.005 270);
 

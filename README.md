@@ -1,10 +1,10 @@
 # ProcureGuard AI
 
-A payment-run control desk for procurement teams. ProcureGuard compares purchase orders, supplier invoices, and goods receipts, identifies exceptions with evidence, and prepares DRAFT-only follow-up work for human review.
+A payment-run control desk for procurement teams. ProcureGuard compares purchase orders, supplier invoices, and goods receipts, identifies exceptions with evidence, and prepares review-ready follow-up work for human approval.
 
-The system does not send emails, release payments, or execute supplier actions. Every AI decision is logged, every drafted communication is labeled DRAFT, and nothing leaves the system without explicit human approval.
+The system does not send emails, release payments, or execute supplier actions. Every AI decision is logged, prepared communications require human review, and nothing leaves the system without explicit human approval.
 
-<img src="public/live-screenshots/procureguard-live-crop-drafts-killer-feature.png" alt="ProcureGuard AI showing DRAFT-only follow-up communications ready for human review" width="100%">
+<img src="public/live-screenshots/procureguard-live-crop-drafts-killer-feature.png" alt="ProcureGuard AI showing follow-up communications ready for human review" width="100%">
 
 ## How it works
 
@@ -12,7 +12,7 @@ ProcureGuard runs a three-stage Gemini analysis pipeline:
 
 1. **Match** purchase orders, invoices, and goods receipts across 17 exception types.
 2. **Classify** exceptions by severity tier and business impact.
-3. **Prepare** DRAFT-only supplier follow-ups, approval requests, and escalation notes.
+3. **Prepare** supplier follow-ups, approval requests, and escalation notes for human review.
 
 Each stage produces structured JSON validated against a schema. Results feed into five review surfaces.
 
@@ -20,7 +20,7 @@ Each stage produces structured JSON validated against a schema. Results feed int
 
 | Executive Summary | Exception Workbench |
 |---|---|
-| <img src="public/live-screenshots/procureguard-live-crop-executive-hero.png" alt="Executive Summary showing held payment value and payment-run command center"> | <img src="public/live-screenshots/procureguard-live-crop-workbench-queue.png" alt="Exception Workbench showing invoice review queue and DRAFT-only follow-up material"> |
+| <img src="public/live-screenshots/procureguard-live-crop-executive-hero.png" alt="Executive Summary showing held payment value and payment-run command center"> | <img src="public/live-screenshots/procureguard-live-crop-workbench-queue.png" alt="Exception Workbench showing invoice review queue and prepared follow-up material"> |
 
 | Supplier Analytics | Audit and Governance |
 |---|---|

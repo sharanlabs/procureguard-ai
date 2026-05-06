@@ -18,7 +18,7 @@ const MODEL_LABELS = {
 const STAGE_LABELS = {
   matching: "Matching",
   classification: "Classification",
-  action_generation: "Draft generation"
+  action_generation: "Communication prep"
 };
 
 const DIVERSITY_CERT_LABELS = {

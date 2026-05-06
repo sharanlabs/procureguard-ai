@@ -210,11 +210,7 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
 
 function ApiKeyPanel({ apiKey, onApiKeyChange }) {
   if (!import.meta.env.DEV) {
-    return (
-      <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-sm dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
-        Production uses the server-side AI service key configured in deployment.
-      </section>
-    );
+    return null;
   }
 
   return (
@@ -596,9 +592,26 @@ function toneBorderClass(tone) {
 
 function routeLabelForAction(action) {
   if (action?.action_type === "escalation_memo") return "AP escalation memo";
-  if (action?.action_type === "po_amendment_request") return "Procurement review draft";
-  if (action?.action_type === "supplier_email") return "Supplier follow-up draft";
-  return "No draft needed";
+  if (action?.action_type === "po_amendment_request") return "Procurement review request";
+  if (action?.action_type === "supplier_email") return "Supplier follow-up";
+  return "No follow-up needed";
+}
+
+function reviewLabelForAction(action) {
+  if (action?.action_type === "escalation_memo") return "Escalation review";
+  if (action?.draft_label) return "Approval required";
+  return "Review required";
+}
+
+function reviewBodyForAction(body) {
+  const text = String(body ?? "").trim();
+  if (!text) return "Prepared communication not available.";
+  return text
+    .replace(/^DRAFT\s*[—-]\s*AWAITING(?:\s+AP)?\s+REVIEW\s*/i, "")
+    .replace(/^ESCALATION\s+MEMO\s*[—-]\s*DRAFT\s*/i, "Escalation memo")
+    .replace(/\bDRAFT[\s-]*only\b/gi, "Review controlled")
+    .replace(/\bDRAFT\b/g, "REVIEW COPY")
+    .trim();
 }
 
 function SummaryMetric({ metric }) {
@@ -700,7 +713,7 @@ function WorkbenchHeader({ hasData, isAnalysisRunning, isPartial = false }) {
             Which invoices need human review now?
           </h2>
           <p className="pg-copy mt-2 max-w-3xl">
-            Analyst queue for triaging invoice exceptions, validating evidence, and reviewing DRAFT-only follow-up material.
+            Analyst queue for triaging invoice exceptions, validating evidence, and reviewing prepared follow-up material.
           </p>
         </div>
         <Badge className={toneBadgeClass(isAnalysisRunning ? "info" : isPartial ? "review" : hasData ? "review" : "neutral")}>
@@ -847,7 +860,7 @@ function DraftAction({
   return (
     <details className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <summary className="cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200">
-        View draft text
+        Review communication
       </summary>
       <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
@@ -855,9 +868,9 @@ function DraftAction({
             <Badge className={toneBadgeClass(action.action_type === "escalation_memo" ? "escalate" : "info")}>
               {routeLabelForAction(action)}
             </Badge>
-            <Badge className={toneBadgeClass("neutral")}>{action.draft_label || "DRAFT - AWAITING REVIEW"}</Badge>
+            <Badge className={toneBadgeClass("neutral")}>{reviewLabelForAction(action)}</Badge>
           </div>
-          <h4 className="mt-3 text-sm font-semibold text-slate-950 dark:text-slate-100">{action.subject || "Draft subject not available"}</h4>
+          <h4 className="mt-3 text-sm font-semibold text-slate-950 dark:text-slate-100">{action.subject || "Subject not available"}</h4>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {renderValue(action.recipient_type)}
             {action.recipient_name ? `: ${action.recipient_name}` : ""}
@@ -875,7 +888,7 @@ function DraftAction({
         ) : null}
       </div>
       <pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm leading-6 text-slate-700 dark:bg-slate-950 dark:text-slate-300">
-        {action.body || "Draft body not available."}
+        {reviewBodyForAction(action.body)}
       </pre>
       <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3 dark:text-slate-400">
         <span>Deadline: {action.response_deadline_days ?? "None"}</span>
@@ -923,14 +936,14 @@ function DraftPanel({
     <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Draft/action panel</p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Review/action panel</p>
           <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{row.draftStatus.detail}</p>
         </div>
         <Badge className={toneBadgeClass(row.draftStatus.tone)}>{row.draftStatus.label}</Badge>
       </div>
       {!row.actionResult ? (
         <p className="mt-4 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-          Draft status not available.
+          Follow-up status not available.
         </p>
       ) : draftActions.length ? (
         <div className="mt-4 space-y-3">
@@ -951,7 +964,7 @@ function DraftPanel({
         </div>
       ) : (
         <p className="mt-4 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-          No draft generated for this invoice.
+          No follow-up generated for this invoice.
         </p>
       )}
     </section>
@@ -1021,7 +1034,7 @@ function InvoiceCard({
               {tierLabel(row.simulation.originalTier)} &rarr; {tierLabel(row.simulation.simulatedTier)}
             </p>
             <p className="mt-1 text-blue-800 dark:text-blue-300">
-              This is a what-if view only. The original model rationale, draft actions, and review controls remain unchanged.
+              This is a what-if view only. The original model rationale, prepared actions, and review controls remain unchanged.
             </p>
           </section>
         ) : null}
@@ -1030,7 +1043,7 @@ function InvoiceCard({
           <CardFact label="Exposure" value={formatMoney(row.exposureAmount)} tone="info" isNumber />
           <CardFact label="Hold" value={formatMoney(row.holdAmount)} tone={row.holdAmount > 0 ? "review" : "neutral"} isNumber />
           <CardFact label="Recommended route" value={row.recommendedRoute.label} tone={row.recommendedRoute.tone} />
-          <CardFact label="Draft status" value={row.draftStatus.label} tone={row.draftStatus.tone} />
+          <CardFact label="Follow-up status" value={row.draftStatus.label} tone={row.draftStatus.tone} />
           <CardFact label="Evidence" value={row.evidenceStrength.label} helper={formatPercentValue(row.modelConfidence)} tone={row.evidenceStrength.tone} isNumber />
         </div>
 
@@ -1433,7 +1446,7 @@ function AuditTrailSummaryAndExport({ viewModel, onExport }) {
           isNumber={false}
         />
         <GovernanceMetric
-          label="Draft-only controls"
+          label="Review controls"
           value="Active"
           helper="Communications require human review before use"
           tone="clean"
@@ -1762,7 +1775,7 @@ function ExceptionWorkbenchPanel({
         <WorkbenchEmptyState
           eyebrow="Analysis in progress"
           title="Workbench will populate after analysis completes"
-          body="The queue is intentionally withheld while matching, classification, or draft generation is running so analysts do not act on partial results."
+          body="The queue is intentionally withheld while matching, classification, or communication preparation is running so analysts do not act on partial results."
           tone="info"
           icon={Loader2}
         />
@@ -1794,7 +1807,7 @@ function ExceptionWorkbenchPanel({
         <WorkbenchEmptyState
           eyebrow="Awaiting analysis"
           title="Run analysis from Start to build the exception queue"
-          body="Upload purchase orders, invoices, and goods receipts, then run Analyze. Completed results will populate invoice priorities, evidence, exposure, holds, and DRAFT-only follow-up material."
+          body="Upload purchase orders, invoices, and goods receipts, then run Analyze. Completed results will populate invoice priorities, evidence, exposure, holds, and review-ready follow-up material."
           actionLabel="Go to Start"
           onAction={onStart}
           tone="neutral"
@@ -2992,7 +3005,7 @@ export default function App() {
     }
 
     let completedCount = 0;
-    setStatusMessage(`Drafting 0/${items.length} chunks...`);
+    setStatusMessage(`Preparing follow-ups 0/${items.length} chunks...`);
 
     await runChunksWithConcurrency(items, async ({ chunk, chunkIndex }) => {
       const chunkMeta = createChunkMeta(chunk, chunkIndex, chunks.length);
@@ -3004,7 +3017,7 @@ export default function App() {
 
       try {
         if (!matchingChunks[chunkIndex] || !classificationChunks[chunkIndex]) {
-          throw new Error(`Missing required input data for draft generation chunk ${chunkMeta.index}/${chunkMeta.total}`);
+          throw new Error(`Missing required input data for communication preparation chunk ${chunkMeta.index}/${chunkMeta.total}`);
         }
 
         const fullBatch = buildActionBatch(context, matchingChunks[chunkIndex], classificationChunks[chunkIndex]);
@@ -3037,7 +3050,7 @@ export default function App() {
             maxTokens: STAGE_MAX_TOKENS.action_generation,
             stage: "action_generation",
             apiKey,
-            onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`AI service is busy during drafting chunk ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
+            onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`AI service is busy during communication preparation chunk ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
           });
           const normalized = normalizeActionChunkResults(
             context.invoices,
@@ -3065,7 +3078,7 @@ export default function App() {
         });
         setPipelineRunState(stateRef.current);
         completedCount += 1;
-        setStatusMessage(`Drafting ${completedCount}/${items.length} chunks complete...`);
+        setStatusMessage(`Preparing follow-ups ${completedCount}/${items.length} chunks complete...`);
         await recordAuditEntry({
           step: "action_generation",
           model: auditModel,
@@ -3175,7 +3188,7 @@ export default function App() {
         startStage: "matching",
         startIndex: 0
       });
-      setStatusMessage("Prompt chain complete. Review drafted communications.");
+      setStatusMessage("Prompt chain complete. Review prepared communications.");
       setActiveWorkspace("executive");
     } catch (pipelineError) {
       setFailedStep((current) => current || activeStep);
@@ -3204,7 +3217,7 @@ export default function App() {
         startStage: descriptor.stage,
         startIndex: descriptor.chunkIndex - 1
       });
-      setStatusMessage("Prompt chain complete after retry. Review drafted communications.");
+      setStatusMessage("Prompt chain complete after retry. Review prepared communications.");
       setActiveWorkspace("executive");
     } catch (retryError) {
       setFailedStep((current) => current || descriptor.stage);
@@ -3251,15 +3264,15 @@ export default function App() {
   }
 
   const runStatusFull = runningStep
-    ? `${formatStageName(runningStep)} running · DRAFT-only`
+    ? `${formatStageName(runningStep)} running · Review-ready`
     : finalResultsComplete
-      ? "Run complete · DRAFT-only"
-      : "Ready to analyze · DRAFT-only";
+      ? "Run complete · Review-ready"
+      : "Ready to analyze";
   const runStatusCompact = runningStep
-    ? `${formatStageName(runningStep)} · DRAFT`
+    ? `${formatStageName(runningStep)} · Review`
     : finalResultsComplete
-      ? "Complete · DRAFT-only"
-      : "Ready · DRAFT-only";
+      ? "Complete · Review-ready"
+      : "Ready";
 
   return (
     <main className={`${isDarkMode ? "dark" : ""} pg-shell px-4 py-5 sm:px-6 lg:px-8`}>
@@ -3349,7 +3362,7 @@ export default function App() {
             <WorkbenchEmptyState
               eyebrow="Executive Summary withheld"
               title="Final batch summary is available only after all stages complete"
-              body="This run has retained partial chunks, but Executive Summary metrics, estimated recovery, and completed-batch wording stay hidden until matching, classification, draft generation, and merge validation all pass."
+              body="This run has retained partial chunks, but Executive Summary metrics, estimated recovery, and completed-batch wording stay hidden until matching, classification, communication preparation, and merge validation all pass."
               actionLabel="Go to Start"
               onAction={() => setActiveWorkspace("start")}
               tone="review"
