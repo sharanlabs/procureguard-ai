@@ -60,15 +60,22 @@ The app does not use LangChain, vector search, autonomous agents, background ema
 
 ## End-to-end architecture
 
-```mermaid
-flowchart LR
-  files["Procurement CSVs"] --> app["React browser app"]
-  app --> pipeline["Gemini analysis pipeline"]
-  pipeline --> proxy["API proxy"]
-  proxy --> gemini["Gemini 2.5 Flash"]
-  gemini --> review["Review dashboards"]
-  review --> human["Human approval only"]
-  evals["Golden eval suite"] -.-> pipeline
+```text
+Procurement CSVs
+      ↓
+React browser app
+      ↓
+Gemini analysis pipeline
+      ↓
+API proxy
+      ↓
+Gemini 2.5 Flash
+      ↓
+Review dashboards
+      ↓
+Human approval only
+
+Golden eval suite → validates the pipeline
 ```
 
 Operational boundaries:
