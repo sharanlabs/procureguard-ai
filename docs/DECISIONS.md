@@ -300,7 +300,7 @@ Decisions are logged as they are made. Later decisions may supersede earlier one
 
 **Rationale:** A linear main history makes the build progression easy to audit.
 
-**Consequences:** Each stage must leave the tree clean and update `progress.md` and `docs/HANDOFF.md`.
+**Consequences:** Each stage must leave the tree clean and pass validation checks.
 
 ---
 
