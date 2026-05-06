@@ -44,3 +44,4 @@ An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but
 - Before production verification, add `GEMINI_API_KEY` to the Vercel project environments. The key must remain server-side and must not use a `VITE_` prefix.
 - Production UI copy presents generated outputs as review-ready follow-up material rather than internal control labels; the underlying no-send and human-approval controls remain unchanged.
 - The Start, Executive Summary, Exception Workbench, Supplier Analytics, and Audit & Governance tabs have been reviewed for professional payment-review language and mobile layout fit.
+- Dark mode has been checked against the golden demo path (`?pgDemo=golden&pgTheme=dark`) across all workspace tabs, including 390px and 320px mobile overflow assertions.

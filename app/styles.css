@@ -209,7 +209,6 @@ summary::marker {
 
 .pg-shell {
   min-height: 100vh;
-  overflow-x: hidden;
   background: var(--color-bg);
   color: var(--color-ink);
   color-scheme: light;
@@ -1666,6 +1665,10 @@ summary::marker {
   background: color-mix(in oklch, var(--color-surface-2) 54%, transparent);
 }
 
+.dark .pg-table-wrap tbody tr:hover td:first-child {
+  background: color-mix(in oklch, var(--color-surface-2) 58%, black);
+}
+
 .pg-table-wrap tbody td {
   padding: 0.82rem 0.95rem;
   font-size: var(--text-sm);
@@ -1825,18 +1828,21 @@ summary::marker {
 
 .dark .pg-heat-cell[data-level="1"] {
   background: color-mix(in oklch, var(--color-accent-soft) 64%, var(--color-surface));
-  color: var(--color-ink);
+  border-color: color-mix(in oklch, var(--color-clean) 42%, var(--color-rule));
+  color: oklch(78% 0.12 145);
 }
 
 .dark .pg-heat-cell[data-level="2"] {
   background: var(--color-review-soft);
-  color: color-mix(in oklch, var(--color-review) 88%, white);
+  border-color: color-mix(in oklch, var(--color-review) 46%, var(--color-rule));
+  color: oklch(80% 0.13 70);
 }
 
 .dark .pg-heat-cell[data-level="3"],
 .dark .pg-heat-cell[data-level="4"] {
   background: var(--color-escalate-soft);
-  color: color-mix(in oklch, var(--color-escalate) 86%, white);
+  border-color: color-mix(in oklch, var(--color-escalate) 44%, var(--color-rule));
+  color: oklch(78% 0.15 25);
 }
 
 .dark .pg-table-wrap {
@@ -2484,6 +2490,13 @@ summary::marker {
   pointer-events: none;
 }
 
+.dark .pg-command-hero::before,
+.dark .pg-material-card::before,
+.dark .pg-evidence-card::before,
+.dark .pg-drafts-hero::before {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .pg-command-hero {
   display: grid;
   gap: clamp(1.45rem, 2vw, 2rem);
@@ -2846,6 +2859,21 @@ summary::marker {
 .pg-release-danger { color: var(--color-escalate); }
 .pg-release-count-review { color: var(--color-review); }
 .pg-release-count-clean { color: var(--color-clean); }
+
+.dark .pg-release-status,
+.dark .pg-release-danger {
+  color: oklch(77% 0.16 25);
+}
+
+.dark .pg-release-review .pg-release-status,
+.dark .pg-release-count-review {
+  color: oklch(80% 0.13 70);
+}
+
+.dark .pg-release-clean .pg-release-status,
+.dark .pg-release-count-clean {
+  color: oklch(77% 0.12 145);
+}
 
 .pg-workflow-panel {
   padding: clamp(1.05rem, 1.4vw, 1.35rem);
@@ -3283,6 +3311,21 @@ summary::marker {
 .pg-evidence-review { border-color: oklch(82% 0.07 70); background: var(--color-review-soft); color: oklch(45% 0.13 70); }
 .pg-evidence-clean { border-color: oklch(82% 0.05 145); background: var(--color-clean-soft); color: var(--color-clean); }
 
+.dark .pg-evidence-escalate {
+  border-color: color-mix(in oklch, var(--color-escalate) 52%, var(--color-rule));
+  color: oklch(78% 0.15 25);
+}
+
+.dark .pg-evidence-review {
+  border-color: color-mix(in oklch, var(--color-review) 56%, var(--color-rule));
+  color: oklch(80% 0.13 70);
+}
+
+.dark .pg-evidence-clean {
+  border-color: color-mix(in oklch, var(--color-clean) 48%, var(--color-rule));
+  color: oklch(77% 0.12 145);
+}
+
 .pg-draft-invoice,
 .pg-draft-amount {
   font-family: var(--font-mono);
@@ -3409,6 +3452,16 @@ summary::marker {
   border: 1px solid oklch(82% 0.07 70);
   background: var(--color-review-soft);
   color: oklch(45% 0.13 70);
+}
+
+.dark .pg-draft-tier-3 {
+  border-color: color-mix(in oklch, var(--color-escalate) 52%, var(--color-rule));
+  color: oklch(78% 0.15 25);
+}
+
+.dark .pg-draft-tier-2 {
+  border-color: color-mix(in oklch, var(--color-review) 56%, var(--color-rule));
+  color: oklch(80% 0.13 70);
 }
 
 .pg-draft-invoice {
@@ -3930,6 +3983,9 @@ summary::marker {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.55rem;
     margin-inline: 0;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     padding-inline: 0;
     padding-block: 0.7rem;
   }
@@ -3942,6 +3998,8 @@ summary::marker {
 
   .pg-workspace-nav {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     justify-self: stretch;
   }
 
@@ -3968,10 +4026,10 @@ summary::marker {
     display: grid;
     grid-template-columns: 2.5rem minmax(0, 1fr);
     justify-content: stretch;
-    width: calc(100% - 0.5rem);
+    width: 100%;
     min-width: 0;
     max-width: 100%;
-    margin-inline: 0.25rem;
+    margin-inline: 0;
     gap: 0.45rem;
   }
 
@@ -4043,7 +4101,16 @@ summary::marker {
   .pg-page-header,
   .pg-page-header > div,
   .pg-page-header > div > div {
+    min-width: 0;
     max-width: 100%;
+  }
+
+  .pg-page-header > div > span {
+    align-self: flex-start;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
   }
 
   .pg-page-title {
@@ -4150,7 +4217,9 @@ summary::marker {
 
   .pg-tabs {
     width: 100%;
-    overflow-x: auto;
+    max-width: 100%;
+    min-width: 0;
+    overflow: visible;
     scrollbar-width: none;
   }
 
@@ -4165,7 +4234,7 @@ summary::marker {
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .pg-tab {
@@ -4181,7 +4250,8 @@ summary::marker {
   .pg-tab-main {
     flex-direction: column;
     gap: 0.22rem;
-    font-size: clamp(0.62rem, 2.55vw, 0.74rem);
+    width: 100%;
+    font-size: clamp(0.58rem, 2.28vw, 0.7rem);
   }
 
   .pg-tab-label {
@@ -4190,15 +4260,11 @@ summary::marker {
 
   .pg-tab-main::after {
     content: attr(data-short-label);
-    display: none;
-    max-width: min(100%, 3.8rem);
+    display: block;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .pg-tab-active .pg-tab-main::after {
-    display: block;
   }
 
   .pg-start-surface section,
