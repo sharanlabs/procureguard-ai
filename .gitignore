@@ -9,5 +9,7 @@ build/
 npm-debug.log*
 *.log
 .claude/settings.local.json
+.claude/worktrees/
 .codex/config.toml
 evals/results/*.json
+.vercel

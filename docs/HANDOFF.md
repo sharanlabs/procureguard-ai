@@ -8,6 +8,9 @@ Last updated: May 6, 2026
 - **Approved model**: `gemini-2.5-flash`.
 - **Validation gates**: `node evals/run_evals.js` (25/25 passing) and `npm run build`.
 - **Deployment target**: Vercel with `GEMINI_API_KEY` as a server-side environment variable.
+- **Vercel project**: `sharank98-6490s-projects/procureguard-ai`, linked to `sharanlabs/procureguard-ai`.
+- **Vercel build config**: `vercel.json` pins Vite, `npm ci`, `npm run build`, and `dist`.
+- **CI**: GitHub Actions workflow `.github/workflows/ci.yml` runs `npm ci`, deterministic evals, and production build on `main` pushes and pull requests.
 
 ## Pipeline stages
 
@@ -29,6 +32,8 @@ An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but
 - `app/lib/uiModels.js` — View model builders for all five review surfaces.
 - `api/messages.js` — Vercel serverless proxy (model allowlist, key gating).
 - `evals/run_evals.js` — Deterministic eval harness with golden dataset.
+- `vercel.json` — Vercel build settings for the Vite app.
+- `.github/workflows/ci.yml` — CI gate for evals and build.
 
 ## Notes
 
@@ -36,3 +41,4 @@ An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but
 - All structured output uses `responseMimeType: "application/json"` with `responseJsonSchema`.
 - Invoice batches are chunked (default 10 per chunk) with per-chunk retry and partial-result preservation.
 - Token and cost telemetry is visible in the Audit & Governance workspace tab.
+- Before production verification, add `GEMINI_API_KEY` to the Vercel project environments. The key must remain server-side and must not use a `VITE_` prefix.
