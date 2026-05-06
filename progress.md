@@ -13,3 +13,4 @@
 - Mobile workbench layout tightened so invoice identifiers, status badges, and review labels wrap cleanly without clipping.
 - Dark-mode QA completed across populated desktop and mobile demo views; dark contrast, mobile tab labels, error fallback styling, and horizontal overflow safeguards were tightened.
 - Production metadata aligned with the Payment Review Console positioning, plus basic robots and sitemap files for the free Vercel URL.
+- README live screenshots refreshed from the current production-style UI so the repository page no longer shows the old draft/prototype presentation.

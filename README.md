@@ -4,7 +4,7 @@ A payment-run control desk for procurement teams. ProcureGuard compares purchase
 
 The system does not send emails, release payments, or execute supplier actions. Every AI decision is logged, prepared communications require human review, and nothing leaves the system without explicit human approval.
 
-<img src="public/live-screenshots/procureguard-live-crop-drafts-killer-feature.png" alt="ProcureGuard AI showing follow-up communications ready for human review" width="100%">
+<img src="public/live-screenshots/procureguard-live-crop-followup-review.png" alt="ProcureGuard AI showing prepared follow-up work ready for human review" width="100%">
 
 ## How it works
 

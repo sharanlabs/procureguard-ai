@@ -45,4 +45,5 @@ An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but
 - Production UI copy presents generated outputs as review-ready follow-up material rather than internal control labels; the underlying no-send and human-approval controls remain unchanged.
 - The Start, Executive Summary, Exception Workbench, Supplier Analytics, and Audit & Governance tabs have been reviewed for professional payment-review language and mobile layout fit.
 - Dark mode has been checked against the golden demo path (`?pgDemo=golden&pgTheme=dark`) across all workspace tabs, including 390px and 320px mobile overflow assertions.
+- README screenshot assets under `public/live-screenshots/` were regenerated from the current UI after the copy polish pass.
 - Production metadata, canonical URL, robots, and sitemap currently target `https://procureguard-ai.vercel.app/`; update them if a custom domain replaces the free Vercel URL.
