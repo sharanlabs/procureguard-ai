@@ -62,14 +62,13 @@ The app does not use LangChain, vector search, autonomous agents, background ema
 
 ```mermaid
 flowchart LR
-  files["Procurement CSVs<br/>POs, invoices, receipts"] --> app["React browser app<br/>parse, validate, hold session state"]
-  app --> pipeline["Gemini analysis pipeline<br/>match → classify → draft"]
-  pipeline --> proxy["API route / proxy<br/>server-side Gemini key in production"]
-  proxy --> gemini["Gemini 2.5 Flash<br/>structured JSON output"]
-  gemini --> review["ProcureGuard review surfaces<br/>Executive, Workbench, Analytics, Audit"]
-  review --> human["Human approval only<br/>DRAFT-only, no send, no payment release"]
-
-  evals["Golden eval suite<br/>25/25 deterministic checks"] -.-> pipeline
+  files["Procurement CSVs"] --> app["React browser app"]
+  app --> pipeline["Gemini analysis pipeline"]
+  pipeline --> proxy["API proxy"]
+  proxy --> gemini["Gemini 2.5 Flash"]
+  gemini --> review["Review dashboards"]
+  review --> human["Human approval only"]
+  evals["Golden eval suite"] -.-> pipeline
 ```
 
 Operational boundaries:

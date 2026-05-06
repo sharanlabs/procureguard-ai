@@ -176,6 +176,7 @@ Next: Final git hygiene, Vercel environment setup, and production deploy.
 - Publication and deployment readiness cleanup completed: added `.env.example`, `DEPLOYMENT.md`, README-focused screenshot crops, and a current Gemini runtime snapshot in `docs/HANDOFF.md`. GitHub CI remains deferred because the current push token lacks workflow permission.
 - README end-to-end architecture diagram completed: added a Mermaid diagram covering browser upload, CSV parsing, prompt chain, Gemini routing, structured output validation, view models, review surfaces, evals, and screenshot demo seed.
 - README architecture diagram simplified for public viewing: reduced the diagram to the main product flow and trust boundaries instead of implementation-level detail.
+- README architecture Mermaid syntax fixed for GitHub rendering by removing rich HTML labels and special glyphs.
 
 ## Decisions pending
 
