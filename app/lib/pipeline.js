@@ -404,7 +404,7 @@ export function buildFailedChunkDescriptor({ stage, chunkIndex, totalChunks, chu
     invoiceCount: chunkMeta?.invoice_count ?? 0,
     failureType: classified.failureType,
     message: classified.message,
-    userMessage: `Analysis stopped at ${stage} chunk ${chunkIndex + 1}/${totalChunks} for invoices ${chunkMeta?.invoice_range ?? "unknown"}: ${classified.message}`,
+    userMessage: `Analysis stopped at ${stage} batch ${chunkIndex + 1}/${totalChunks} for invoices ${chunkMeta?.invoice_range ?? "unknown"}: ${classified.message}`,
     retryable: classified.retryable
   };
 }
@@ -569,7 +569,7 @@ export function normalizeActionChunkResults(expectedInvoices, actionResults, cla
   }
   const unexpected = rowNumbers.filter((number) => !expectedInvoices.some((invoice) => invoiceNumber(invoice) === number));
   if (unexpected.length) {
-    throw new Error(`action_generation returned unexpected invoice(s) for invoices ${rangeLabel}: ${unexpected.join(", ")}`);
+    throw new Error(`Communication preparation returned unexpected invoices for range ${rangeLabel}: ${unexpected.join(", ")}`);
   }
 
   return { action_results: normalizedRows };

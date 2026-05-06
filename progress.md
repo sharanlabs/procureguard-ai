@@ -9,3 +9,5 @@
 - Vercel build settings pinned in `vercel.json`.
 - Remaining production blocker: add `GEMINI_API_KEY` in Vercel environments before production analysis can run.
 - Production UI copy polished: removed the deployment-key status banner and replaced internal control-label language with professional review-ready follow-up wording while preserving human approval controls.
+- Full workspace UI polish completed across Start, Executive Summary, Exception Workbench, Supplier Analytics, and Audit & Governance; prototype/demo wording was replaced with professional payment-review language.
+- Mobile workbench layout tightened so invoice identifiers, status badges, and review labels wrap cleanly without clipping.

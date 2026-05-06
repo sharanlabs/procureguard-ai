@@ -304,7 +304,7 @@ const WORKFLOW_STEPS = [
   { id: "po", label: "PO", icon: PurchaseOrderIcon },
   { id: "receipt", label: "Receipt", icon: GoodsReceiptIcon },
   { id: "invoice", label: "Invoice", icon: SupplierInvoiceIcon },
-  { id: "match", label: "AI Match", icon: MatchScaleIcon },
+  { id: "match", label: "Match", icon: MatchScaleIcon },
   { id: "review", label: "Review", icon: ReviewIcon },
   { id: "followup", label: "Follow-up", icon: DraftDocumentIcon }
 ];
@@ -338,15 +338,15 @@ function ExecutiveHeadline({ headline, runMeta, kpis, onOpenHeldInvoices, onOpen
         ) : null}
         <dl className="pg-command-meta" aria-label="Run metadata">
           <div>
-            <dt>Closed</dt>
+            <dt>Completed</dt>
             <dd>{runMeta.closedTime}</dd>
           </div>
           <div>
-            <dt>Pipeline</dt>
+            <dt>Workflow</dt>
             <dd>{runMeta.pipelineSummary}</dd>
           </div>
           <div>
-            <dt>Wall clock</dt>
+            <dt>Run time</dt>
             <dd>{runMeta.latency}</dd>
           </div>
         </dl>
@@ -378,10 +378,10 @@ function ExecutiveHeadline({ headline, runMeta, kpis, onOpenHeldInvoices, onOpen
 
 function AiWorkLedger({ items }) {
   return (
-    <section className="pg-ai-ledger" aria-label="AI checks completed">
+    <section className="pg-ai-ledger" aria-label="Review checks completed">
       <div className="pg-ai-ledger-label">
         <AiChecksCompleteIcon aria-hidden="true" className="h-5 w-5" />
-        <span>AI checks completed</span>
+        <span>Review checks completed</span>
       </div>
       <div className="pg-ai-ledger-grid">
         {items.map((item) => (
@@ -406,11 +406,11 @@ function OutcomeRibbon({ outcome, aside }) {
         </div>
         <h2>{outcome.title}</h2>
         <p>{outcome.summary}</p>
-        <p className="pg-release-control">0 autonomous payments · 0 communications released automatically</p>
+        <p className="pg-release-control">0 payments released automatically · 0 communications sent automatically</p>
       </div>
       <dl className="pg-release-stats">
         <div>
-          <dt><XCircle aria-hidden="true" className="h-5 w-5" />Won't pay tonight</dt>
+          <dt><XCircle aria-hidden="true" className="h-5 w-5" />Held from release</dt>
           <dd className="pg-release-danger">{formatInteger(aside.wontPayTonight)}</dd>
         </div>
         <div>
@@ -593,7 +593,7 @@ function DraftsHero({ vm, onOpenWorkbench }) {
           <button className="pg-button pg-button-primary" type="button" onClick={() => onOpenWorkbench?.()}>
             Open in Workbench
           </button>
-          <span>Reviewed by you · actioned by you</span>
+          <span>Human reviewed · human actioned</span>
         </div>
       </div>
 
@@ -699,7 +699,7 @@ function TrustFooter({ vm, onExport }) {
       <span>{vm.runId}</span>
       <span>
         {formatInteger(vm.invoiceCount)} invoices · {formatInteger(vm.supplierCount)} suppliers · {formatInteger(vm.warehouseCount)} warehouses ·{" "}
-        {formatInteger(vm.auditEntryCount)} audit entries across {vm.stageCount} stages · {vm.evalStatus} · {vm.modelRouting} · prompt {vm.promptVersion} · {vm.latency}
+        {formatInteger(vm.auditEntryCount)} audit entries across {vm.stageCount} stages · {vm.evalStatus} · {vm.modelRouting} · {vm.promptVersion} · {vm.latency}
       </span>
       <button type="button" onClick={onExport}>Export audit CSV</button>
     </footer>
@@ -865,10 +865,10 @@ export function SessionGovernancePanel({ analytics }) {
     <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm dark:border-indigo-800 dark:bg-indigo-950/40">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">AI workflow evidence</p>
-          <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Cost and model trace</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Workflow evidence</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Cost and processing trace</h2>
           <p className="mt-1 text-sm leading-6 text-indigo-900 dark:text-indigo-200">
-            Governance metadata for model usage, prompt versions, token reporting, and latency.
+            Governance metadata for processing route, workflow version, usage reporting, and response timing.
           </p>
         </div>
         <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">
@@ -878,15 +878,15 @@ export function SessionGovernancePanel({ analytics }) {
 
       {governance.tokenDataReported ? (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <Metric label="Input tokens" value={formatInteger(governance.inputTokens)} />
-          <Metric label="Output tokens" value={formatInteger(governance.outputTokens)} />
-          <Metric label="Cache write tokens" value={governance.cacheUsageReported ? formatInteger(governance.cacheCreationInputTokens) : "Not available"} />
-          <Metric label="Cache read tokens" value={governance.cacheUsageReported ? formatInteger(governance.cacheReadInputTokens) : "Not available"} />
-          <Metric label="Estimated cache-aware cost" value={formatCost(governance.estimatedCacheAwareCost)} />
+          <Metric label="Input usage" value={formatInteger(governance.inputTokens)} />
+          <Metric label="Output usage" value={formatInteger(governance.outputTokens)} />
+          <Metric label="Cache write usage" value={governance.cacheUsageReported ? formatInteger(governance.cacheCreationInputTokens) : "Not available"} />
+          <Metric label="Cache read usage" value={governance.cacheUsageReported ? formatInteger(governance.cacheReadInputTokens) : "Not available"} />
+          <Metric label="Estimated processing cost" value={formatCost(governance.estimatedCacheAwareCost)} />
         </div>
       ) : (
         <p className="mt-5 rounded-lg border border-indigo-200 bg-white p-4 text-sm text-indigo-900 dark:border-indigo-800 dark:bg-slate-900 dark:text-indigo-200">
-          Token usage will appear after service responses include usage metadata.
+          Usage data will appear after service responses include processing metadata.
         </p>
       )}
 
@@ -900,19 +900,19 @@ export function SessionGovernancePanel({ analytics }) {
         <div className="rounded-lg border border-indigo-200 bg-white p-3 dark:border-indigo-800 dark:bg-slate-900">
           <p className="font-semibold text-slate-900 dark:text-slate-100">Audit entries</p>
           <p className="mt-1 font-mono tabular-nums text-slate-600 dark:text-slate-400">
-            {formatInteger(governance.auditEntryCount)} entries | {formatMilliseconds(governance.averageLatencyMs)} avg latency
+            {formatInteger(governance.auditEntryCount)} entries | {formatMilliseconds(governance.averageLatencyMs)} avg response time
           </p>
         </div>
         <div className="rounded-lg border border-indigo-200 bg-white p-3 dark:border-indigo-800 dark:bg-slate-900">
-          <p className="font-semibold text-slate-900 dark:text-slate-100">Models used</p>
+          <p className="font-semibold text-slate-900 dark:text-slate-100">Processing routes used</p>
           <p className="mt-1 text-slate-600 dark:text-slate-400">
             {(governance.models ?? []).map(formatModelName).join(", ") || "Not available"}
           </p>
         </div>
       </div>
       <p className="mt-4 text-xs leading-5 text-indigo-900/70 dark:text-indigo-200/80">
-        Audit records store hashes, summaries, latency, model, prompt version, and chunk metadata. They do not store service keys,
-        full prompt text, or full invoice payloads.
+        Audit records store hashes, summaries, response timing, processing route, workflow version, and batch metadata. They do not store service keys,
+        full workflow instructions, or full invoice payloads.
       </p>
     </section>
   );

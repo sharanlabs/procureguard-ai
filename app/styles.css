@@ -4069,6 +4069,47 @@ summary::marker {
     letter-spacing: 0.105em;
   }
 
+  .pg-invoice-row-summary {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem;
+    padding: 1rem 2.35rem 1rem 1.35rem;
+  }
+
+  .pg-invoice-row-summary::after {
+    position: absolute;
+    top: 1.2rem;
+    right: 1rem;
+  }
+
+  .pg-invoice-row-id,
+  .pg-invoice-row-badges {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .pg-invoice-row-id span:last-child {
+    white-space: normal;
+  }
+
+  .pg-invoice-row-badges > div {
+    width: 100%;
+    max-width: 100%;
+    align-items: flex-start;
+  }
+
+  .pg-invoice-row-badges > div > span {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .pg-invoice-row-facts {
+    display: none;
+  }
+
   .pg-card {
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.86) inset,

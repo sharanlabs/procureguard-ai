@@ -20,11 +20,11 @@ export default class ErrorBoundary extends React.Component {
         <main className="min-h-screen bg-slate-50 px-6 py-12 text-slate-900">
           <section className="mx-auto max-w-xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
             <p className="text-sm font-semibold uppercase tracking-wide text-red-600">
-              Application error
+              Workspace interrupted
             </p>
             <h1 className="mt-2 text-2xl font-semibold">ProcureGuard AI needs a reload</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Something went wrong while rendering the application. Reloading usually restores the workspace.
+              The review workspace could not finish loading. Reloading usually restores the current session.
             </p>
             <button
               className="mt-6 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"

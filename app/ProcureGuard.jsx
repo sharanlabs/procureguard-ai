@@ -217,7 +217,7 @@ function ApiKeyPanel({ apiKey, onApiKeyChange }) {
     <section className="pg-card p-4">
       <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="ai-service-key">
         <Key aria-hidden="true" className="h-4 w-4" />
-        Session API key
+        Service access key
       </label>
       <form className="mt-2 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => event.preventDefault()}>
         <input
@@ -228,7 +228,7 @@ function ApiKeyPanel({ apiKey, onApiKeyChange }) {
           spellCheck={false}
           value={apiKey}
           onChange={(event) => onApiKeyChange(event.target.value)}
-          placeholder="Paste API key for this session"
+          placeholder="Paste service key for this session"
         />
       </form>
       <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -298,21 +298,21 @@ function formatFailureTypeLabel(value) {
     rate_limit: "Rate limit",
     network: "Network",
     max_tokens: "Output limit",
-    api: "AI service",
+    api: "Analysis service",
     validation: "Validation",
     unknown: "Unknown"
   }[value] ?? "Unknown";
 }
 
 function retryButtonLabel(descriptor) {
-  if (!descriptor) return "Retry failed chunk";
-  return `Retry ${formatStageName(descriptor.stage)} chunk ${descriptor.chunkIndex}/${descriptor.totalChunks}`;
+  if (!descriptor) return "Retry failed batch";
+  return `Retry ${formatStageName(descriptor.stage)} batch ${descriptor.chunkIndex}/${descriptor.totalChunks}`;
 }
 
 function getStoppedRunTitle(runState) {
   const descriptor = runState?.retryDescriptor;
   if (!descriptor) return "Analysis did not complete";
-  return `Analysis stopped at ${formatStageName(descriptor.stage)} chunk ${descriptor.chunkIndex}/${descriptor.totalChunks}`;
+  return `Analysis stopped at ${formatStageName(descriptor.stage)} batch ${descriptor.chunkIndex}/${descriptor.totalChunks}`;
 }
 
 function PipelineRunStatusPanel({ runState, isRunning, onRetry, onRestart }) {
@@ -326,16 +326,16 @@ function PipelineRunStatusPanel({ runState, isRunning, onRetry, onRestart }) {
     <section className={`pg-card p-4 ${hasFailure ? "border-amber-300 dark:border-amber-700" : ""}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Pipeline run state</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Run progress</p>
           <h3 className="mt-1 text-base font-semibold text-slate-950 dark:text-slate-100">
             {hasFailure ? getStoppedRunTitle(runState) : runState.status === "complete" ? "Analysis complete" : "Analysis in progress"}
           </h3>
           <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
             {hasFailure
-              ? "Completed chunks are retained in memory, but this run is not a completed batch analysis."
+              ? "Completed batches are retained in memory, but this is not a completed payment-run analysis."
               : isRunning
-                ? `Running ${formatStageName(runState.currentStage)} chunk ${runState.currentChunkIndex ?? "-"} of ${runState.totalChunks}.`
-                : "Chunk-level progress is captured for the current run."}
+                ? `Running ${formatStageName(runState.currentStage)} batch ${runState.currentChunkIndex ?? "-"} of ${runState.totalChunks}.`
+                : "Batch-level progress is captured for the current run."}
           </p>
         </div>
         <Badge className={toneBadgeClass(hasFailure ? "review" : runState.status === "complete" ? "clean" : "info")}>
@@ -348,7 +348,7 @@ function PipelineRunStatusPanel({ runState, isRunning, onRetry, onRestart }) {
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-slate-700 dark:bg-slate-800" key={item.stage}>
             <p className="font-semibold text-slate-950 dark:text-slate-100">{formatStageName(item.stage)}</p>
             <p className="mt-1 font-mono text-xs tabular-nums text-slate-500 dark:text-slate-400">
-              {item.completed}/{item.total} chunks retained
+              {item.completed}/{item.total} batches retained
             </p>
           </div>
         ))}
@@ -358,7 +358,7 @@ function PipelineRunStatusPanel({ runState, isRunning, onRetry, onRestart }) {
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <FieldRow label="Failed stage" value={formatStageName(descriptor.stage)} />
-            <FieldRow label="Failed chunk" value={`${descriptor.chunkIndex}/${descriptor.totalChunks}`} />
+            <FieldRow label="Failed batch" value={`${descriptor.chunkIndex}/${descriptor.totalChunks}`} />
             <FieldRow label="Invoice range" value={descriptor.invoiceRange || "Not available"} />
             <FieldRow label="Failure type" value={formatFailureTypeLabel(descriptor.failureType)} />
             <FieldRow label="Retryable" value={descriptor.retryable ? "Yes" : "No"} />
@@ -430,7 +430,7 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation, policy
 
   const changedCount = simulation.changedInvoiceCount;
   const summaryText = changedCount
-    ? `Adjusting tolerances would reclassify ${changedCount} invoice(s), changing ${tierLabel(2).toLowerCase()} count from ${simulation.originalCounts.tier2} to ${simulation.simulatedCounts.tier2}.`
+    ? `Adjusting tolerances would reclassify ${changedCount} ${changedCount === 1 ? "invoice" : "invoices"}, changing ${tierLabel(2).toLowerCase()} count from ${simulation.originalCounts.tier2} to ${simulation.simulatedCounts.tier2}.`
     : "No invoices would change review path under the current tolerance settings.";
 
   return (
@@ -440,7 +440,7 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation, policy
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Policy simulator</p>
           <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Tolerance policy sensitivity</h2>
           <p className="mt-1 text-sm text-blue-900 dark:text-blue-200">
-            Simulation only. Adjust policy tolerances for this view without changing model classifications, payment behavior, or audit records.
+            Simulation only. Adjust policy tolerances for this view without changing recorded classifications, payment behavior, or audit records.
           </p>
         </div>
         <Badge className="border-blue-300 bg-white text-blue-800 dark:border-blue-600 dark:bg-blue-950/50 dark:text-blue-200">Simulation only</Badge>
@@ -681,7 +681,7 @@ function PartialAnalysisNotice({ runState, onRetry, onStart }) {
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">Partial analysis</p>
           <h2 className="mt-1 text-lg font-semibold">{getStoppedRunTitle(runState)}</h2>
           <p className="mt-2 max-w-4xl text-sm leading-6">
-            Completed chunks are retained, but final batch results are not complete. Partial rows below are limited to invoices with completed prerequisite data.
+            Completed batches are retained, but final payment-run results are not complete. Partial rows below are limited to invoices with completed prerequisite data.
           </p>
           <p className="mt-2 text-sm font-semibold">
             Failed invoices {descriptor.invoiceRange || "not available"}: {descriptor.message}
@@ -717,7 +717,7 @@ function WorkbenchHeader({ hasData, isAnalysisRunning, isPartial = false }) {
           </p>
         </div>
         <Badge className={toneBadgeClass(isAnalysisRunning ? "info" : isPartial ? "review" : hasData ? "review" : "neutral")}>
-          {isAnalysisRunning ? "Analysis in progress" : isPartial ? "Partial data retained" : hasData ? "Human-in-the-loop" : "Awaiting analysis"}
+          {isAnalysisRunning ? "Analysis in progress" : isPartial ? "Partial data retained" : hasData ? "Analyst review" : "Awaiting analysis"}
         </Badge>
       </div>
     </header>
@@ -746,7 +746,7 @@ function EvidenceConfidence({ row }) {
           <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{row.evidenceStrength.helper}</p>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Model confidence</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Confidence score</p>
           <p className="mt-1 font-mono text-sm font-semibold tabular-nums text-slate-950 dark:text-slate-100">
             {formatPercentValue(row.modelConfidence)}
           </p>
@@ -770,7 +770,7 @@ function EvidenceRationalePanel({ row }) {
       </summary>
       <div className="mt-4 grid gap-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
         <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-          <p className="font-semibold text-slate-900 dark:text-slate-100">1. What is wrong?</p>
+          <p className="font-semibold text-slate-900 dark:text-slate-100">1. Exception summary</p>
           {row.exceptionLabels.length ? (
             <div className="mt-3 space-y-3">
               {row.exceptionLabels.map((detail) => (
@@ -783,7 +783,7 @@ function EvidenceRationalePanel({ row }) {
           ) : (
             <p className="mt-2">No exception rule triggered.</p>
           )}
-          {!row.classification ? <p className="mt-3 font-semibold text-amber-700 dark:text-amber-300">Classification not available.</p> : null}
+          {!row.classification ? <p className="mt-3 font-semibold text-amber-700 dark:text-amber-300">Review route not available.</p> : null}
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
@@ -936,7 +936,7 @@ function DraftPanel({
     <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Review/action panel</p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Review workflow</p>
           <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{row.draftStatus.detail}</p>
         </div>
         <Badge className={toneBadgeClass(row.draftStatus.tone)}>{row.draftStatus.label}</Badge>
@@ -993,7 +993,7 @@ function InvoiceCard({
     >
       <summary className="pg-invoice-row-summary">
         <div className="pg-invoice-row-id">
-          <span className="pg-invoice-row-type">Invoice exception case</span>
+          <span className="pg-invoice-row-type">Invoice review case</span>
           <strong>{row.invoiceNumber}</strong>
           <span>{row.supplierName}</span>
         </div>
@@ -1125,10 +1125,10 @@ function AiReliabilityCenter({ viewModel }) {
     <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm dark:border-indigo-800 dark:bg-indigo-950/40">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">AI Reliability Center</p>
-          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Run health, controls, and audit readiness</h3>
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Control Assurance Center</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Run controls, evidence, and audit readiness</h3>
           <p className="mt-1 text-sm leading-6 text-indigo-900 dark:text-indigo-200">
-            Reliability metadata for the current AI-assisted review process. Claims are based on captured run data only.
+            Assurance metadata for the current review process. Claims are based on captured run data only.
           </p>
         </div>
         <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">
@@ -1184,10 +1184,10 @@ function ApiServiceAndDataInputs({ viewModel, apiKey, onApiKeyChange }) {
     <section className="pg-card">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">AI service and data inputs</p>
-          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">AI service and data access</h3>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Secure processing and data inputs</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Processing access and uploaded data</h3>
           <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Production keeps model access server-side. This workspace keeps any provided key session-only.
+            Production keeps analysis access server-side. Development keeps any provided key session-only.
           </p>
         </div>
         <Badge className={toneBadgeClass(exposure.serviceTone)}>{exposure.modeLabel}</Badge>
@@ -1195,14 +1195,14 @@ function ApiServiceAndDataInputs({ viewModel, apiKey, onApiKeyChange }) {
 
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <GovernanceMetric
-          label="AI service status"
+          label="Processing status"
           value={exposure.serviceStatus}
           helper={exposure.detail}
           tone={exposure.serviceTone}
           isNumber={false}
         />
         <GovernanceMetric
-          label="Client key exposure"
+          label="Browser key exposure"
           value={exposure.clientKeyExposure}
           helper="Audit export excludes service keys."
           tone={exposure.exposureTone}
@@ -1250,8 +1250,8 @@ function WorkflowTraceSummary({ trace }) {
   return (
     <section className="pg-card">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Workflow trace summary</p>
-        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Prompt-chain trace from data setup to export</h3>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Control workflow trace</p>
+        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Review workflow from upload to export</h3>
         <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
           {formatInteger(trace.completedCount)} of {formatInteger(trace.steps.length)} trace steps have current run evidence.
         </p>
@@ -1267,15 +1267,15 @@ function WorkflowTraceSummary({ trace }) {
             <p className="mt-2 min-h-10 text-xs leading-5 text-slate-600 dark:text-slate-400">{step.detail}</p>
             <dl className="mt-3 space-y-1 border-t border-slate-200 pt-3 text-xs dark:border-slate-700">
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-500 dark:text-slate-400">Chunks</dt>
+                <dt className="text-slate-500 dark:text-slate-400">Batches</dt>
                 <dd className="font-mono tabular-nums text-slate-800 dark:text-slate-200">{step.chunkCount ? formatInteger(step.chunkCount) : "Not available"}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-500 dark:text-slate-400">Model</dt>
+                <dt className="text-slate-500 dark:text-slate-400">Route</dt>
                 <dd className="text-right text-slate-800 dark:text-slate-200">{step.model}</dd>
               </div>
               <div className="flex justify-between gap-2">
-                <dt className="text-slate-500 dark:text-slate-400">Latency</dt>
+                <dt className="text-slate-500 dark:text-slate-400">Timing</dt>
                 <dd className="font-mono tabular-nums text-slate-800 dark:text-slate-200">{formatTelemetryDuration(step.latencyMs)}</dd>
               </div>
             </dl>
@@ -1295,46 +1295,46 @@ function RuntimeCostTelemetry({ viewModel }) {
     <section className="pg-card">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Runtime and cost telemetry</p>
-          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Tokens, cost estimate, latency, and model routing</h3>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Processing usage and timing</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Usage, cost estimate, timing, and processing route</h3>
           <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Token and cost values appear only when usage metadata is returned by the AI response.
+            Usage and cost values appear only when the provider returns processing metadata.
           </p>
         </div>
         <Badge className={toneBadgeClass(tokenCost.tokenDataReported ? "info" : "neutral")}>
-          {tokenCost.tokenDataReported ? "Usage metadata captured" : "Token usage not available"}
+          {tokenCost.tokenDataReported ? "Usage metadata captured" : "Usage not available"}
         </Badge>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <GovernanceMetric
-          label="Input tokens"
+          label="Input usage"
           value={tokenCost.tokenDataReported ? formatInteger(tokenCost.inputTokens) : "Not available"}
-          helper={tokenCost.tokenDataReported ? "Prompt/input usage" : tokenCost.emptyMessage}
+          helper={tokenCost.tokenDataReported ? "Input units reported by provider" : tokenCost.emptyMessage}
           tone="neutral"
         />
         <GovernanceMetric
-          label="Output tokens"
+          label="Output usage"
           value={tokenCost.tokenDataReported ? formatInteger(tokenCost.outputTokens) : "Not available"}
-          helper={tokenCost.tokenDataReported ? "Completion/output usage" : tokenCost.emptyMessage}
+          helper={tokenCost.tokenDataReported ? "Output units reported by provider" : tokenCost.emptyMessage}
           tone="neutral"
         />
         <GovernanceMetric
-          label="Cache write tokens"
+          label="Cache write usage"
           value={tokenCost.cacheUsageReported ? formatInteger(tokenCost.cacheCreationInputTokens) : "Not available"}
-          helper={tokenCost.cacheUsageReported ? "Prompt cache creation usage" : tokenCost.cacheUsageMessage}
+          helper={tokenCost.cacheUsageReported ? "Cache creation usage" : tokenCost.cacheUsageMessage}
           tone="neutral"
         />
         <GovernanceMetric
-          label="Cache read tokens"
+          label="Cache read usage"
           value={tokenCost.cacheUsageReported ? formatInteger(tokenCost.cacheReadInputTokens) : "Not available"}
-          helper={tokenCost.cacheUsageReported ? "Prompt cache read usage" : tokenCost.cacheUsageMessage}
+          helper={tokenCost.cacheUsageReported ? "Cache read usage" : tokenCost.cacheUsageMessage}
           tone="neutral"
         />
         <GovernanceMetric
-          label="Estimated cache-aware cost"
+          label="Estimated processing cost"
           value={tokenCost.tokenDataReported ? formatCostValue(tokenCost.estimatedCacheAwareCost) : "Not available"}
-          helper={tokenCost.cacheUsageReported ? "Estimated with cache write/read token rates" : tokenCost.cacheUsageMessage}
+          helper={tokenCost.cacheUsageReported ? "Estimated with cache write/read rates" : tokenCost.cacheUsageMessage}
           tone="neutral"
         />
         <GovernanceMetric
@@ -1344,26 +1344,26 @@ function RuntimeCostTelemetry({ viewModel }) {
           tone="neutral"
         />
         <GovernanceMetric
-          label="Total latency"
+          label="Total response time"
           value={latency.hasLatency ? formatDuration(latency.totalLatencyMs) : "Not available"}
-          helper={latency.hasLatency ? "Sum of captured API response timings" : latency.emptyMessage}
+          helper={latency.hasLatency ? "Sum of captured response timings" : latency.emptyMessage}
           tone="neutral"
         />
         <GovernanceMetric
-          label="Average latency"
+          label="Average response time"
           value={latency.hasLatency ? formatDuration(latency.averageLatencyMs) : "Not available"}
           helper="Average per captured audit entry"
           tone="neutral"
         />
         <GovernanceMetric
-          label="Slowest chunk"
+          label="Slowest batch"
           value={latency.slowest ? latency.slowest.chunkLabel : "Not available"}
           helper={latency.slowest ? `${latency.slowest.stage} · ${formatDuration(latency.slowest.latencyMs)} · invoices ${latency.slowest.invoiceRange}` : latency.emptyMessage}
           tone={latency.slowest ? "review" : "neutral"}
           isNumber={false}
         />
         <GovernanceMetric
-          label="Models used"
+          label="Processing routes used"
           value={modelRouting.modelsUsed.length ? modelRouting.modelsUsed.join(", ") : "Not available"}
           helper={modelRouting.summary}
           tone="neutral"
@@ -1377,8 +1377,8 @@ function RuntimeCostTelemetry({ viewModel }) {
             <thead>
               <tr>
                 <th scope="col">Stage</th>
-                <th scope="col">Model routing</th>
-                <th className="pg-table-num-header" scope="col">Chunks</th>
+                <th scope="col">Processing route</th>
+                <th className="pg-table-num-header" scope="col">Batches</th>
                 <th scope="col">Status</th>
               </tr>
             </thead>
@@ -1396,7 +1396,7 @@ function RuntimeCostTelemetry({ viewModel }) {
         </div>
       ) : (
         <p className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
-          Model usage not available for this run.
+          Processing route not available for this run.
         </p>
       )}
     </section>
@@ -1473,7 +1473,7 @@ function AuditEntryRow({ entry, index }) {
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{entry.timestamp || `Entry ${index + 1}`}</p>
         </div>
         <Badge className={toneBadgeClass(entry.status === "failed" ? "escalate" : "neutral")}>
-          {entry.chunk ? `Chunk ${entry.chunk.index}/${entry.chunk.total}` : "No chunk metadata"}
+          {entry.chunk ? `Batch ${entry.chunk.index}/${entry.chunk.total}` : "No batch metadata"}
         </Badge>
       </div>
       <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
@@ -1481,9 +1481,9 @@ function AuditEntryRow({ entry, index }) {
         <FieldRow label="Retry status" value={entry.chunk?.retry_status || "Not available"} />
         <FieldRow label="Attempt" value={entry.chunk?.attempt ? `${entry.chunk.attempt}` : "Not available"} />
         <FieldRow label="Failure type" value={entry.chunk?.failure_type ? formatFailureTypeLabel(entry.chunk.failure_type) : "Not available"} />
-        <FieldRow label="Latency" value={formatTelemetryDuration(entry.latency_ms)} />
-        <FieldRow label="Tokens" value={`In ${formatOptionalInteger(inputTokens)} · Out ${formatOptionalInteger(outputTokens)}`} />
-        <FieldRow label="Cache tokens" value={`Write ${formatOptionalInteger(cacheCreationTokens)} · Read ${formatOptionalInteger(cacheReadTokens)}`} />
+        <FieldRow label="Response time" value={formatTelemetryDuration(entry.latency_ms)} />
+        <FieldRow label="Usage" value={`In ${formatOptionalInteger(inputTokens)} · Out ${formatOptionalInteger(outputTokens)}`} />
+        <FieldRow label="Cache usage" value={`Write ${formatOptionalInteger(cacheCreationTokens)} · Read ${formatOptionalInteger(cacheReadTokens)}`} />
         <FieldRow label="Output summary" value={`${entry.output_summary?.invoice_count ?? 0} invoices · ${entry.output_summary?.exception_count ?? 0} exceptions`} />
       </dl>
       {entry.error_message ? (
@@ -1500,9 +1500,9 @@ function AuditStageGroups({ groups }) {
     <section className="pg-card">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Grouped audit entries</p>
-        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Raw audit records by stage</h3>
+        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Detailed audit records by stage</h3>
         <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Raw entries sit below the reliability summary so analysts can inspect evidence without starting from a log wall.
+          Detailed entries sit below the assurance summary so analysts can inspect evidence without starting from technical logs.
         </p>
       </div>
 
@@ -1515,17 +1515,17 @@ function AuditStageGroups({ groups }) {
               </summary>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
                 <GovernanceMetric label="Status" value={group.status.label} helper={group.chunkRangeLabel} tone={group.status.tone} isNumber={false} />
-                <GovernanceMetric label="Chunks" value={formatInteger(group.chunkCount)} helper="Unique chunk records" tone="neutral" />
-                <GovernanceMetric label="Latency" value={formatTelemetryDuration(group.totalLatencyMs)} helper="Total captured latency" tone="neutral" />
-                <GovernanceMetric label="Tokens" value={formatInteger(group.totalTokens)} helper="Input plus output tokens" tone="neutral" />
+                <GovernanceMetric label="Batches" value={formatInteger(group.chunkCount)} helper="Unique batch records" tone="neutral" />
+                <GovernanceMetric label="Response time" value={formatTelemetryDuration(group.totalLatencyMs)} helper="Total captured response time" tone="neutral" />
+                <GovernanceMetric label="Usage units" value={formatInteger(group.totalTokens)} helper="Input plus output usage" tone="neutral" />
                 <GovernanceMetric
-                  label="Cache tokens"
+                  label="Cached usage"
                   value={group.cacheUsageReported ? `${formatInteger(group.cacheCreationInputTokens)} write · ${formatInteger(group.cacheReadInputTokens)} read` : "Not available"}
                   helper={group.cacheUsageReported ? "Reported cache usage" : "Cache usage not available for this run."}
                   tone="neutral"
                   isNumber={false}
                 />
-                <GovernanceMetric label="Models" value={group.models.join(", ") || "Not available"} helper="Humanized model labels" tone="neutral" isNumber={false} />
+                <GovernanceMetric label="Processing routes" value={group.models.join(", ") || "Not available"} helper="Provider route labels" tone="neutral" isNumber={false} />
               </div>
               <div className="mt-4 space-y-2">
                 {group.entries.map((entry, index) => (
@@ -1553,7 +1553,7 @@ function GovernancePanel({ viewModel, apiKey, onApiKeyChange, onExport, onStart 
         <WorkbenchEmptyState
           eyebrow="Awaiting analysis"
           title="Run analysis from Start to capture audit and reliability metadata"
-          body="Audit entries, workflow trace, token usage, latency, model routing, and export readiness appear after the analysis workflow runs."
+          body="Audit entries, workflow trace, usage, response timing, processing route, and export readiness appear after the analysis workflow runs."
           actionLabel="Go to Start"
           onAction={onStart}
           tone="neutral"
@@ -1790,7 +1790,7 @@ function ExceptionWorkbenchPanel({
         <WorkbenchEmptyState
           eyebrow="Analysis failed"
           title={partialRunState?.retryDescriptor ? getStoppedRunTitle(partialRunState) : "Exception Workbench is waiting for a successful run"}
-          body="Completed chunks are retained, but no completed classification subset is available for the workbench yet. Return to Start, retry the failed chunk when available, or restart the full analysis."
+          body="Completed batches are retained, but no completed review subset is available for the workbench yet. Return to Start, retry the failed batch when available, or restart the full analysis."
           actionLabel="Go to Start"
           onAction={onStart}
           tone="escalate"
@@ -1906,7 +1906,7 @@ function SupplierRiskCard({ supplier }) {
           <dd className="mt-1 font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{formatMoney(supplier.exposure)}</dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top codes</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Primary exception types</dt>
           <dd className="mt-1 text-slate-700 dark:text-slate-300">{supplier.topExceptionCodes.length ? supplier.topExceptionCodes.join(", ") : "Not available"}</dd>
         </div>
       </dl>
@@ -1923,7 +1923,7 @@ function SupplierRiskSummary({ suppliers }) {
     <section className="pg-card">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Supplier risk summary</p>
-        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Top supplier follow-through candidates</h3>
+        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Supplier follow-up priorities</h3>
         <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
           Ranked by current batch exposure, escalation pressure, and exception concentration.
         </p>
@@ -1936,7 +1936,7 @@ function SupplierRiskSummary({ suppliers }) {
         </div>
       ) : (
         <p className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800 dark:border-green-700 dark:bg-green-950/50 dark:text-green-200">
-          No supplier concentration detected in this batch.
+          No supplier follow-up priority detected in this batch.
         </p>
       )}
     </section>
@@ -2190,7 +2190,7 @@ function RootCausePatternsSection({ rootCause }) {
         </>
       ) : (
         <p className="mt-5 rounded-lg border border-indigo-200 bg-white p-4 text-sm font-semibold text-slate-800 dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200">
-          No supplier concentration detected in this batch.
+          No repeated supplier, warehouse, or policy pattern detected in this batch.
         </p>
       )}
     </section>
@@ -2588,7 +2588,7 @@ export default function App() {
       sessionStorage.setItem(DARK_MODE_STORAGE, "light");
     }
 
-    setStatusMessage("Loading deterministic golden-batch demo run.");
+    setStatusMessage("Loading sample payment-run review.");
     import("./lib/demoRun.js")
       .then(({ buildGoldenDemoRun }) => buildGoldenDemoRun())
       .then((demoRun) => {
@@ -2609,7 +2609,7 @@ export default function App() {
         setError("");
         setFailedStep("");
         setUploadError("");
-        setStatusMessage("Golden-batch demo loaded for live screenshot capture.");
+        setStatusMessage("Sample payment-run review loaded.");
         setActiveWorkspace(requestedTab);
       })
       .catch((demoError) => {
@@ -2799,7 +2799,7 @@ export default function App() {
     }
 
     let completedCount = 0;
-    setStatusMessage(`Matching 0/${items.length} chunks...`);
+    setStatusMessage(`Matching 0/${items.length} batches...`);
 
     await runChunksWithConcurrency(items, async ({ chunk, chunkIndex }) => {
       const chunkMeta = createChunkMeta(chunk, chunkIndex, chunks.length);
@@ -2819,7 +2819,7 @@ export default function App() {
           maxTokens: STAGE_MAX_TOKENS.matching,
           stage: "matching",
           apiKey,
-          onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`AI service is busy during matching chunk ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
+          onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`Analysis service is busy during matching batch ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
         });
         const alignedResponse = validateAndAlignResults("matching", context.invoices, response.data, chunkMeta.invoice_range);
         const guarded = applyGlobalMatchingGuards(context, alignedResponse);
@@ -2839,7 +2839,7 @@ export default function App() {
         });
         setPipelineRunState(stateRef.current);
         completedCount += 1;
-        setStatusMessage(`Matching ${completedCount}/${items.length} chunks complete...`);
+        setStatusMessage(`Matching ${completedCount}/${items.length} batches complete...`);
         await recordAuditEntry({
           step: "matching",
           model: MODELS.matching,
@@ -2901,7 +2901,7 @@ export default function App() {
     }
 
     let completedCount = 0;
-    setStatusMessage(`Classification 0/${items.length} chunks...`);
+    setStatusMessage(`Classification 0/${items.length} batches...`);
 
     await runChunksWithConcurrency(items, async ({ chunk, chunkIndex }) => {
       const chunkMeta = createChunkMeta(chunk, chunkIndex, chunks.length);
@@ -2913,7 +2913,7 @@ export default function App() {
 
       try {
         if (!matchingChunks[chunkIndex]) {
-          throw new Error(`Missing required input data for classification chunk ${chunkMeta.index}/${chunkMeta.total}`);
+          throw new Error(`Missing required input data for classification batch ${chunkMeta.index}/${chunkMeta.total}`);
         }
         const userMessage = JSON.stringify({ results: matchingChunks[chunkIndex].results });
         const response = await callGeminiAPI({
@@ -2924,7 +2924,7 @@ export default function App() {
           maxTokens: STAGE_MAX_TOKENS.classification,
           stage: "classification",
           apiKey,
-          onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`AI service is busy during classification chunk ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
+          onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`Analysis service is busy during classification batch ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
         });
         const aligned = validateAndAlignResults("classification", context.invoices, response.data, chunkMeta.invoice_range);
         assertNoApiKeyLeak(aligned);
@@ -2942,7 +2942,7 @@ export default function App() {
         });
         setPipelineRunState(stateRef.current);
         completedCount += 1;
-        setStatusMessage(`Classification ${completedCount}/${items.length} chunks complete...`);
+        setStatusMessage(`Classification ${completedCount}/${items.length} batches complete...`);
         await recordAuditEntry({
           step: "classification",
           model: MODELS.classification,
@@ -3005,7 +3005,7 @@ export default function App() {
     }
 
     let completedCount = 0;
-    setStatusMessage(`Preparing follow-ups 0/${items.length} chunks...`);
+    setStatusMessage(`Preparing follow-ups 0/${items.length} batches...`);
 
     await runChunksWithConcurrency(items, async ({ chunk, chunkIndex }) => {
       const chunkMeta = createChunkMeta(chunk, chunkIndex, chunks.length);
@@ -3017,7 +3017,7 @@ export default function App() {
 
       try {
         if (!matchingChunks[chunkIndex] || !classificationChunks[chunkIndex]) {
-          throw new Error(`Missing required input data for communication preparation chunk ${chunkMeta.index}/${chunkMeta.total}`);
+          throw new Error(`Missing required input data for communication preparation batch ${chunkMeta.index}/${chunkMeta.total}`);
         }
 
         const fullBatch = buildActionBatch(context, matchingChunks[chunkIndex], classificationChunks[chunkIndex]);
@@ -3050,7 +3050,7 @@ export default function App() {
             maxTokens: STAGE_MAX_TOKENS.action_generation,
             stage: "action_generation",
             apiKey,
-            onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`AI service is busy during communication preparation chunk ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
+            onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`Analysis service is busy during communication preparation batch ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
           });
           const normalized = normalizeActionChunkResults(
             context.invoices,
@@ -3078,7 +3078,7 @@ export default function App() {
         });
         setPipelineRunState(stateRef.current);
         completedCount += 1;
-        setStatusMessage(`Preparing follow-ups ${completedCount}/${items.length} chunks complete...`);
+        setStatusMessage(`Preparing follow-ups ${completedCount}/${items.length} batches complete...`);
         await recordAuditEntry({
           step: "action_generation",
           model: auditModel,
@@ -3178,7 +3178,7 @@ export default function App() {
     setReviewedTier3(new Set());
     setWorkbenchPreset(null);
     setActiveWorkspace("start");
-    setStatusMessage(`Preparing ${parsedFiles.invoices.length} invoices across ${chunks.length} chunks of up to ${ANALYSIS_CHUNK_SIZE}.`);
+    setStatusMessage(`Preparing ${parsedFiles.invoices.length} invoices across ${chunks.length} batches of up to ${ANALYSIS_CHUNK_SIZE}.`);
 
     try {
       activeStep = "matching";
@@ -3188,7 +3188,7 @@ export default function App() {
         startStage: "matching",
         startIndex: 0
       });
-      setStatusMessage("Prompt chain complete. Review prepared communications.");
+      setStatusMessage("Analysis complete. Review prepared communications.");
       setActiveWorkspace("executive");
     } catch (pipelineError) {
       setFailedStep((current) => current || activeStep);
@@ -3208,7 +3208,7 @@ export default function App() {
     setError("");
     setFailedStep("");
     setActiveWorkspace("start");
-    setStatusMessage(`Retrying ${formatStageName(descriptor.stage)} chunk ${descriptor.chunkIndex}/${descriptor.totalChunks} (invoices ${descriptor.invoiceRange})...`);
+    setStatusMessage(`Retrying ${formatStageName(descriptor.stage)} batch ${descriptor.chunkIndex}/${descriptor.totalChunks} (invoices ${descriptor.invoiceRange})...`);
 
     try {
       runState = await continuePipelineFrom({
@@ -3217,7 +3217,7 @@ export default function App() {
         startStage: descriptor.stage,
         startIndex: descriptor.chunkIndex - 1
       });
-      setStatusMessage("Prompt chain complete after retry. Review prepared communications.");
+      setStatusMessage("Analysis complete after retry. Review prepared communications.");
       setActiveWorkspace("executive");
     } catch (retryError) {
       setFailedStep((current) => current || descriptor.stage);
@@ -3285,7 +3285,7 @@ export default function App() {
             </span>
             <div>
               <h1 className="pg-app-title">ProcureGuard AI</h1>
-              <p className="pg-app-subtitle">Payment Control</p>
+              <p className="pg-app-subtitle">Payment Review Console</p>
             </div>
           </div>
           <WorkspaceTabs
@@ -3362,7 +3362,7 @@ export default function App() {
             <WorkbenchEmptyState
               eyebrow="Executive Summary withheld"
               title="Final batch summary is available only after all stages complete"
-              body="This run has retained partial chunks, but Executive Summary metrics, estimated recovery, and completed-batch wording stay hidden until matching, classification, communication preparation, and merge validation all pass."
+          body="This run has retained partial batches, but Executive Summary metrics, estimated recovery, and completed-run wording stay hidden until matching, classification, communication preparation, and merge validation all pass."
               actionLabel="Go to Start"
               onAction={() => setActiveWorkspace("start")}
               tone="review"

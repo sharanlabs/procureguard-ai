@@ -12,7 +12,7 @@ export function formatPercent(value) {
 }
 
 const MODEL_LABELS = {
-  "gemini-2.5-flash": "Cost-aware analysis model"
+  "gemini-2.5-flash": "Cost-aware processing route"
 };
 
 const STAGE_LABELS = {

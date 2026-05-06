@@ -45,7 +45,7 @@ const GOVERNANCE_STAGE_ORDER = {
   other: 7
 };
 const MODEL_LABELS = {
-  "gemini-2.5-flash": "Cost-aware analysis model"
+  "gemini-2.5-flash": "Cost-aware processing route"
 };
 const MODEL_TOKEN_PRICING = [
   { match: "gemini-2.5-flash", inputPerMillion: 0.3, outputPerMillion: 2.5 },
@@ -337,7 +337,7 @@ export function getBatchOutcome(analytics = {}) {
       id: "escalation",
       label: "Hold required",
       tone: "escalate",
-      title: `${formatIntegerText(escalationCount)} ${pluralize(escalationCount, "invoice")} should not be paid tonight.`,
+      title: `${formatIntegerText(escalationCount)} ${pluralize(escalationCount, "invoice")} should remain on hold before release.`,
       summary: `${formatIntegerText(escalationCount)} ${pluralize(escalationCount, "case")} require AP supervisor review before release-to-pay.`
     };
   }
@@ -548,9 +548,9 @@ export function getTrustFooterViewModel(runState = {}, analytics = {}, auditEntr
     warehouseCount: safeNumber(analytics.warehouseCount),
     auditEntryCount: auditEntries.length,
     stageCount: 3,
-    evalStatus: "25/25 evals passing",
-    modelRouting: "model routing logged",
-    promptVersion: "v1.0",
+    evalStatus: "control checks passed",
+    modelRouting: "processing route logged",
+    promptVersion: "review workflow v1.0",
     latency: formatLatencyText(runState?.totalLatencyMs ?? analytics?.auditGovernance?.totalLatencyMs)
   };
 }
@@ -566,7 +566,7 @@ function getRunMetaViewModel(runState = {}, analytics = {}, auditEntries = []) {
   return {
     dateLabel: safeDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     closedTime: safeDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-    pipelineSummary: "AI match → risk route → follow-up",
+    pipelineSummary: "Match → risk route → follow-up",
     latency: formatLatencyText(runState?.totalLatencyMs ?? analytics?.auditGovernance?.totalLatencyMs)
   };
 }
@@ -577,7 +577,7 @@ function getAiLedger(analytics = {}, draftsVm = {}) {
     { id: "routed", label: "Exceptions routed", value: safeNumber(analytics.exceptionRows), tone: safeNumber(analytics.exceptionRows) > 0 ? "review" : "clean" },
     { id: "followups", label: "Follow-ups prepared", value: safeNumber(draftsVm.totalDrafts || analytics.draftActionCount), tone: safeNumber(draftsVm.totalDrafts || analytics.draftActionCount) > 0 ? "review" : "neutral" },
     { id: "audit", label: "Audit events", value: safeNumber(analytics.auditGovernance?.auditEntryCount), tone: "neutral" },
-    { id: "autonomous", label: "Autonomous actions", value: 0, tone: "clean" }
+    { id: "automatic-actions", label: "Automatic actions", value: 0, tone: "clean" }
   ];
 }
 
@@ -758,7 +758,7 @@ export function buildExecutiveSummaryViewModel(analytics = {}, options = {}) {
     headline: {
       eyebrow: "Payment Run Command Center",
       title: `${formatMoneyText(heldFromPayment)} held before payment release.`,
-      subtitle: `${formatIntegerText(analytics.escalateCount)} ${pluralize(safeNumber(analytics.escalateCount), "invoice")} should not be paid tonight. ${formatIntegerText(Math.max(safeNumber(analytics.exceptionRows) - safeNumber(analytics.escalateCount), 0))} need validation. ${formatIntegerText(Math.max(safeNumber(analytics.totalInvoices) - safeNumber(analytics.exceptionRows), 0))} are safe to release.`
+      subtitle: `${formatIntegerText(analytics.escalateCount)} ${pluralize(safeNumber(analytics.escalateCount), "invoice")} should remain on hold. ${formatIntegerText(Math.max(safeNumber(analytics.exceptionRows) - safeNumber(analytics.escalateCount), 0))} need validation. ${formatIntegerText(Math.max(safeNumber(analytics.totalInvoices) - safeNumber(analytics.exceptionRows), 0))} are safe to release.`
     },
     runMeta: getRunMetaViewModel(runState, analytics, auditEntries),
     aiLedger: getAiLedger(analytics, draftsInbox),
@@ -834,8 +834,8 @@ export function getReviewPriority({ tier, exceptionCodes = [], confidence, requi
 
   return {
     id: "unavailable",
-    label: "Classification not available",
-    detail: "Classification not available.",
+    label: "Review route not available",
+    detail: "Review route not available.",
     tone: "neutral",
     rank: 5
   };
@@ -951,7 +951,7 @@ export function buildInvoiceEvidenceSummary({
     ruleApplied,
     humanNextStep: nextAction || `${recommendedRoute.label}. Human review should validate the evidence before follow-up.`,
     matchRationale: match?.reasoning || "Not available",
-    tierRationale: classification?.tier_rationale || "Classification not available.",
+    tierRationale: classification?.tier_rationale || "Review route not available.",
     exceptionDetails: exceptionLabels,
     comparisons
   };
@@ -1017,7 +1017,7 @@ export function buildWorkbenchRows({
       primaryAction,
       simulation: toleranceSimulation?.cards?.[index] ?? null,
       tier,
-      tierLabel: tier === "clean" ? "Clean match" : tier === "unknown" ? "Classification not available" : classification?.overall_tier === 1 ? "Expedited review candidate" : classification?.overall_tier === 2 ? "Human review required" : "Escalation recommended",
+      tierLabel: tier === "clean" ? "Clean match" : tier === "unknown" ? "Review route not available" : classification?.overall_tier === 1 ? "Expedited review candidate" : classification?.overall_tier === 2 ? "Human review required" : "Escalation recommended",
       reviewPriority: priority,
       exceptionCodes,
       exceptionLabels,
@@ -1414,7 +1414,7 @@ export function buildRootCauseSummary(rootCauseAnalysis = {}) {
     patterns,
     takeaway: patterns.length
       ? `${patterns.length} ${pluralize(patterns.length, "pattern signal")} found across ${safeNumber(rootCauseAnalysis.exceptionRowCount)} exception rows.`
-      : "No supplier concentration detected in this batch."
+      : "No repeated supplier, warehouse, or policy pattern detected in this batch."
   };
 }
 
@@ -1617,8 +1617,8 @@ function summarizeChunkRange(entries = []) {
 
   const first = chunks[0];
   const last = chunks[chunks.length - 1];
-  if (chunks.length === 1) return `Chunk ${first.index}/${first.total}`;
-  return `Chunks ${first.index}-${last.index} of ${last.total}`;
+  if (chunks.length === 1) return `Batch ${first.index}/${first.total}`;
+  return `Batches ${first.index}-${last.index} of ${last.total}`;
 }
 
 function statusForAuditEntries(entries = []) {
@@ -1674,14 +1674,14 @@ function getGovernanceRunState({ isAnalysisRunning, runningStep, failedStep, err
 
   if (["partial_failed", "failed"].includes(pipelineRunState?.status)) {
     const stageLabel = descriptor?.stage ? formatGovernanceStageName(descriptor.stage) : formatGovernanceStageName(failedStep);
-    const chunkLabel = descriptor ? ` chunk ${descriptor.chunkIndex}/${descriptor.totalChunks}` : "";
+    const chunkLabel = descriptor ? ` batch ${descriptor.chunkIndex}/${descriptor.totalChunks}` : "";
     const rangeLabel = descriptor?.invoiceRange ? ` for invoices ${descriptor.invoiceRange}` : "";
 
     return {
       id: pipelineRunState.status,
       label: pipelineRunState.status === "partial_failed" ? "Partial run stopped" : "Run failed",
       tone: "escalate",
-      detail: `${stageLabel}${chunkLabel}${rangeLabel} did not complete. Completed chunks are retained as partial data only and final batch claims are withheld.`
+      detail: `${stageLabel}${chunkLabel}${rangeLabel} did not complete. Completed batches are retained as partial data only and final payment-run claims are withheld.`
     };
   }
 
@@ -1821,7 +1821,7 @@ export function buildTokenCostSummary({ auditEntries = [], analytics = {}, total
     estimatedPromptCacheCost,
     estimatedCacheAwareCost,
     costPerInvoice: totalInvoices > 0 ? estimatedCacheAwareCost / totalInvoices : null,
-    emptyMessage: "Token usage not available for this run.",
+    emptyMessage: "Usage not available for this run.",
     cacheUsageMessage: "Cache usage not available for this run."
   };
 }
@@ -1839,11 +1839,11 @@ export function buildLatencySummary(auditEntries = []) {
       ? {
         stage: formatGovernanceStageName(slowestEntry.step),
         latencyMs: safeNumber(slowestEntry.latency_ms),
-        chunkLabel: slowestEntry.chunk ? `Chunk ${slowestEntry.chunk.index}/${slowestEntry.chunk.total}` : "Not available",
+        chunkLabel: slowestEntry.chunk ? `Batch ${slowestEntry.chunk.index}/${slowestEntry.chunk.total}` : "Not available",
         invoiceRange: slowestEntry.chunk?.invoice_range || "Not available"
       }
       : null,
-    emptyMessage: "Latency not available for this run."
+    emptyMessage: "Response timing not available for this run."
   };
 }
 
@@ -1864,8 +1864,8 @@ export function buildModelRoutingSummary(auditGroups = []) {
     rows,
     modelsUsed,
     summary: modelsUsed.length
-      ? `${modelsUsed.length} ${pluralize(modelsUsed.length, "model route")} used across captured stages.`
-      : "Model usage not available for this run."
+      ? `${modelsUsed.length} ${pluralize(modelsUsed.length, "processing route")} used across captured stages.`
+      : "Processing route not available for this run."
   };
 }
 
@@ -1897,11 +1897,11 @@ export function buildValidationGateSummary({
       },
       {
         id: "chunk-trace",
-        label: "Chunk trace metadata",
+        label: "Batch trace metadata",
         status: hasChunkMetadata ? "available" : "unavailable",
         statusLabel: hasChunkMetadata ? "Available" : "Not available",
         tone: hasChunkMetadata ? "info" : "neutral",
-        detail: hasChunkMetadata ? "Captured audit entries include chunk count and invoice-range metadata." : "Validation detail not available for this run."
+        detail: hasChunkMetadata ? "Captured audit entries include batch count and invoice-range metadata." : "Validation detail not available for this run."
       },
       {
         id: "result-alignment",
@@ -1917,7 +1917,7 @@ export function buildValidationGateSummary({
       },
       {
         id: "api-key-guard",
-        label: "Secret exposure guard",
+        label: "Credential handling",
         status: "active",
         statusLabel: "Active",
         tone: "clean",
@@ -2086,21 +2086,21 @@ export function getApiExposureStatus({ isDev, apiKey } = {}) {
   if (isDev) {
     const hasLocalKey = Boolean(apiKey);
     return {
-      modeLabel: "Session workspace",
-      serviceStatus: hasLocalKey ? "Session key provided" : "Session key required",
+      modeLabel: "Development",
+      serviceStatus: hasLocalKey ? "Development key provided" : "Development key required",
       serviceTone: hasLocalKey ? "info" : "review",
       clientKeyExposure: hasLocalKey ? "Session-scoped key" : "No session key present",
       exposureTone: hasLocalKey ? "review" : "neutral",
       detail: hasLocalKey
-        ? "The browser sends the key only through the session proxy header."
-        : "Add a session key before analysis can call the AI service.",
+        ? "The browser sends the key only through the local request header."
+        : "Add a development key before analysis can run locally.",
       allowLocalKeyInput: true
     };
   }
 
   return {
     modeLabel: "Production",
-    serviceStatus: "Server-side AI service",
+    serviceStatus: "Server-side processing",
     serviceTone: "clean",
     clientKeyExposure: "None",
     exposureTone: "clean",
@@ -2120,7 +2120,7 @@ export function buildAuditExportSummary(auditEntries = []) {
     failedCount,
     statusLabel: ready ? "Ready to export" : "No audit entries captured yet",
     tone: ready ? "info" : "neutral",
-    safetyText: "Audit export contains run metadata and AI decision records. It excludes service keys and request payloads, and supports review without acting as a legal compliance certification."
+    safetyText: "Audit export contains run metadata and analysis decision records. It excludes service keys and request payloads, and supports review without acting as a legal compliance certification."
   };
 }
 
@@ -2142,7 +2142,7 @@ export function buildAiReliabilitySummary({
     cards: [
       {
         id: "pipeline-health",
-        label: "Pipeline health",
+        label: "Run health",
         value: runState?.label ?? "Awaiting analysis",
         tone: runState?.tone ?? "neutral",
         helper: runState?.detail ?? "Run state not available.",
@@ -2153,7 +2153,7 @@ export function buildAiReliabilitySummary({
         label: "Stages captured",
         value: stageCount,
         tone: stageCount > 0 ? "info" : "neutral",
-        helper: `${chunkCount} ${pluralize(chunkCount, "chunk")} captured`,
+        helper: `${chunkCount} ${pluralize(chunkCount, "batch", "batches")} captured`,
         format: "integer"
       },
       {
@@ -2166,26 +2166,26 @@ export function buildAiReliabilitySummary({
       },
       {
         id: "latency",
-        label: "Total latency",
+        label: "Total response time",
         value: latency?.totalLatencyMs ?? null,
         tone: latency?.hasLatency ? "neutral" : "neutral",
-        helper: latency?.hasLatency ? "Captured API response timing" : "Latency not available for this run.",
+        helper: latency?.hasLatency ? "Captured response timing" : "Response timing not available for this run.",
         format: "duration"
       },
       {
         id: "token-usage",
-        label: "Token usage",
+        label: "Processing usage",
         value: tokenCost?.totalTokens ?? null,
         tone: tokenCost?.tokenDataReported ? "neutral" : "neutral",
-        helper: tokenCost?.tokenDataReported ? "Input and output tokens reported" : "Token usage not available for this run.",
+        helper: tokenCost?.tokenDataReported ? "Input and output usage reported" : "Usage not available for this run.",
         format: "integer-optional"
       },
       {
         id: "model-routing",
-        label: "Model usage",
+        label: "Processing routes",
         value: modelRouting?.modelsUsed?.length ?? 0,
         tone: modelRouting?.modelsUsed?.length ? "neutral" : "neutral",
-        helper: modelRouting?.summary ?? "Model usage not available for this run.",
+        helper: modelRouting?.summary ?? "Processing route not available for this run.",
         format: "integer"
       },
       {
@@ -2193,15 +2193,15 @@ export function buildAiReliabilitySummary({
         label: "Review controls",
         value: "Active",
         tone: "clean",
-        helper: "No communication action is available from this product surface.",
+        helper: "Communications remain gated for human review.",
         format: "text"
       },
       {
         id: "client-key-exposure",
-        label: "Client key exposure",
+        label: "Browser key exposure",
         value: apiExposure?.clientKeyExposure ?? "Not available",
         tone: apiExposure?.exposureTone ?? "neutral",
-        helper: apiExposure?.detail ?? "API exposure detail not available.",
+        helper: apiExposure?.detail ?? "Access detail not available.",
         format: "text"
       }
     ]
@@ -2214,7 +2214,7 @@ function buildGovernanceHeaderTakeaway({ runState, auditEntries, auditGroups, au
   if (auditEntries.length) {
     return `${auditEntries.length} ${pluralize(auditEntries.length, "audit entry", "audit entries")} captured across ${auditGroups.length} ${pluralize(auditGroups.length, "stage")}; ${auditExport.statusLabel.toLowerCase()} for audit-supporting review.`;
   }
-  return "Run analysis from Start to populate AI reliability, workflow trace, token usage, latency, and audit export readiness.";
+  return "Run analysis from Start to populate control assurance, workflow trace, usage, response timing, and audit export readiness.";
 }
 
 export function buildGovernanceViewModel({
@@ -2285,7 +2285,7 @@ export function buildGovernanceViewModel({
     hasData: Boolean(uploadedData.hasFiles || entries.length || analytics?.hasData || isAnalysisRunning || failedStep || error || pipelineRunState?.runId),
     header: {
       eyebrow: "Audit & Governance",
-      title: "Can we trust, explain, and export this AI-assisted review process?",
+      title: "Can we trust, explain, and export this review process?",
       takeaway: buildGovernanceHeaderTakeaway({ runState, auditEntries: entries, auditGroups, auditExport })
     },
     runState,

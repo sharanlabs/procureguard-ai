@@ -23,7 +23,7 @@ const THINKING_BUDGET_BY_STAGE = {
   action_generation: 1024
 };
 const MAX_TOKENS_HELP =
-  "The AI service reached the output token limit before completing structured JSON. Restart the analysis so the run can use smaller, safer invoice chunks.";
+  "The analysis service reached the output limit before completing structured results. Restart the analysis so the run can use smaller, safer invoice batches.";
 let nextAllowedRequestAt = 0;
 
 function wait(ms) {
@@ -85,7 +85,7 @@ function stageTimeoutLabel(stage) {
 
 function timeoutMessage(stage, timeoutMs) {
   const seconds = Math.ceil(normalizeTimeoutMs(timeoutMs) / 1000);
-  return `The AI service timed out while processing ${stageTimeoutLabel(stage)} after ${seconds} seconds. Retry the analysis. If this repeats, reduce batch size or try again later.`;
+  return `The analysis service timed out while processing ${stageTimeoutLabel(stage)} after ${seconds} seconds. Retry the analysis. If this repeats, reduce batch size or try again later.`;
 }
 
 function retryDelayMs(attempt) {
@@ -163,13 +163,13 @@ function parseStructuredOutput(rawData) {
   const text = textFromGeminiResponse(rawData);
   if (!text) {
     const reason = rawData?.promptFeedback?.blockReason || rawData?.candidates?.[0]?.finishReason || "missing content";
-    throw new Error(`The AI response did not include structured JSON text: ${reason}`);
+    throw new Error(`The analysis response did not include structured result text: ${reason}`);
   }
 
   try {
     return JSON.parse(stripCodeFence(text));
   } catch {
-    throw new Error(`The AI service returned text that was not valid JSON: ${safePreview(text)}`);
+    throw new Error(`The analysis service returned text that was not valid structured data: ${safePreview(text)}`);
   }
 }
 
@@ -235,17 +235,17 @@ function rateLimitDelayMs(metadata, attempt) {
 
 function rateLimitFailureMessage(metadata, attempts) {
   if (metadata?.dailyQuota) {
-    return "AI service daily quota is exhausted for this key. Retry after the quota reset or use a billing-enabled key.";
+    return "Analysis service daily quota is exhausted for this key. Retry after the quota reset or use a billing-enabled key.";
   }
 
   const quotaText = metadata?.quotaSummary ? ` Last quota signal: ${metadata.quotaSummary}.` : "";
-  return `AI service rate limit did not clear after ${attempts} attempts.${quotaText} Wait about a minute, then retry the failed chunk.`;
+  return `Analysis service rate limit did not clear after ${attempts} attempts.${quotaText} Wait about a minute, then retry the failed batch.`;
 }
 
 function userFacingApiError(message) {
   const text = String(message ?? "");
   if (text.toLowerCase().includes("api key")) {
-    return "AI service authentication failed. Check the session key and try again.";
+    return "Analysis service authentication failed. Check the service key and try again.";
   }
   return text;
 }
@@ -324,7 +324,7 @@ export async function callGeminiAPI({
       }
 
       if (!response.ok) {
-        let errorMessage = `AI API request failed with status ${response.status}`;
+        let errorMessage = `Analysis request failed with status ${response.status}`;
         try {
           const errorBody = JSON.parse(responseText);
           if (errorBody?.error?.message) errorMessage = errorBody.error.message;
@@ -334,7 +334,7 @@ export async function callGeminiAPI({
         }
 
         if (response.status === 401 || response.status === 403) {
-          throw geminiError("AI service authentication failed. Check the session key and try again.", {
+          throw geminiError("Analysis service authentication failed. Check the service key and try again.", {
             failureType: "api",
             retryable: false,
             status: response.status
@@ -352,7 +352,7 @@ export async function callGeminiAPI({
       try {
         raw = responseText ? JSON.parse(responseText) : {};
       } catch {
-        throw new Error(`AI API response was not valid JSON: ${safePreview(responseText)}`);
+        throw new Error(`Analysis response was not valid structured data: ${safePreview(responseText)}`);
       }
 
       const finishReason = raw?.candidates?.[0]?.finishReason;
@@ -363,7 +363,7 @@ export async function callGeminiAPI({
         });
       }
       if (finishReason === "SAFETY" || raw?.promptFeedback?.blockReason) {
-        throw new Error("The AI service blocked the request before returning structured output.");
+        throw new Error("The analysis service blocked the request before returning structured output.");
       }
 
       return {
@@ -409,11 +409,11 @@ export async function callGeminiAPI({
   }
 
   if (lastError instanceof TypeError) {
-    throw geminiError("Network error while contacting AI API", {
+    throw geminiError("Network error while contacting the analysis service", {
       failureType: "network",
       retryable: true
     });
   }
 
-  throw lastError ?? new Error("AI API request failed");
+  throw lastError ?? new Error("Analysis request failed");
 }
