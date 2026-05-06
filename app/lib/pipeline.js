@@ -1,9 +1,11 @@
-export const DEFAULT_ANALYSIS_CHUNK_SIZE = 5;
+export const DEFAULT_ANALYSIS_CHUNK_SIZE = 25;
 export const PIPELINE_STAGES = ["matching", "classification", "action_generation"];
 
 const SECRET_PATTERNS = [
   /sk-ant-[A-Za-z0-9_-]+/i,
+  /AIza[0-9A-Za-z_-]{20,}/i,
   /ANTHROPIC_API_KEY/i,
+  /GEMINI_API_KEY/i,
   /x-api-key/i
 ];
 const STAGE_OUTPUT_KEYS = {
@@ -74,6 +76,7 @@ function failureTypeFromMessage(message) {
   if (lower.includes("timed out") || lower.includes("timeout")) return "timeout";
   if (lower.includes("429") || lower.includes("rate limit")) return "rate_limit";
   if (lower.includes("network") || lower.includes("unable to reach")) return "network";
+  if (lower.includes("max token") || lower.includes("output token limit")) return "max_tokens";
   if (lower.includes("status 500") || lower.includes("status 502") || lower.includes("status 503") || lower.includes("status 504") || lower.includes("overloaded")) return "api";
   if (
     (lower.includes("returned") && lower.includes("expected")) ||
@@ -97,7 +100,6 @@ function failureTypeFromMessage(message) {
     lower.includes("not valid json") ||
     lower.includes("valid structured json") ||
     lower.includes("content blocks") ||
-    lower.includes("max token") ||
     lower.includes("missing required input")
   ) {
     return "api";
@@ -328,6 +330,9 @@ export function createIdlePipelineRunState() {
     failedMessage: "",
     failureType: null,
     retryable: false,
+    runStartedAt: null,
+    runCompletedAt: null,
+    totalLatencyMs: null,
     completedChunks: emptyStageMap(),
     retryAttempts: emptyStageMap(),
     matchingChunkOutputs: [],
@@ -342,11 +347,14 @@ export function createIdlePipelineRunState() {
 }
 
 export function createPipelineRunState({ runId, totalChunks = 0 } = {}) {
+  const startedAtMs = Date.now();
   return {
     ...createIdlePipelineRunState(),
     runId,
     status: "running",
-    totalChunks
+    totalChunks,
+    runStartedAt: new Date(startedAtMs).toISOString(),
+    runStartedAtMs: startedAtMs
   };
 }
 
@@ -502,16 +510,20 @@ export function markPipelineChunkFailed(runState, { stage, chunkIndex, chunkMeta
 }
 
 export function markPipelineComplete(runState) {
+  const completedAtMs = Date.now();
+  const startedAtMs = Number.isFinite(runState?.runStartedAtMs) ? runState.runStartedAtMs : completedAtMs;
   return {
     ...clearFailureFields(copyRunState(runState)),
     status: "complete",
     currentStage: null,
     currentChunkIndex: null,
-    finalResultsComplete: true
+    finalResultsComplete: true,
+    runCompletedAt: new Date(completedAtMs).toISOString(),
+    totalLatencyMs: Math.max(0, completedAtMs - startedAtMs)
   };
 }
 
-function createDefaultActionResult(invoice, classification) {
+export function createDefaultActionResult(invoice, classification) {
   return {
     invoice_number: invoice.invoice_number,
     overall_tier: classification?.overall_tier ?? 1,
@@ -531,22 +543,30 @@ export function normalizeActionChunkResults(expectedInvoices, actionResults, cla
   }
 
   const rowNumbers = rows.map(invoiceNumber);
-  if (hasDuplicateValues(rowNumbers)) {
-    throw new Error(`action_generation returned duplicate invoice numbers for invoices ${rangeLabel}`);
-  }
-
-  const rowByInvoice = new Map(rows.map((row) => [invoiceNumber(row), row]));
+  const rowQueuesByInvoice = new Map();
+  rows.forEach((row) => {
+    const number = invoiceNumber(row);
+    if (!number) return;
+    if (!rowQueuesByInvoice.has(number)) rowQueuesByInvoice.set(number, []);
+    rowQueuesByInvoice.get(number).push(row);
+  });
   const classifications = classificationResults?.classifications ?? [];
   const normalizedRows = expectedInvoices.map((invoice, index) => {
     const number = invoiceNumber(invoice);
-    if (rowByInvoice.has(number)) return rowByInvoice.get(number);
-
     const classification = classifications[index];
     const isClean = (classification?.detected_exceptions ?? []).length === 0;
     if (isClean) return createDefaultActionResult(invoice, classification);
 
+    const rowQueue = rowQueuesByInvoice.get(number) ?? [];
+    const row = rowQueue.shift();
+    if (row) return row;
+
     throw new Error(`action_generation omitted non-clean invoice ${number} for invoices ${rangeLabel}`);
   });
+  const unusedRows = [...rowQueuesByInvoice.values()].flat().map(invoiceNumber);
+  if (unusedRows.length) {
+    throw new Error(`action_generation returned unused invoice row(s) for invoices ${rangeLabel}: ${unusedRows.join(", ")}`);
+  }
   const unexpected = rowNumbers.filter((number) => !expectedInvoices.some((invoice) => invoiceNumber(invoice) === number));
   if (unexpected.length) {
     throw new Error(`action_generation returned unexpected invoice(s) for invoices ${rangeLabel}: ${unexpected.join(", ")}`);
@@ -602,4 +622,29 @@ export function runPipelineDryRunValidation(invoiceCount = 25, chunkSize = DEFAU
     classification_count: classification.classifications.length,
     action_count: actions.action_results.length
   };
+}
+
+export async function runChunksWithConcurrency(items, runOne, concurrency) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  let firstError = null;
+
+  async function worker() {
+    while (firstError === null) {
+      const myIndex = nextIndex;
+      nextIndex += 1;
+      if (myIndex >= items.length) return;
+      try {
+        results[myIndex] = await runOne(items[myIndex], myIndex);
+      } catch (err) {
+        if (firstError === null) firstError = err;
+        return;
+      }
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  if (firstError) throw firstError;
+  return results;
 }

@@ -1,11 +1,11 @@
 # ProcureGuard AI
 
-Intelligent 3-way procurement matching workflow. Takes PO, Invoice, and GRN data, runs through a 3-step Claude API prompt chain with gate checks, produces exception analysis with reasoning transparency, severity classification, drafted communications, tolerance simulator, root cause analysis, and executive dashboard.
+Intelligent 3-way procurement matching workflow. Takes PO, Invoice, and GRN data, runs through a 3-step Gemini API prompt chain with gate checks, produces exception analysis with reasoning transparency, severity classification, drafted communications, tolerance simulator, root cause analysis, and executive dashboard.
 
 ## Tech Stack
 
-- **AI**: Claude API with runtime model routing (Haiku 4.5 / `claude-haiku-4-5-20251001` for matching; Sonnet 4.6 / `claude-sonnet-4-6` for classification and action generation). Opus is not used in the current runtime pipeline.
-- **API features**: Structured Outputs (`anthropic-beta: structured-outputs-2025-11-13`), adaptive thinking, prompt caching
+- **AI**: Gemini API with runtime model routing (`gemini-2.5-flash` for matching, classification, and action generation).
+- **API features**: structured JSON output via Gemini `responseMimeType: "application/json"` and `responseJsonSchema`
 - **Frontend**: React (JSX), single-file artifact pattern
 - **Styling**: Tailwind CSS with custom design tokens
 - **Charts**: Recharts
@@ -17,8 +17,8 @@ Intelligent 3-way procurement matching workflow. Takes PO, Invoice, and GRN data
 - `/data` — sample CSVs and data dictionary
 - `/prompts` — system prompts for the 3-stage pipeline plus the auxiliary text extraction prompt
 - `/app` — React application
-- `/app/lib` — Claude client helpers, schemas, CSV parsing, pipeline utilities, and view models
-- `/api` — Vercel serverless Claude proxy
+- `/app/lib` — Gemini client helpers, schemas, CSV parsing, pipeline utilities, and view models
+- `/api` — Vercel serverless Gemini proxy
 - `/evals` — golden dataset and evaluation harness
 - `/docs` — handoff history and planned future reference docs
 

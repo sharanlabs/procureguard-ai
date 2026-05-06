@@ -4,26 +4,37 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+            return "react";
+          }
+          if (id.includes("node_modules/lucide-react")) {
+            return "icons";
+          }
+          return undefined;
+        }
+      }
+    }
+  },
   server: {
     proxy: {
       "/api/messages": {
-        target: "https://api.anthropic.com",
+        target: "https://generativelanguage.googleapis.com",
         changeOrigin: true,
-        rewrite: () => "/v1/messages",
+        rewrite: () => "/v1beta/models/gemini-2.5-flash:generateContent",
         configure: (proxy) => {
           proxy.on("proxyReq", (proxyReq, req) => {
             const apiKey = req.headers["x-api-key"];
-            const anthropicVersion = req.headers["anthropic-version"];
 
             if (apiKey) {
-              proxyReq.setHeader("x-api-key", apiKey);
+              proxyReq.setHeader("x-goog-api-key", apiKey);
             }
 
-            proxyReq.setHeader(
-              "anthropic-version",
-              anthropicVersion || "2023-06-01"
-            );
-            proxyReq.setHeader("anthropic-dangerous-direct-browser-access", "true");
+            proxyReq.removeHeader("x-api-key");
+            proxyReq.removeHeader("x-gemini-model");
           });
         }
       }

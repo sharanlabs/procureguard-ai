@@ -1,10 +1,18 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import matchingPrompt from "../prompts/01_matching.md?raw";
 import classificationPrompt from "../prompts/02_classification.md?raw";
 import actionPrompt from "../prompts/03_action_generation.md?raw";
-import ExecutiveDashboard from "./ProcureGuardDashboard.jsx";
+import {
+  AuditNavIcon,
+  BrandMark,
+  StartNavIcon,
+  SummaryNavIcon,
+  SuppliersNavIcon,
+  UploadStageIcon,
+  WorkbenchNavIcon
+} from "./ProcureGuardIcons.jsx";
 import { createAuditEntry, exportAuditCsv } from "./lib/audit.js";
-import { callClaudeAPI } from "./lib/claude.js";
+import { callGeminiAPI } from "./lib/gemini.js";
 import { normalizeProcurementFiles } from "./lib/csv.js";
 import { buildDashboardAnalytics } from "./lib/dashboard.js";
 import {
@@ -22,6 +30,7 @@ import {
   applyGlobalMatchingGuards,
   assertNoApiKeyLeak,
   buildChunkContext,
+  createDefaultActionResult,
   createIdlePipelineRunState,
   createPipelineRunState,
   chunkInvoices,
@@ -39,6 +48,7 @@ import {
   mergeMatchingChunks,
   mergeCompletedPipelineStage,
   normalizeActionChunkResults,
+  runChunksWithConcurrency,
   validateAndAlignResults,
   validateMergedResults
 } from "./lib/pipeline.js";
@@ -52,34 +62,35 @@ import {
 import {
   AlertCircle,
   AlertTriangle,
-  BarChart3,
+  Building2,
   CheckCircle2,
   Circle,
   Download,
+  FileText,
   Key,
   Loader2,
   Moon,
   Play,
   RotateCcw,
-  Shield,
-  Sun,
-  TrendingUp,
-  Upload
+  Sun
 } from "lucide-react";
 
-const LOCAL_API_KEY_STORAGE = "procureguard_anthropic_session_key";
+const ExecutiveDashboard = lazy(() => import("./ProcureGuardDashboard.jsx"));
+
+const LOCAL_API_KEY_STORAGE = "procureguard_gemini_session_key";
 const DARK_MODE_STORAGE = "procureguard_dark_mode";
 const MODELS = {
-  matching: "claude-haiku-4-5-20251001",
-  classification: "claude-sonnet-4-6",
-  action_generation: "claude-sonnet-4-6"
+  matching: "gemini-2.5-flash",
+  classification: "gemini-2.5-flash",
+  action_generation: "gemini-2.5-flash"
 };
-const ANALYSIS_CHUNK_SIZE = DEFAULT_ANALYSIS_CHUNK_SIZE;
-const CHUNK_DELAY_MS = 250;
+const ANALYSIS_CHUNK_SIZE = Math.min(DEFAULT_ANALYSIS_CHUNK_SIZE, 10);
+const MATCHING_CONCURRENCY = 1;
+const REASONING_CONCURRENCY = 1;
 const STAGE_MAX_TOKENS = {
-  matching: 8192,
-  classification: 8192,
-  action_generation: 8192
+  matching: 65536,
+  classification: 65536,
+  action_generation: 65536
 };
 const DEFAULT_TOLERANCES = {
   pricePct: 2,
@@ -87,11 +98,11 @@ const DEFAULT_TOLERANCES = {
   dateBusinessDays: 2
 };
 const WORKSPACE_TABS = [
-  { id: "start", label: "Start", icon: Upload },
-  { id: "executive", label: "Executive Summary", icon: BarChart3 },
-  { id: "workbench", label: "Exception Workbench", icon: AlertTriangle },
-  { id: "analytics", label: "Supplier & Policy Analytics", icon: TrendingUp },
-  { id: "governance", label: "Audit & Governance", icon: Shield }
+  { id: "start", label: "Start", shortLabel: "Start", icon: StartNavIcon },
+  { id: "executive", label: "Executive Summary", shortLabel: "Executive", icon: SummaryNavIcon },
+  { id: "workbench", label: "Exception Workbench", shortLabel: "Workbench", icon: WorkbenchNavIcon },
+  { id: "analytics", label: "Supplier & Policy Analytics", shortLabel: "Analytics", icon: SuppliersNavIcon },
+  { id: "governance", label: "Audit & Governance", shortLabel: "Audit", icon: AuditNavIcon }
 ];
 const DEFAULT_QUEUE_FILTERS = {
   search: "",
@@ -154,7 +165,7 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
 
   return (
     <section
-      className={`rounded-2xl border p-6 shadow-sm transition-colors ${isDragging ? "border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40" : "border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800/30 dark:hover:border-slate-600 dark:hover:bg-slate-800/50"}`}
+      className={`pg-upload-panel rounded-2xl border p-6 shadow-sm transition-colors ${isDragging ? "pg-upload-panel-active" : ""}`}
       onDragOver={(event) => {
         event.preventDefault();
         setIsDragging(true);
@@ -162,15 +173,15 @@ function UploadPanel({ parsedFiles, onFilesSelected, isBusy }) {
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Upload procurement CSVs</h2>
+      <div className="pg-upload-row flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="pg-upload-copy">
+          <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-100">Upload payment-run files</h2>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Add purchase_orders.csv, invoices.csv, and goods_receipts.csv before analysis.
+            Add purchase orders, supplier invoices, and goods receipts before analysis.
           </p>
         </div>
-        <label className="pg-button pg-button-primary flex items-center gap-2 cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-blue-600">
-          <Upload aria-hidden="true" className="h-4 w-4" />
+        <label className="pg-upload-button pg-button pg-button-primary flex items-center gap-2 cursor-pointer">
+          <UploadStageIcon aria-hidden="true" className="h-4 w-4" />
           Choose files
           <input
             className="sr-only"
@@ -201,31 +212,31 @@ function ApiKeyPanel({ apiKey, onApiKeyChange }) {
   if (!import.meta.env.DEV) {
     return (
       <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 shadow-sm dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
-        Production uses the server-side Claude API key configured in deployment.
+        Production uses the server-side AI service key configured in deployment.
       </section>
     );
   }
 
   return (
     <section className="pg-card p-4">
-      <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="anthropic-key">
+      <label className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor="ai-service-key">
         <Key aria-hidden="true" className="h-4 w-4" />
-        Local Claude API key
+        Session API key
       </label>
-      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+      <form className="mt-2 flex flex-col gap-2 sm:flex-row" onSubmit={(event) => event.preventDefault()}>
         <input
-          id="anthropic-key"
+          id="ai-service-key"
           className="pg-control min-w-0 flex-1"
           type="password"
           autoComplete="off"
           spellCheck={false}
           value={apiKey}
           onChange={(event) => onApiKeyChange(event.target.value)}
-          placeholder="sk-ant-..."
+          placeholder="Paste API key for this session"
         />
-      </div>
+      </form>
       <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-        Stored only in this browser session for local development.
+        Stored only in this browser session. Audit exports never include service keys.
       </p>
     </section>
   );
@@ -237,32 +248,49 @@ function ProgressPanel({ runningStep, statusMessage, hasMatchResults, hasClassif
     ["classification", formatStageName("classification"), hasClassificationResults],
     ["action_generation", formatStageName("action_generation"), hasActionResults]
   ];
+  const runningIndex = steps.findIndex(([key]) => runningStep === key);
 
   return (
-    <section className="pg-card p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {steps.map(([key, label, complete]) => (
-            <Badge
-              key={key}
-              className={
-                complete
-                  ? "border-green-200 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-950/50 dark:text-green-200"
-                  : runningStep === key
-                    ? "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-200"
-                    : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-              }
-            >
-              {complete
-                ? <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />
-                : runningStep === key
-                  ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
-                  : <Circle aria-hidden="true" className="h-3.5 w-3.5" />}
-              {label}
-            </Badge>
-          ))}
+    <section className="pg-card pg-progress-card p-4">
+      <div className="pg-progress-layout">
+        <div className="pg-pipeline-progress" role="list" aria-label="Analysis pipeline progress">
+          {steps.map(([key, label, complete], index) => {
+            const isRunning = runningStep === key;
+            const state = complete ? "complete" : isRunning ? "running" : "queued";
+            const stateLabel = complete ? "Complete" : isRunning ? "Running" : "Queued";
+            const connectorState =
+              complete || runningIndex >= index
+                ? "complete"
+                : runningIndex === index - 1
+                  ? "running"
+                  : "queued";
+
+            return (
+              <div key={key} className="pg-pipeline-item" role="listitem">
+                {index > 0 ? (
+                  <span className={`pg-pipeline-connector pg-pipeline-connector-${connectorState}`} aria-hidden="true" />
+                ) : null}
+                <span
+                  className={`pg-pipeline-stage pg-pipeline-${state}`}
+                  aria-current={isRunning ? "step" : undefined}
+                >
+                  <span className="pg-pipeline-icon" aria-hidden="true">
+                    {complete
+                      ? <CheckCircle2 className="h-3.5 w-3.5" />
+                      : isRunning
+                        ? <Loader2 className="h-3.5 w-3.5" />
+                        : <Circle className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className="pg-pipeline-copy">
+                    <span className="pg-pipeline-label">{label}</span>
+                    <span className="pg-pipeline-state">{stateLabel}</span>
+                  </span>
+                </span>
+              </div>
+            );
+          })}
         </div>
-        <p aria-live="polite" className="text-sm text-slate-600 dark:text-slate-400">{statusMessage || "Ready to analyze validated files."}</p>
+        <p aria-live="polite" className="pg-progress-status">{statusMessage || "Ready when all files are validated."}</p>
       </div>
     </section>
   );
@@ -273,7 +301,8 @@ function formatFailureTypeLabel(value) {
     timeout: "Timeout",
     rate_limit: "Rate limit",
     network: "Network",
-    api: "Claude API",
+    max_tokens: "Output limit",
+    api: "AI service",
     validation: "Validation",
     unknown: "Unknown"
   }[value] ?? "Unknown";
@@ -331,7 +360,7 @@ function PipelineRunStatusPanel({ runState, isRunning, onRetry, onRestart }) {
 
       {descriptor ? (
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <dl className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             <FieldRow label="Failed stage" value={formatStageName(descriptor.stage)} />
             <FieldRow label="Failed chunk" value={`${descriptor.chunkIndex}/${descriptor.totalChunks}`} />
             <FieldRow label="Invoice range" value={descriptor.invoiceRange || "Not available"} />
@@ -373,25 +402,26 @@ function PipelineRunStatusPanel({ runState, isRunning, onRetry, onRestart }) {
 
 function ToleranceSlider({ id, label, value, min, max, step, unit, affectedCount, onChange }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex items-center justify-between gap-3">
-        <label className="text-sm font-semibold text-slate-800 dark:text-slate-200" htmlFor={id}>
+    <div className="pg-slider-card">
+      <div className="pg-slider-head">
+        <label htmlFor={id}>
           {label}
         </label>
         <Badge className="border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-200">{affectedCount} affected</Badge>
       </div>
-      <div className="mt-3 flex items-center gap-4">
+      <div className="pg-slider-row">
         <input
           id={id}
-          className="w-full accent-blue-600"
+          className="pg-slider"
           type="range"
           min={min}
           max={max}
           step={step}
           value={value}
+          aria-valuetext={`${value}${unit}`}
           onChange={(event) => onChange(Number(event.target.value))}
         />
-        <p className="min-w-20 text-right text-sm font-semibold text-slate-950 dark:text-slate-100">
+        <p className="pg-slider-value">
           {value}{unit}
         </p>
       </div>
@@ -414,7 +444,7 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation, policy
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">Policy simulator</p>
           <h2 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Tolerance policy sensitivity</h2>
           <p className="mt-1 text-sm text-blue-900 dark:text-blue-200">
-            Simulation only. Adjust policy tolerances locally without changing Claude classifications, payment behavior, or audit records.
+            Simulation only. Adjust policy tolerances for this view without changing model classifications, payment behavior, or audit records.
           </p>
         </div>
         <Badge className="border-blue-300 bg-white text-blue-800 dark:border-blue-600 dark:bg-blue-950/50 dark:text-blue-200">Simulation only</Badge>
@@ -505,9 +535,9 @@ function ToleranceSimulator({ tolerances, onTolerancesChange, simulation, policy
 
 function FieldRow({ label, value }) {
   return (
-    <div className="grid gap-1 rounded-lg bg-white p-3 text-sm sm:grid-cols-[10rem_1fr] dark:bg-slate-900">
+    <div className="pg-field-row grid gap-1 rounded-lg bg-white p-3 text-sm sm:grid-cols-[minmax(7rem,0.75fr)_minmax(0,1fr)] dark:bg-slate-900">
       <dt className="font-semibold text-slate-500 dark:text-slate-400">{label}</dt>
-      <dd className="min-w-0 text-slate-800 dark:text-slate-200">{value}</dd>
+      <dd className="min-w-0 break-words text-slate-800 dark:text-slate-200">{value}</dd>
     </div>
   );
 }
@@ -592,12 +622,28 @@ function WorkbenchSummaryStrip({ summary }) {
   );
 }
 
-function WorkbenchEmptyState({ eyebrow, title, body, actionLabel, onAction, tone = "neutral" }) {
+function EmptyPreview({ tone = "neutral" }) {
+  return (
+    <div className={`pg-empty-preview pg-empty-preview-${tone}`} aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
+function WorkbenchEmptyState({ eyebrow, title, body, actionLabel, onAction, tone = "neutral", icon: Icon }) {
   return (
     <section className={`pg-empty-panel ${toneBorderClass(tone)}`}>
+      {Icon ? (
+        <span aria-hidden="true" className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <Icon className="h-5 w-5" />
+        </span>
+      ) : null}
       <p className="pg-kicker pg-kicker-neutral">{eyebrow}</p>
       <h2 className="pg-section-title">{title}</h2>
       <p className="pg-copy mt-2 max-w-3xl">{body}</p>
+      <EmptyPreview tone={tone} />
       {actionLabel && onAction ? (
         <button
           className="pg-button pg-button-secondary mt-4"
@@ -819,7 +865,7 @@ function DraftAction({
         </div>
         {tier === 2 ? (
           <button
-            className="rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-blue-600 disabled:bg-slate-500 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white dark:disabled:bg-slate-700 dark:disabled:text-slate-300"
+            className="pg-focus-halo rounded-lg bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:bg-slate-500 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white dark:disabled:bg-slate-700 dark:disabled:text-slate-300"
             type="button"
             disabled={approved}
             onClick={() => onApprove(actionKey)}
@@ -914,6 +960,7 @@ function DraftPanel({
 
 function InvoiceCard({
   row,
+  isFocused = false,
   approvedActions,
   tier3Notes,
   reviewedTier3,
@@ -922,18 +969,23 @@ function InvoiceCard({
   onTier3Reviewed
 }) {
   const simulationChanged = row.simulation?.changed;
-  const cardClass = simulationChanged
-    ? "pg-card pg-card-interactive border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40"
-    : "pg-card pg-card-interactive";
+  const tone = row.tier === 3 ? "escalate" : row.tier === 2 ? "review" : row.tier === "clean" ? "clean" : "info";
 
   return (
-    <article className={cardClass}>
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Invoice exception case</p>
-          <h3 className="mt-1 text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{row.invoiceNumber}</h3>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{row.supplierName}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+    <details
+      className={`pg-invoice-row-card pg-invoice-${tone} ${simulationChanged ? "pg-invoice-simulated" : ""} ${isFocused ? "pg-invoice-focused" : ""}`}
+      data-invoice-number={row.invoiceNumber}
+      open={isFocused || undefined}
+      tabIndex={-1}
+    >
+      <summary className="pg-invoice-row-summary">
+        <div className="pg-invoice-row-id">
+          <span className="pg-invoice-row-type">Invoice exception case</span>
+          <strong>{row.invoiceNumber}</strong>
+          <span>{row.supplierName}</span>
+        </div>
+        <div className="pg-invoice-row-badges">
+          <div>
             <Badge className={toneBadgeClass(row.reviewPriority.tone)}>{row.reviewPriority.label}</Badge>
             <Badge className={toneBadgeClass(row.tier === "clean" ? "clean" : row.tier === 3 ? "escalate" : row.tier === 2 ? "review" : "info")}>
               {row.tierLabel}
@@ -941,68 +993,78 @@ function InvoiceCard({
             <Badge className={toneBadgeClass("neutral")}>{statusLabel(row.match?.match_status)}</Badge>
           </div>
         </div>
-        <div className="grid gap-2 text-sm sm:grid-cols-2 lg:min-w-[22rem]">
+        <dl className="pg-invoice-row-facts">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">PO</p>
-            <p className="mt-1 font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{renderValue(row.match?.po_number, "No PO match")}</p>
+            <dt>PO</dt>
+            <dd>{renderValue(row.match?.po_number, "No PO match")}</dd>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">GRN</p>
-            <p className="mt-1 font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{renderValue(row.match?.grn_numbers, "No GRN")}</p>
+            <dt>GRN</dt>
+            <dd>{renderValue(row.match?.grn_numbers, "No GRN")}</dd>
+          </div>
+          <div>
+            <dt>Exposure</dt>
+            <dd>{formatMoney(row.exposureAmount)}</dd>
+          </div>
+          <div>
+            <dt>Route</dt>
+            <dd>{row.recommendedRoute.label}</dd>
+          </div>
+        </dl>
+      </summary>
+
+      <div className="pg-invoice-row-detail">
+        {simulationChanged ? (
+          <section className="rounded-xl border border-blue-300 bg-white p-4 text-sm text-blue-950 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100">
+            <Badge className="border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-600 dark:bg-blue-950/50 dark:text-blue-200">Policy simulation changed this review path</Badge>
+            <p className="mt-3 font-semibold">
+              {tierLabel(row.simulation.originalTier)} &rarr; {tierLabel(row.simulation.simulatedTier)}
+            </p>
+            <p className="mt-1 text-blue-800 dark:text-blue-300">
+              This is a what-if view only. The original model rationale, draft actions, and review controls remain unchanged.
+            </p>
+          </section>
+        ) : null}
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <CardFact label="Exposure" value={formatMoney(row.exposureAmount)} tone="info" isNumber />
+          <CardFact label="Hold" value={formatMoney(row.holdAmount)} tone={row.holdAmount > 0 ? "review" : "neutral"} isNumber />
+          <CardFact label="Recommended route" value={row.recommendedRoute.label} tone={row.recommendedRoute.tone} />
+          <CardFact label="Draft status" value={row.draftStatus.label} tone={row.draftStatus.tone} />
+          <CardFact label="Evidence" value={row.evidenceStrength.label} helper={formatPercentValue(row.modelConfidence)} tone={row.evidenceStrength.tone} isNumber />
+        </div>
+
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Exception labels</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {row.exceptionLabels.length ? (
+              row.exceptionLabels.map((item) => (
+                <Badge
+                  key={`${row.id}-${item.code}-badge`}
+                  className={toneBadgeClass(item.tier === 3 ? "escalate" : item.tier === 2 ? "review" : "info")}
+                >
+                  {item.code}: {item.label}
+                </Badge>
+              ))
+            ) : (
+              <Badge className={toneBadgeClass("clean")}>No detected exceptions</Badge>
+            )}
           </div>
         </div>
+
+        <EvidenceRationalePanel row={row} />
+        <DraftPanel
+          row={row}
+          approvedActions={approvedActions}
+          tier3Notes={tier3Notes}
+          reviewedTier3={reviewedTier3}
+          onApprove={onApprove}
+          onTier3NoteChange={onTier3NoteChange}
+          onTier3Reviewed={onTier3Reviewed}
+        />
+        <EvidenceConfidence row={row} />
       </div>
-
-      {simulationChanged ? (
-        <section className="mt-4 rounded-xl border border-blue-300 bg-white p-4 text-sm text-blue-950 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100">
-          <Badge className="border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-600 dark:bg-blue-950/50 dark:text-blue-200">Policy simulation changed this review path</Badge>
-          <p className="mt-3 font-semibold">
-            {tierLabel(row.simulation.originalTier)} &rarr; {tierLabel(row.simulation.simulatedTier)}
-          </p>
-          <p className="mt-1 text-blue-800 dark:text-blue-300">
-            This is a what-if view only. The original Claude rationale, draft actions, and review controls remain unchanged.
-          </p>
-        </section>
-      ) : null}
-
-      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <CardFact label="Exposure" value={formatMoney(row.exposureAmount)} tone="info" isNumber />
-        <CardFact label="Hold" value={formatMoney(row.holdAmount)} tone={row.holdAmount > 0 ? "review" : "neutral"} isNumber />
-        <CardFact label="Recommended route" value={row.recommendedRoute.label} tone={row.recommendedRoute.tone} />
-        <CardFact label="Draft status" value={row.draftStatus.label} tone={row.draftStatus.tone} />
-        <CardFact label="Evidence" value={row.evidenceStrength.label} helper={formatPercentValue(row.modelConfidence)} tone={row.evidenceStrength.tone} isNumber />
-      </div>
-
-      <div className="mt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Exception labels</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {row.exceptionLabels.length ? (
-            row.exceptionLabels.map((item) => (
-              <Badge
-                key={`${row.id}-${item.code}-badge`}
-                className={toneBadgeClass(item.tier === 3 ? "escalate" : item.tier === 2 ? "review" : "info")}
-              >
-                {item.code}: {item.label}
-              </Badge>
-            ))
-          ) : (
-            <Badge className={toneBadgeClass("clean")}>No detected exceptions</Badge>
-          )}
-        </div>
-      </div>
-
-      <EvidenceRationalePanel row={row} />
-      <DraftPanel
-        row={row}
-        approvedActions={approvedActions}
-        tier3Notes={tier3Notes}
-        reviewedTier3={reviewedTier3}
-        onApprove={onApprove}
-        onTier3NoteChange={onTier3NoteChange}
-        onTier3Reviewed={onTier3Reviewed}
-      />
-      <EvidenceConfidence row={row} />
-    </article>
+    </details>
   );
 }
 
@@ -1021,7 +1083,7 @@ function GovernanceMetric({ label, value, helper, tone = "neutral", isNumber = t
       <p className={`${isNumber ? "font-mono pg-metric-value" : "text-lg leading-6"} mt-2 font-semibold text-slate-950 dark:text-slate-100`}>
         {value}
       </p>
-      {helper ? <p className="pg-meta mt-2">{helper}</p> : null}
+      {helper ? <p className="pg-governance-helper">{helper}</p> : null}
     </article>
   );
 }
@@ -1110,9 +1172,9 @@ function ApiServiceAndDataInputs({ viewModel, apiKey, onApiKeyChange }) {
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">AI service and data inputs</p>
-          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Claude service mode and uploaded data</h3>
+          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">AI service and data access</h3>
           <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Production uses server-side Claude configuration. Local development keeps the key session-only when provided.
+            Production keeps model access server-side. This workspace keeps any provided key session-only.
           </p>
         </div>
         <Badge className={toneBadgeClass(exposure.serviceTone)}>{exposure.modeLabel}</Badge>
@@ -1129,7 +1191,7 @@ function ApiServiceAndDataInputs({ viewModel, apiKey, onApiKeyChange }) {
         <GovernanceMetric
           label="Client key exposure"
           value={exposure.clientKeyExposure}
-          helper="Audit export excludes raw API keys."
+          helper="Audit export excludes service keys."
           tone={exposure.exposureTone}
           isNumber={false}
         />
@@ -1223,7 +1285,7 @@ function RuntimeCostTelemetry({ viewModel }) {
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Runtime and cost telemetry</p>
           <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Tokens, cost estimate, latency, and model routing</h3>
           <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            Token and cost values appear only when usage metadata is returned by the Claude API response.
+            Token and cost values appear only when usage metadata is returned by the AI response.
           </p>
         </div>
         <Badge className={toneBadgeClass(tokenCost.tokenDataReported ? "info" : "neutral")}>
@@ -1298,22 +1360,22 @@ function RuntimeCostTelemetry({ viewModel }) {
 
       {modelRouting.rows.length ? (
         <div className="pg-table-wrap mt-5">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <table className="min-w-full">
+            <thead>
               <tr>
-                <th className="px-3 py-2" scope="col">Stage</th>
-                <th className="px-3 py-2" scope="col">Model routing</th>
-                <th className="px-3 py-2 text-right" scope="col">Chunks</th>
-                <th className="px-3 py-2" scope="col">Status</th>
+                <th scope="col">Stage</th>
+                <th scope="col">Model routing</th>
+                <th className="pg-table-num-header" scope="col">Chunks</th>
+                <th scope="col">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+            <tbody>
               {modelRouting.rows.map((row) => (
-                <tr className="align-top hover:bg-slate-50 dark:hover:bg-slate-800" key={row.stage}>
-                  <td className="px-3 py-3 font-semibold text-slate-900 dark:text-slate-100">{row.stageLabel}</td>
-                  <td className="px-3 py-3 text-slate-700 dark:text-slate-300">{row.models.join(", ")}</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatInteger(row.chunkCount)}</td>
-                  <td className="px-3 py-3"><Badge className={toneBadgeClass(row.status.tone)}>{row.status.label}</Badge></td>
+                <tr className="align-top" key={row.stage}>
+                  <td className="font-semibold">{row.stageLabel}</td>
+                  <td>{row.models.join(", ")}</td>
+                  <td className="pg-table-num">{formatInteger(row.chunkCount)}</td>
+                  <td><Badge className={toneBadgeClass(row.status.tone)}>{row.status.label}</Badge></td>
                 </tr>
               ))}
             </tbody>
@@ -1340,7 +1402,7 @@ function AuditTrailSummaryAndExport({ viewModel, onExport }) {
           <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">{auditExport.safetyText}</p>
         </div>
         <button
-          className="flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="pg-focus-halo flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           type="button"
           disabled={!auditExport.ready}
           onClick={onExport}
@@ -1472,16 +1534,17 @@ function AuditStageGroups({ groups }) {
 function GovernancePanel({ viewModel, apiKey, onApiKeyChange, onExport, onStart }) {
   if (!viewModel.hasData) {
     return (
-      <section className="pg-page-stack">
+      <section className="pg-page-stack pg-empty-workspace pg-governance-empty">
         <GovernanceHeader viewModel={viewModel} />
         <ApiServiceAndDataInputs viewModel={viewModel} apiKey={apiKey} onApiKeyChange={onApiKeyChange} />
         <WorkbenchEmptyState
           eyebrow="Awaiting analysis"
           title="Run analysis from Start to capture audit and reliability metadata"
-          body="Audit entries, workflow trace, token usage, latency, model routing, and export readiness appear after the Claude prompt-chain workflow runs."
+          body="Audit entries, workflow trace, token usage, latency, model routing, and export readiness appear after the analysis workflow runs."
           actionLabel="Go to Start"
           onAction={onStart}
           tone="neutral"
+          icon={AuditNavIcon}
         />
       </section>
     );
@@ -1504,18 +1567,18 @@ function WorkspaceTabs({ activeWorkspace, onChange, dashboardReady, reviewCount,
   return (
     <nav
       aria-label="Workspace navigation"
-      className="pg-card p-2"
+      className="pg-workspace-nav"
     >
-      <div className="pg-tabs">
+      <div className="pg-tabs" role="tablist" aria-label="Workspace">
         <div className="pg-tabs-list">
           {WORKSPACE_TABS.map((tab) => {
             const isActive = activeWorkspace === tab.id;
             const helper = {
-              start: "Upload and analyze",
-              executive: dashboardReady ? "Batch summary" : "Appears after analysis",
-              workbench: `${reviewCount} invoice cards`,
-              analytics: "Supplier and policy views",
-              governance: `${auditEntryCount} audit entries`
+              start: "Prepare run",
+              executive: dashboardReady ? "Decision summary" : "Ready after analysis",
+              workbench: `${reviewCount} cases`,
+              analytics: "Supplier risk",
+              governance: `${auditEntryCount} audit events`
             }[tab.id];
 
             return (
@@ -1523,12 +1586,15 @@ function WorkspaceTabs({ activeWorkspace, onChange, dashboardReady, reviewCount,
                 key={tab.id}
                 type="button"
                 className={`pg-tab ${isActive ? "pg-tab-active" : ""}`}
-                aria-pressed={isActive}
+                role="tab"
+                aria-label={`${tab.label}. ${helper}`}
+                aria-selected={isActive}
+                aria-current={isActive ? "page" : undefined}
                 onClick={() => onChange(tab.id)}
               >
-                <span className="flex items-center gap-2 text-sm font-semibold">
-                  <tab.icon aria-hidden="true" className="h-4 w-4" />
-                  {tab.label}
+                <span className="pg-tab-main" data-short-label={tab.shortLabel}>
+                  <tab.icon aria-hidden="true" className="pg-nav-icon h-4 w-4" />
+                  <span className="pg-tab-label">{tab.shortLabel}</span>
                 </span>
                 <span className="pg-tab-helper">
                   {helper}
@@ -1562,7 +1628,7 @@ function ReviewQueueControls({
           <h3 className="text-sm font-semibold text-slate-950 dark:text-slate-100">Filter and sort queue</h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
             <span className="font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{visibleCount}</span> of{" "}
-            <span className="font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{totalCount}</span> invoices visible. Filters are local and do not change classifications.
+            <span className="font-mono font-semibold tabular-nums text-slate-950 dark:text-slate-100">{totalCount}</span> invoices visible. Filters do not change classifications.
           </p>
         </div>
         <button
@@ -1670,6 +1736,7 @@ function ExceptionWorkbenchPanel({
   partialRunState,
   onRetryPartial,
   onStart,
+  focusedInvoiceNumber,
   approvedActions,
   tier3Notes,
   reviewedTier3,
@@ -1677,15 +1744,27 @@ function ExceptionWorkbenchPanel({
   onTier3NoteChange,
   onTier3Reviewed
 }) {
+  useEffect(() => {
+    if (!focusedInvoiceNumber) return;
+    const target = [...document.querySelectorAll("[data-invoice-number]")]
+      .find((element) => element.getAttribute("data-invoice-number") === focusedInvoiceNumber);
+    if (!target) return;
+
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "center" });
+    target.focus?.({ preventScroll: true });
+  }, [focusedInvoiceNumber, viewModel.visibleRows]);
+
   if (isAnalysisRunning) {
     return (
       <section className="pg-page-stack">
         <WorkbenchHeader hasData={false} isAnalysisRunning />
         <WorkbenchEmptyState
           eyebrow="Analysis in progress"
-          title="Workbench will populate after the prompt chain completes"
+          title="Workbench will populate after analysis completes"
           body="The queue is intentionally withheld while matching, classification, or draft generation is running so analysts do not act on partial results."
           tone="info"
+          icon={Loader2}
         />
       </section>
     );
@@ -1702,6 +1781,7 @@ function ExceptionWorkbenchPanel({
           actionLabel="Go to Start"
           onAction={onStart}
           tone="escalate"
+          icon={AlertCircle}
         />
       </section>
     );
@@ -1718,6 +1798,7 @@ function ExceptionWorkbenchPanel({
           actionLabel="Go to Start"
           onAction={onStart}
           tone="neutral"
+          icon={SummaryNavIcon}
         />
       </section>
     );
@@ -1745,6 +1826,7 @@ function ExceptionWorkbenchPanel({
             <InvoiceCard
               key={row.id}
               row={row}
+              isFocused={row.invoiceNumber === focusedInvoiceNumber}
               approvedActions={approvedActions}
               tier3Notes={tier3Notes}
               reviewedTier3={reviewedTier3}
@@ -1766,13 +1848,6 @@ function ExceptionWorkbenchPanel({
       )}
     </section>
   );
-}
-
-function analyticsHeatCellClass(count) {
-  if (count >= 3) return "border-red-200 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-950/50 dark:text-red-200";
-  if (count === 2) return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200";
-  if (count === 1) return "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-200";
-  return "border-transparent bg-transparent text-slate-300 dark:text-slate-600";
 }
 
 function SupplierPolicyHeader({ viewModel }) {
@@ -1860,37 +1935,45 @@ function SupplierScorecard({ rows }) {
     <section className="pg-card">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Supplier scorecard</p>
-        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Batch-based operational risk by supplier</h3>
+        <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Batch exception signal by supplier</h3>
         <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Risk labels explain the current batch signal only; they do not represent external supplier risk.
+          Signal labels explain this payment run only; they do not represent external supplier risk.
         </p>
       </div>
       {rows.length ? (
-        <div className="pg-table-wrap mt-5">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <div className="pg-table-wrap pg-scorecard-wrap mt-5">
+          <table className="pg-scorecard-table">
+            <colgroup>
+              <col className="pg-scorecard-col-supplier" />
+              <col className="pg-scorecard-col-cert" />
+              <col className="pg-scorecard-col-count" />
+              <col className="pg-scorecard-col-money" />
+              <col className="pg-scorecard-col-signal" />
+              <col className="pg-scorecard-col-why" />
+            </colgroup>
+            <thead>
               <tr>
-                <th className="px-3 py-2" scope="col">Supplier</th>
-                <th className="px-3 py-2" scope="col">Diversity certification</th>
-                <th className="px-3 py-2 text-right" scope="col">Exceptions</th>
-                <th className="px-3 py-2 text-right" scope="col">Exposure</th>
-                <th className="px-3 py-2" scope="col">Risk</th>
-                <th className="px-3 py-2" scope="col">Why</th>
+                <th scope="col">Supplier</th>
+                <th scope="col">Diversity certification</th>
+                <th className="pg-table-num-header" scope="col">Exceptions</th>
+                <th className="pg-table-num-header" scope="col">Exposure</th>
+                <th scope="col">Batch signal</th>
+                <th scope="col">Why</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+            <tbody>
               {rows.map((supplier) => (
-                <tr className="align-top hover:bg-slate-50 dark:hover:bg-slate-800" key={supplier.key}>
-                  <td className="px-3 py-3 font-semibold text-slate-900 dark:text-slate-100">{supplier.supplierName}</td>
-                  <td className="px-3 py-3 text-slate-700 dark:text-slate-300">{supplier.diversityCertification}</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-800 dark:text-slate-200">{formatInteger(supplier.exceptionRows)}</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-800 dark:text-slate-200">{formatMoney(supplier.exposure)}</td>
-                  <td className="px-3 py-3">
+                <tr className="align-top" key={supplier.key}>
+                  <td className="pg-scorecard-supplier font-semibold">{supplier.supplierName}</td>
+                  <td className="pg-scorecard-cert">{supplier.diversityCertification}</td>
+                  <td className="pg-table-num">{formatInteger(supplier.exceptionRows)}</td>
+                  <td className="pg-table-num">{formatMoney(supplier.exposure)}</td>
+                  <td className="pg-scorecard-signal">
                     <Badge className={toneBadgeClass(supplier.riskLevel === "High" ? "escalate" : supplier.riskLevel === "Medium" ? "review" : "clean")}>
                       {supplier.riskLevel}
                     </Badge>
                   </td>
-                  <td className="max-w-md px-3 py-3 text-slate-700 dark:text-slate-300">
+                  <td className="pg-scorecard-why">
                     <p>{supplier.riskExplanation}</p>
                     <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{supplier.recommendedAction}</p>
                   </td>
@@ -1948,24 +2031,24 @@ function ExceptionHeatmap({ rows, legend, takeaway }) {
 
       {rows.length && legend.length ? (
         <div className="pg-table-wrap mt-5">
-          <table className="min-w-full text-center text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <table className="min-w-full text-center">
+            <thead>
               <tr>
-                <th className="px-3 py-2 text-left" scope="col">Supplier</th>
-                <th className="px-3 py-2 text-right" scope="col">Exposure</th>
+                <th className="text-left" scope="col">Supplier</th>
+                <th className="pg-table-num-header" scope="col">Exposure</th>
                 {legend.map((item) => (
-                  <th className="px-3 py-2" key={item.code} scope="col">{item.code}</th>
+                  <th key={item.code} scope="col">{item.code}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+            <tbody>
               {rows.map((row) => (
-                <tr className="hover:bg-slate-50 dark:hover:bg-slate-800" key={row.key}>
-                  <td className="px-3 py-3 text-left font-semibold text-slate-900 dark:text-slate-100">{row.supplierName}</td>
-                  <td className="px-3 py-3 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">{formatMoney(row.exposure)}</td>
+                <tr key={row.key}>
+                  <td className="text-left font-semibold">{row.supplierName}</td>
+                  <td className="pg-table-num">{formatMoney(row.exposure)}</td>
                   {row.cells.map((cell) => (
                     <td className="px-2 py-3" key={`${row.key}-${cell.code}`}>
-                      <span className={`inline-flex min-w-8 justify-center rounded-md border px-2 py-1 font-mono tabular-nums ${analyticsHeatCellClass(cell.count)}`}>
+                      <span className="pg-heat-cell" data-level={Math.min(cell.count, 4)}>
                         {cell.count > 0 ? cell.count : "—"}
                       </span>
                     </td>
@@ -1997,6 +2080,7 @@ function PolicySimulatorSection({ policySummary, tolerances, onTolerancesChange,
         title="Policy simulation is available after analysis."
         body="Run analysis to enable tolerance sensitivity controls for price, quantity, and receiving timing rules."
         tone="neutral"
+        icon={SuppliersNavIcon}
       />
     );
   }
@@ -2042,12 +2126,12 @@ function RootCausePatternsSection({ rootCause }) {
     <section className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm dark:border-indigo-800 dark:bg-indigo-950/40">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Browser-only pattern review</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">Batch pattern review</p>
           <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Pattern signals</h3>
           <p className="mt-1 text-sm leading-6 text-indigo-900 dark:text-indigo-200">{rootCause.takeaway}</p>
         </div>
         <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">
-          Browser-only pattern review
+          Batch pattern review
         </Badge>
       </div>
 
@@ -2116,8 +2200,9 @@ function SupplierPolicyAnalyticsPanel({
         <WorkbenchEmptyState
           eyebrow="Analysis in progress"
           title="Supplier & Policy Analytics will appear after validation completes"
-          body="The Start page is running the prompt-chain workflow. This page avoids showing stale supplier analytics while analysis is in flight."
+          body="The Start page is running the analysis workflow. This page avoids showing stale supplier analytics while analysis is in flight."
           tone="info"
+          icon={Loader2}
         />
       </section>
     );
@@ -2134,6 +2219,7 @@ function SupplierPolicyAnalyticsPanel({
           actionLabel="Go to Start"
           onAction={onStart}
           tone="escalate"
+          icon={AlertCircle}
         />
       </section>
     );
@@ -2146,10 +2232,11 @@ function SupplierPolicyAnalyticsPanel({
         <WorkbenchEmptyState
           eyebrow="Awaiting analysis"
           title="Run analysis from Start to build supplier and policy analytics"
-          body="Completed results will populate supplier risk explanations, exception concentration, policy simulation, and browser-only pattern signals."
+          body="Completed results will populate supplier risk explanations, exception concentration, policy simulation, and batch pattern signals."
           actionLabel="Go to Start"
           onAction={onStart}
           tone="neutral"
+          icon={Building2}
         />
       </section>
     );
@@ -2204,12 +2291,6 @@ function buildActionBatch(parsedFiles, matchResults, classificationResults) {
       },
       classification: classifications[index] ?? classifications.find((item) => item.invoice_number === match.invoice_number)
     };
-  });
-}
-
-function waitForChunkWindow() {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, CHUNK_DELAY_MS);
   });
 }
 
@@ -2444,7 +2525,89 @@ export default function App() {
   const [tolerances, setTolerances] = useState(DEFAULT_TOLERANCES);
   const [activeWorkspace, setActiveWorkspace] = useState("start");
   const [queueFilters, setQueueFilters] = useState(DEFAULT_QUEUE_FILTERS);
+  const [workbenchPreset, setWorkbenchPreset] = useState(null);
   const [pipelineRunState, setPipelineRunState] = useState(() => createIdlePipelineRunState());
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDarkMode);
+    document.body.classList.toggle("dark", isDarkMode);
+    document.documentElement.style.colorScheme = isDarkMode ? "dark" : "light";
+    document.body.style.colorScheme = isDarkMode ? "dark" : "light";
+
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) {
+      themeMeta.setAttribute("content", isDarkMode ? "#080a12" : "#fbfcff");
+    }
+
+    return () => {
+      document.documentElement.classList.remove("dark");
+      document.body.classList.remove("dark");
+      document.documentElement.style.colorScheme = "";
+      document.body.style.colorScheme = "";
+    };
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return undefined;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("pgDemo") !== "golden") return undefined;
+
+    let cancelled = false;
+    const tabAliases = {
+      executive: "executive",
+      summary: "executive",
+      workbench: "workbench",
+      analytics: "analytics",
+      suppliers: "analytics",
+      governance: "governance",
+      audit: "governance",
+      start: "start"
+    };
+    const requestedTab = tabAliases[params.get("pgTab")] ?? "executive";
+    const requestedTheme = params.get("pgTheme");
+
+    if (requestedTheme === "dark") {
+      setIsDarkMode(true);
+      sessionStorage.setItem(DARK_MODE_STORAGE, "dark");
+    } else if (requestedTheme === "light") {
+      setIsDarkMode(false);
+      sessionStorage.setItem(DARK_MODE_STORAGE, "light");
+    }
+
+    setStatusMessage("Loading deterministic golden-batch demo run.");
+    import("./lib/demoRun.js")
+      .then(({ buildGoldenDemoRun }) => buildGoldenDemoRun())
+      .then((demoRun) => {
+        if (cancelled) return;
+        setParsedFiles(demoRun.parsedFiles);
+        setMatchResults(demoRun.matchResults);
+        setClassificationResults(demoRun.classificationResults);
+        setActionResults(demoRun.actionResults);
+        setAuditEntries(demoRun.auditEntries);
+        setApprovedActions(new Set());
+        setTier3Notes({});
+        setReviewedTier3(new Set());
+        setTolerances(DEFAULT_TOLERANCES);
+        setQueueFilters(DEFAULT_QUEUE_FILTERS);
+        setWorkbenchPreset(null);
+        setPipelineRunState(demoRun.pipelineRunState);
+        setRunningStep("");
+        setError("");
+        setFailedStep("");
+        setUploadError("");
+        setStatusMessage("Golden-batch demo loaded for live screenshot capture.");
+        setActiveWorkspace(requestedTab);
+      })
+      .catch((demoError) => {
+        if (cancelled) return;
+        setError(`Unable to load golden-batch demo: ${demoError.message}`);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const finalResultsComplete = isFinalRunComplete(pipelineRunState, matchResults, classificationResults, actionResults);
   const partialWorkbenchResults = useMemo(
@@ -2554,9 +2717,10 @@ export default function App() {
       setReviewedTier3(new Set());
       setTolerances(DEFAULT_TOLERANCES);
       setQueueFilters(DEFAULT_QUEUE_FILTERS);
+      setWorkbenchPreset(null);
       setPipelineRunState(createIdlePipelineRunState());
       setActiveWorkspace("start");
-      setStatusMessage("Files validated. Ready to analyze.");
+      setStatusMessage("Files validated. Ready for analysis.");
     } catch (fileError) {
       setParsedFiles(null);
       setUploadError(fileError.message);
@@ -2613,23 +2777,28 @@ export default function App() {
   }
 
   async function runMatchingChunks(chunks, initialRunState, startIndex = 0) {
-    let runState = initialRunState;
+    const stateRef = { current: initialRunState };
     setRunningStep("matching");
 
-    for (let index = startIndex; index < chunks.length; index += 1) {
-      const chunk = chunks[index];
-      const chunkMeta = createChunkMeta(chunk, index, chunks.length);
-      const started = markPipelineChunkStarted(runState, { stage: "matching", chunkIndex: index, chunkMeta });
-      runState = started.runState;
-      setPipelineRunState(runState);
+    const items = [];
+    for (let i = startIndex; i < chunks.length; i++) {
+      items.push({ chunk: chunks[i], chunkIndex: i });
+    }
+
+    let completedCount = 0;
+    setStatusMessage(`Matching 0/${items.length} chunks...`);
+
+    await runChunksWithConcurrency(items, async ({ chunk, chunkIndex }) => {
+      const chunkMeta = createChunkMeta(chunk, chunkIndex, chunks.length);
+      const started = markPipelineChunkStarted(stateRef.current, { stage: "matching", chunkIndex, chunkMeta });
+      stateRef.current = started.runState;
+      setPipelineRunState(stateRef.current);
       const context = buildChunkContext(parsedFiles, chunk, parsedFiles.invoices);
       const userMessage = JSON.stringify(matchingPayloadForContext(context));
       const startedAt = performance.now();
 
-      setStatusMessage(`Matching chunk ${chunkMeta.index}/${chunkMeta.total} (invoices ${chunkMeta.invoice_range})...`);
-
       try {
-        const response = await callClaudeAPI({
+        const response = await callGeminiAPI({
           systemPrompt: matchingPrompt,
           userMessage,
           model: MODELS.matching,
@@ -2637,7 +2806,7 @@ export default function App() {
           maxTokens: STAGE_MAX_TOKENS.matching,
           stage: "matching",
           apiKey,
-          onRetry: ({ attempt }) => setStatusMessage(`Rate limited during matching chunk ${chunkMeta.index}/${chunkMeta.total}. Retry ${attempt + 1} of 3...`)
+          onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`AI service is busy during matching chunk ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
         });
         const alignedResponse = validateAndAlignResults("matching", context.invoices, response.data, chunkMeta.invoice_range);
         const guarded = applyGlobalMatchingGuards(context, alignedResponse);
@@ -2648,14 +2817,16 @@ export default function App() {
           started.attempt,
           started.attempt > 1 ? "retry_success" : "initial_success"
         );
-        runState = markPipelineChunkSucceeded(runState, {
+        stateRef.current = markPipelineChunkSucceeded(stateRef.current, {
           stage: "matching",
-          chunkIndex: index,
+          chunkIndex,
           chunkMeta: auditChunk,
           output: aligned,
           attempt: started.attempt
         });
-        setPipelineRunState(runState);
+        setPipelineRunState(stateRef.current);
+        completedCount += 1;
+        setStatusMessage(`Matching ${completedCount}/${items.length} chunks complete...`);
         await recordAuditEntry({
           step: "matching",
           model: MODELS.matching,
@@ -2666,13 +2837,14 @@ export default function App() {
           chunk: auditChunk
         });
       } catch (chunkError) {
-        const failedRunState = markPipelineChunkFailed(runState, {
+        const failedRunState = markPipelineChunkFailed(stateRef.current, {
           stage: "matching",
-          chunkIndex: index,
+          chunkIndex,
           chunkMeta,
           error: chunkError,
           attempt: started.attempt
         });
+        stateRef.current = failedRunState;
         const descriptor = failedRunState.retryDescriptor;
         const auditChunk = auditChunkForAttempt(chunkMeta, started.attempt, descriptor.retryStatus, descriptor);
         setPipelineRunState(failedRunState);
@@ -2690,10 +2862,9 @@ export default function App() {
         });
         throw new Error(descriptor.userMessage);
       }
+    }, MATCHING_CONCURRENCY);
 
-      if (index < chunks.length - 1) await waitForChunkWindow();
-    }
-
+    let runState = stateRef.current;
     const merged = validateMergedResults(
       parsedFiles.invoices,
       mergeMatchingChunks(getPipelineStageOutputs(runState, "matching")),
@@ -2707,27 +2878,32 @@ export default function App() {
   }
 
   async function runClassificationChunks(chunks, initialRunState, startIndex = 0) {
-    let runState = initialRunState;
+    const stateRef = { current: initialRunState };
     setRunningStep("classification");
-    const matchingChunks = getPipelineStageOutputs(runState, "matching");
+    const matchingChunks = getPipelineStageOutputs(stateRef.current, "matching");
 
-    for (let index = startIndex; index < chunks.length; index += 1) {
-      const chunk = chunks[index];
-      const chunkMeta = createChunkMeta(chunk, index, chunks.length);
-      const started = markPipelineChunkStarted(runState, { stage: "classification", chunkIndex: index, chunkMeta });
-      runState = started.runState;
-      setPipelineRunState(runState);
+    const items = [];
+    for (let i = startIndex; i < chunks.length; i++) {
+      items.push({ chunk: chunks[i], chunkIndex: i });
+    }
+
+    let completedCount = 0;
+    setStatusMessage(`Classification 0/${items.length} chunks...`);
+
+    await runChunksWithConcurrency(items, async ({ chunk, chunkIndex }) => {
+      const chunkMeta = createChunkMeta(chunk, chunkIndex, chunks.length);
+      const started = markPipelineChunkStarted(stateRef.current, { stage: "classification", chunkIndex, chunkMeta });
+      stateRef.current = started.runState;
+      setPipelineRunState(stateRef.current);
       const context = buildChunkContext(parsedFiles, chunk, parsedFiles.invoices);
       const startedAt = performance.now();
 
-      setStatusMessage(`Classification chunk ${chunkMeta.index}/${chunkMeta.total} (invoices ${chunkMeta.invoice_range})...`);
-
       try {
-        if (!matchingChunks[index]) {
+        if (!matchingChunks[chunkIndex]) {
           throw new Error(`Missing required input data for classification chunk ${chunkMeta.index}/${chunkMeta.total}`);
         }
-        const userMessage = JSON.stringify({ results: matchingChunks[index].results });
-        const response = await callClaudeAPI({
+        const userMessage = JSON.stringify({ results: matchingChunks[chunkIndex].results });
+        const response = await callGeminiAPI({
           systemPrompt: classificationPrompt,
           userMessage,
           model: MODELS.classification,
@@ -2735,7 +2911,7 @@ export default function App() {
           maxTokens: STAGE_MAX_TOKENS.classification,
           stage: "classification",
           apiKey,
-          onRetry: ({ attempt }) => setStatusMessage(`Rate limited during classification chunk ${chunkMeta.index}/${chunkMeta.total}. Retry ${attempt + 1} of 3...`)
+          onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`AI service is busy during classification chunk ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
         });
         const aligned = validateAndAlignResults("classification", context.invoices, response.data, chunkMeta.invoice_range);
         assertNoApiKeyLeak(aligned);
@@ -2744,14 +2920,16 @@ export default function App() {
           started.attempt,
           started.attempt > 1 ? "retry_success" : "initial_success"
         );
-        runState = markPipelineChunkSucceeded(runState, {
+        stateRef.current = markPipelineChunkSucceeded(stateRef.current, {
           stage: "classification",
-          chunkIndex: index,
+          chunkIndex,
           chunkMeta: auditChunk,
           output: aligned,
           attempt: started.attempt
         });
-        setPipelineRunState(runState);
+        setPipelineRunState(stateRef.current);
+        completedCount += 1;
+        setStatusMessage(`Classification ${completedCount}/${items.length} chunks complete...`);
         await recordAuditEntry({
           step: "classification",
           model: MODELS.classification,
@@ -2762,13 +2940,14 @@ export default function App() {
           chunk: auditChunk
         });
       } catch (chunkError) {
-        const failedRunState = markPipelineChunkFailed(runState, {
+        const failedRunState = markPipelineChunkFailed(stateRef.current, {
           stage: "classification",
-          chunkIndex: index,
+          chunkIndex,
           chunkMeta,
           error: chunkError,
           attempt: started.attempt
         });
+        stateRef.current = failedRunState;
         const descriptor = failedRunState.retryDescriptor;
         const auditChunk = auditChunkForAttempt(chunkMeta, started.attempt, descriptor.retryStatus, descriptor);
         setPipelineRunState(failedRunState);
@@ -2786,10 +2965,9 @@ export default function App() {
         });
         throw new Error(descriptor.userMessage);
       }
+    }, REASONING_CONCURRENCY);
 
-      if (index < chunks.length - 1) await waitForChunkWindow();
-    }
-
+    let runState = stateRef.current;
     const merged = validateMergedResults(
       parsedFiles.invoices,
       mergeClassificationChunks(getPipelineStageOutputs(runState, "classification")),
@@ -2803,77 +2981,109 @@ export default function App() {
   }
 
   async function runActionGenerationChunks(chunks, initialRunState, startIndex = 0) {
-    let runState = initialRunState;
+    const stateRef = { current: initialRunState };
     setRunningStep("action_generation");
-    const matchingChunks = getPipelineStageOutputs(runState, "matching");
-    const classificationChunks = getPipelineStageOutputs(runState, "classification");
+    const matchingChunks = getPipelineStageOutputs(stateRef.current, "matching");
+    const classificationChunks = getPipelineStageOutputs(stateRef.current, "classification");
 
-    for (let index = startIndex; index < chunks.length; index += 1) {
-      const chunk = chunks[index];
-      const chunkMeta = createChunkMeta(chunk, index, chunks.length);
-      const started = markPipelineChunkStarted(runState, { stage: "action_generation", chunkIndex: index, chunkMeta });
-      runState = started.runState;
-      setPipelineRunState(runState);
+    const items = [];
+    for (let i = startIndex; i < chunks.length; i++) {
+      items.push({ chunk: chunks[i], chunkIndex: i });
+    }
+
+    let completedCount = 0;
+    setStatusMessage(`Drafting 0/${items.length} chunks...`);
+
+    await runChunksWithConcurrency(items, async ({ chunk, chunkIndex }) => {
+      const chunkMeta = createChunkMeta(chunk, chunkIndex, chunks.length);
+      const started = markPipelineChunkStarted(stateRef.current, { stage: "action_generation", chunkIndex, chunkMeta });
+      stateRef.current = started.runState;
+      setPipelineRunState(stateRef.current);
       const context = buildChunkContext(parsedFiles, chunk, parsedFiles.invoices);
       const startedAt = performance.now();
 
-      setStatusMessage(`Drafting chunk ${chunkMeta.index}/${chunkMeta.total} (invoices ${chunkMeta.invoice_range})...`);
-
       try {
-        if (!matchingChunks[index] || !classificationChunks[index]) {
+        if (!matchingChunks[chunkIndex] || !classificationChunks[chunkIndex]) {
           throw new Error(`Missing required input data for draft generation chunk ${chunkMeta.index}/${chunkMeta.total}`);
         }
-        const userMessage = JSON.stringify({
-          batch: buildActionBatch(context, matchingChunks[index], classificationChunks[index])
+
+        const fullBatch = buildActionBatch(context, matchingChunks[chunkIndex], classificationChunks[chunkIndex]);
+        const exceptionBatch = fullBatch.filter((item) => {
+          const exceptions = item.classification?.detected_exceptions ?? [];
+          return exceptions.length > 0;
         });
-        const response = await callClaudeAPI({
-          systemPrompt: actionPrompt,
-          userMessage,
-          model: MODELS.action_generation,
-          schema: actionOutputSchema,
-          maxTokens: STAGE_MAX_TOKENS.action_generation,
-          stage: "action_generation",
-          apiKey,
-          onRetry: ({ attempt }) => setStatusMessage(`Rate limited during drafting chunk ${chunkMeta.index}/${chunkMeta.total}. Retry ${attempt + 1} of 3...`)
-        });
-        const normalized = normalizeActionChunkResults(
-          context.invoices,
-          response.data,
-          classificationChunks[index],
-          chunkMeta.invoice_range
-        );
-        const aligned = validateAndAlignResults("action_generation", context.invoices, normalized, chunkMeta.invoice_range);
+
+        let aligned;
+        let auditModel = MODELS.action_generation;
+        let auditInput;
+        let auditResponse = null;
+
+        if (exceptionBatch.length === 0) {
+          const syntheticResults = {
+            action_results: context.invoices.map((invoice, i) =>
+              createDefaultActionResult(invoice, classificationChunks[chunkIndex].classifications?.[i])
+            )
+          };
+          aligned = validateAndAlignResults("action_generation", context.invoices, syntheticResults, chunkMeta.invoice_range);
+          auditModel = "skipped_no_exceptions";
+          auditInput = "";
+        } else {
+          const userMessage = JSON.stringify({ batch: exceptionBatch });
+          const response = await callGeminiAPI({
+            systemPrompt: actionPrompt,
+            userMessage,
+            model: MODELS.action_generation,
+            schema: actionOutputSchema,
+            maxTokens: STAGE_MAX_TOKENS.action_generation,
+            stage: "action_generation",
+            apiKey,
+            onRetry: ({ attempt, maxAttempts = 4, delayMs }) => setStatusMessage(`AI service is busy during drafting chunk ${chunkMeta.index}/${chunkMeta.total}. Waiting ${Math.ceil((delayMs ?? 0) / 1000)}s before retry ${attempt + 1} of ${maxAttempts}...`)
+          });
+          const normalized = normalizeActionChunkResults(
+            context.invoices,
+            response.data,
+            classificationChunks[chunkIndex],
+            chunkMeta.invoice_range
+          );
+          aligned = validateAndAlignResults("action_generation", context.invoices, normalized, chunkMeta.invoice_range);
+          auditInput = userMessage;
+          auditResponse = response;
+        }
+
         assertNoApiKeyLeak(aligned);
         const auditChunk = auditChunkForAttempt(
           chunkMeta,
           started.attempt,
           started.attempt > 1 ? "retry_success" : "initial_success"
         );
-        runState = markPipelineChunkSucceeded(runState, {
+        stateRef.current = markPipelineChunkSucceeded(stateRef.current, {
           stage: "action_generation",
-          chunkIndex: index,
+          chunkIndex,
           chunkMeta: auditChunk,
           output: aligned,
           attempt: started.attempt
         });
-        setPipelineRunState(runState);
+        setPipelineRunState(stateRef.current);
+        completedCount += 1;
+        setStatusMessage(`Drafting ${completedCount}/${items.length} chunks complete...`);
         await recordAuditEntry({
           step: "action_generation",
-          model: MODELS.action_generation,
-          input: userMessage,
+          model: auditModel,
+          input: auditInput,
           output: aligned,
-          response,
+          response: auditResponse,
           promptVersion: "03_action_generation_v1",
           chunk: auditChunk
         });
       } catch (chunkError) {
-        const failedRunState = markPipelineChunkFailed(runState, {
+        const failedRunState = markPipelineChunkFailed(stateRef.current, {
           stage: "action_generation",
-          chunkIndex: index,
+          chunkIndex,
           chunkMeta,
           error: chunkError,
           attempt: started.attempt
         });
+        stateRef.current = failedRunState;
         const descriptor = failedRunState.retryDescriptor;
         const auditChunk = auditChunkForAttempt(chunkMeta, started.attempt, descriptor.retryStatus, descriptor);
         setPipelineRunState(failedRunState);
@@ -2891,10 +3101,9 @@ export default function App() {
         });
         throw new Error(descriptor.userMessage);
       }
+    }, REASONING_CONCURRENCY);
 
-      if (index < chunks.length - 1) await waitForChunkWindow();
-    }
-
+    let runState = stateRef.current;
     const merged = validateMergedResults(
       parsedFiles.invoices,
       mergeActionChunks(getPipelineStageOutputs(runState, "action_generation")),
@@ -2954,6 +3163,7 @@ export default function App() {
     setApprovedActions(new Set());
     setTier3Notes({});
     setReviewedTier3(new Set());
+    setWorkbenchPreset(null);
     setActiveWorkspace("start");
     setStatusMessage(`Preparing ${parsedFiles.invoices.length} invoices across ${chunks.length} chunks of up to ${ANALYSIS_CHUNK_SIZE}.`);
 
@@ -3014,15 +3224,70 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function openHeldInvoicesInWorkbench() {
+    setWorkbenchPreset({ filter: "held-only", focus: null });
+    setQueueFilters((current) => ({
+      ...current,
+      search: "",
+      tier: "tier3",
+      supplier: "all",
+      exception: "all",
+      sort: "severity"
+    }));
+    setActiveWorkspace("workbench");
+  }
+
+  function openDraftsInWorkbench(invoiceNumber = null) {
+    setWorkbenchPreset({ filter: "drafts-only", focus: invoiceNumber });
+    setQueueFilters((current) => ({
+      ...current,
+      search: invoiceNumber ?? "",
+      tier: "all",
+      supplier: "all",
+      exception: "all",
+      sort: "severity"
+    }));
+    setActiveWorkspace("workbench");
+  }
+
+  const runStatusFull = runningStep
+    ? `${formatStageName(runningStep)} running · DRAFT-only`
+    : finalResultsComplete
+      ? "Run complete · DRAFT-only"
+      : "Ready to analyze · DRAFT-only";
+  const runStatusCompact = runningStep
+    ? `${formatStageName(runningStep)} · DRAFT`
+    : finalResultsComplete
+      ? "Complete · DRAFT-only"
+      : "Ready · DRAFT-only";
+
   return (
     <main className={`${isDarkMode ? "dark" : ""} pg-shell px-4 py-5 sm:px-6 lg:px-8`}>
+      <a className="pg-skip-link" href="#pg-main-content">Skip to dashboard</a>
       <section className="pg-container">
         <header className="pg-topbar border-b border-slate-200/80 dark:border-slate-700/60">
-          <div>
-            <h1 className="pg-app-title">ProcureGuard AI</h1>
-            <p className="pg-app-subtitle">AP Exception Control Tower</p>
+          <div className="pg-brand">
+            <span className="pg-brand-mark" aria-hidden="true">
+              <BrandMark />
+            </span>
+            <div>
+              <h1 className="pg-app-title">ProcureGuard AI</h1>
+              <p className="pg-app-subtitle">Payment Control</p>
+            </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <WorkspaceTabs
+            activeWorkspace={activeWorkspace}
+            onChange={setActiveWorkspace}
+            dashboardReady={finalResultsComplete}
+            reviewCount={workbenchViewModel.rows.length}
+            auditEntryCount={auditEntries.length}
+          />
+          <div className="pg-topbar-actions">
+            <span className="pg-run-status" aria-live="polite">
+              <span aria-hidden="true" />
+              <span className="pg-run-status-full">{runStatusFull}</span>
+              <span className="pg-run-status-compact">{runStatusCompact}</span>
+            </span>
             <button
               className="pg-button pg-button-secondary"
               type="button"
@@ -3033,27 +3298,27 @@ export default function App() {
               {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <button
-              className="pg-button pg-button-primary flex items-center gap-2"
+              className={`pg-button ${finalResultsComplete ? "pg-button-secondary pg-button-complete" : "pg-button-primary"} flex items-center gap-2`}
               type="button"
               disabled={!parsedFiles || Boolean(runningStep)}
               onClick={runPipeline}
             >
-              {runningStep ? <><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />Analyzing…</> : <><Play aria-hidden="true" className="h-4 w-4" />Analyze</>}
+              {runningStep
+                ? <><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />Analyzing…</>
+                : <><Play aria-hidden="true" className="h-4 w-4" />{finalResultsComplete ? "Analyze again" : "Analyze"}</>}
             </button>
           </div>
         </header>
 
         <Alert message={uploadError} />
         <Alert message={error} />
-        <WorkspaceTabs
-          activeWorkspace={activeWorkspace}
-          onChange={setActiveWorkspace}
-          dashboardReady={finalResultsComplete}
-          reviewCount={workbenchViewModel.rows.length}
-          auditEntryCount={auditEntries.length}
-        />
 
-        <div className="pg-tab-content" key={activeWorkspace}>
+        <div
+          id="pg-main-content"
+          className={`pg-tab-content ${activeWorkspace === "start" && !finalResultsComplete ? "pg-start-surface" : ""}`}
+          key={activeWorkspace}
+          tabIndex={-1}
+        >
         {activeWorkspace === "start" ? (
           <section className="pg-page-stack pg-animate-in">
             <ApiKeyPanel apiKey={apiKey} onApiKeyChange={handleApiKeyChange} />
@@ -3088,6 +3353,7 @@ export default function App() {
               actionLabel="Go to Start"
               onAction={() => setActiveWorkspace("start")}
               tone="review"
+              icon={SummaryNavIcon}
             />
           </section>
         ) : activeWorkspace === "executive" ? (
@@ -3101,11 +3367,27 @@ export default function App() {
             </section>
           ) : (
             <div className="pg-animate-in">
-              <ExecutiveDashboard
-                analytics={dashboardAnalytics}
-                isDarkMode={isDarkMode}
-                isAnalysisRunning={Boolean(runningStep)}
-              />
+              <Suspense fallback={
+                <section className="pg-page-stack pg-animate-in">
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                  </div>
+                </section>
+              }>
+                <ExecutiveDashboard
+                  analytics={dashboardAnalytics}
+                  isDarkMode={isDarkMode}
+                  isAnalysisRunning={Boolean(runningStep)}
+                  workbenchRows={workbenchViewModel.rows}
+                  auditEntries={auditEntries}
+                  runState={pipelineRunState}
+                  onOpenDrafts={openDraftsInWorkbench}
+                  onOpenHeldInvoices={openHeldInvoicesInWorkbench}
+                  onExportAudit={exportAuditTrail}
+                />
+              </Suspense>
             </div>
           )
         ) : null}
@@ -3130,6 +3412,7 @@ export default function App() {
                 partialRunState={isIncompleteRun(pipelineRunState) ? pipelineRunState : null}
                 onRetryPartial={retryFailedChunk}
                 onStart={() => setActiveWorkspace("start")}
+                focusedInvoiceNumber={workbenchPreset?.focus}
                 approvedActions={approvedActions}
                 tier3Notes={tier3Notes}
                 reviewedTier3={reviewedTier3}

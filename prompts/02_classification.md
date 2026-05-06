@@ -1,7 +1,7 @@
 # System Prompt — Step 2: Exception Classification
 
-**Model:** Claude Sonnet 4.6
-**API Features:** Structured Outputs (`anthropic-beta: structured-outputs-2025-11-13`), Adaptive Thinking (thinking blocks returned structurally)
+**Runtime model:** Gemini 2.5 Flash
+**API Features:** Gemini structured JSON output (`responseMimeType: "application/json"` + `responseJsonSchema`), bounded Gemini thinking budget configured at runtime
 **Pipeline position:** Call #2 of 3 — match results → classified exceptions with severity tiers, financial impact, and recommended actions
 
 ---
@@ -419,7 +419,7 @@ Each example shows the Step 1 `match_result` input and the expected `classificat
 
 ## OUTPUT JSON SCHEMA
 
-This schema is enforced by Structured Outputs (`anthropic-beta: structured-outputs-2025-11-13`). Every field is required. Produce exactly one `classification_result` object per `match_result` in the input, in the same array order.
+This schema is enforced by the Gemini structured JSON response schema at runtime. Every field is required. Produce exactly one `classification_result` object per `match_result` in the input, in the same array order.
 
 ```json
 {

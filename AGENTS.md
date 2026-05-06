@@ -2,12 +2,12 @@
 
 ## Non-negotiable architecture
 
-ProcureGuard AI uses Claude API as the application AI stack.
+ProcureGuard AI uses Gemini API as the application AI stack.
 
-Codex is only the repository editing assistant. Codex may inspect files, edit code, run commands, and verify tests, but it must not change the product AI stack.
+Codex is only the repository editing assistant. Codex may inspect files, edit code, run commands, and verify tests, but it must not change the product AI stack unless the user explicitly requests a provider migration.
 
 Do not:
-- Replace Claude API with OpenAI runtime APIs
+- Replace Gemini API with OpenAI runtime APIs
 - Add LangChain, CrewAI, AutoGen, or other agent frameworks
 - Add RAG or vector databases
 - Add a Python backend
@@ -16,7 +16,7 @@ Do not:
 - Add database persistence unless a later stage explicitly requests it
 
 Use:
-- Anthropic Messages API
+- Gemini API
 - Prompt chaining
 - Structured Outputs with JSON schema
 - Existing prompt files in /prompts

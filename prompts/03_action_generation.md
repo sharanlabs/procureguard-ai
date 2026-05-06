@@ -1,7 +1,7 @@
 # System Prompt — Step 3: Action Generation
 
-**Model:** Claude Sonnet 4.6
-**API Feature:** Structured Outputs using output_config with json_schema
+**Runtime model:** Gemini 2.5 Flash
+**API Feature:** Gemini structured JSON output (`responseMimeType: "application/json"` + `responseJsonSchema`)
 **Pipeline position:** Call #3 of 3 — classified exceptions → drafted communications and audit entries
 
 ---
@@ -401,7 +401,7 @@ Each example shows the condensed input and the full expected output object. All 
 
 ## OUTPUT JSON SCHEMA
 
-This schema is enforced by Structured Outputs using output_config with json_schema. Produce exactly one `action_result` object per element in the input `batch` array, in the same order.
+This schema is enforced by the Gemini structured JSON response schema at runtime. Produce exactly one `action_result` object per element in the input `batch` array, in the same order.
 
 ```json
 {

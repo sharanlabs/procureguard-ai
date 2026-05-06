@@ -12,9 +12,7 @@ export function formatPercent(value) {
 }
 
 const MODEL_LABELS = {
-  "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
-  "claude-sonnet-4-6": "Claude Sonnet 4.6",
-  "claude-opus-4-7": "Claude Opus 4.7"
+  "gemini-2.5-flash": "Cost-aware analysis model"
 };
 
 const STAGE_LABELS = {
@@ -43,9 +41,9 @@ export function formatModelName(model) {
   if (!value) return "Not available";
   if (MODEL_LABELS[value]) return MODEL_LABELS[value];
 
-  const parsed = value.match(/^claude-([a-z]+)-(\d+)-(\d+)/i);
-  if (parsed) {
-    return `Claude ${titleCaseWords(parsed[1])} ${parsed[2]}.${parsed[3]}`;
+  const geminiParsed = value.match(/^gemini-(\d+(?:\.\d+)?)-([a-z-]+)/i);
+  if (geminiParsed) {
+    return `Gemini ${geminiParsed[1]} ${titleCaseWords(geminiParsed[2].replace(/-/g, " "))}`;
   }
 
   return titleCaseWords(value.replace(/[-_]/g, " "));

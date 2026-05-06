@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ProcureGuard AI mark">
+  <defs>
+    <linearGradient id="tile" x1="114" y1="64" x2="398" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8D9AFF"/>
+      <stop offset="0.56" stop-color="#6571F2"/>
+      <stop offset="1" stop-color="#4E56D4"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="256" y1="125" x2="256" y2="392" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EEF2FF"/>
+    </linearGradient>
+    <filter id="softShadow" x="26" y="26" width="460" height="460" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#5360D8" flood-opacity="0.22"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#101426" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="#F5F6FF"/>
+  <rect x="38" y="38" width="436" height="436" rx="98" fill="#FFFFFF" opacity="0.56"/>
+  <g filter="url(#softShadow)">
+    <rect x="76" y="76" width="360" height="360" rx="88" fill="url(#tile)"/>
+    <path d="M256 130 347 163v78c0 72-35 125-91 151-56-26-91-79-91-151v-78l91-33Z" fill="url(#shield)"/>
+    <path d="M256 172v171c38-22 59-57 59-102v-45l-59-24Z" fill="#6571F2" fill-opacity="0.15"/>
+    <path d="m215 255 29 29 61-70" fill="none" stroke="#6571F2" stroke-width="21" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

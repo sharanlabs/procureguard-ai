@@ -11,6 +11,7 @@ const CACHE_WRITE_INPUT_MULTIPLIER = 1.25;
 const CACHE_READ_INPUT_MULTIPLIER = 0.1;
 const RISK_RANK = { High: 0, Medium: 1, Low: 2 };
 const MODEL_TOKEN_PRICING = [
+  { match: "gemini-2.5-flash", inputPerMillion: 0.3, outputPerMillion: 2.5 },
   { match: "haiku", inputPerMillion: 1, outputPerMillion: 5 },
   { match: "sonnet", inputPerMillion: 3, outputPerMillion: 15 },
   { match: "opus", inputPerMillion: 5, outputPerMillion: 25 }
@@ -23,6 +24,15 @@ function addUnique(list, value) {
 function getFinancialValue(classification, key) {
   const value = classification?.financial_summary?.[key];
   return typeof value === "number" && !Number.isNaN(value) ? value : 0;
+}
+
+function getNumericValue(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value.replace(/[$,]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function sumExceptionFinancials(classification, key) {
@@ -125,7 +135,7 @@ function getTokenValue(tokenUsage, keys) {
 
 function getTokenPricing(model = "") {
   const normalized = String(model).toLowerCase();
-  return MODEL_TOKEN_PRICING.find((pricing) => normalized.includes(pricing.match)) ?? MODEL_TOKEN_PRICING[1];
+  return MODEL_TOKEN_PRICING.find((pricing) => normalized.includes(pricing.match)) ?? MODEL_TOKEN_PRICING[0];
 }
 
 function hasTokenUsageField(tokenUsage, key) {
@@ -240,7 +250,13 @@ export function buildDashboardAnalytics({
   const classifications = classificationResults?.classifications ?? [];
   const invoices = parsedFiles?.invoices ?? [];
   const purchaseOrders = parsedFiles?.purchase_orders ?? [];
+  const goodsReceipts = parsedFiles?.goods_receipts ?? [];
   const totalInvoices = invoices.length || matches.length;
+  const batchValue = invoices.reduce((sum, invoice) => sum + getNumericValue(invoice?.total_amount), 0);
+  const warehouseCount = new Set([
+    ...goodsReceipts.map((receipt) => receipt?.receiving_warehouse).filter(Boolean),
+    ...purchaseOrders.map((po) => po?.warehouse_code).filter(Boolean)
+  ]).size;
   const supplierGroups = new Map();
   const exceptionStats = new Map();
   const warehouseMap = new Map();
@@ -381,7 +397,9 @@ export function buildDashboardAnalytics({
     .sort((left, right) => right.total - left.total || right.exposure - left.exposure)
     .slice(0, 6);
   const draftActionCount = (actionResults?.action_results ?? [])
-    .reduce((sum, item) => sum + (item.actions ?? []).length, 0);
+    .reduce((sum, item) => (
+      sum + (item.actions ?? []).filter((action) => action?.action_type !== "approval_note").length
+    ), 0);
   const requiresHumanReview = reviewCount + escalateCount;
   const healthyCount = cleanCount + autoApproveCount;
   const matchRate = totalInvoices ? cleanCount / totalInvoices : 0;
@@ -390,6 +408,10 @@ export function buildDashboardAnalytics({
   return {
     hasData: Boolean(totalInvoices && classifications.length),
     totalInvoices,
+    batchValue,
+    totalInvoiceAmount: batchValue,
+    supplierCount: supplierGroups.size,
+    warehouseCount,
     cleanCount,
     autoApproveCount,
     reviewCount,

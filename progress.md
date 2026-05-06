@@ -38,7 +38,13 @@ Production Rework Chunk 2.1R reference-backed typography audit completed.
 Production Rework Chunk 2.2 Icon system completed.
 Production Rework Chunk 2.3 Correctness and accessibility fixes completed.
 Production Rework Chunk 2.4 Premium visual polish completed.
-Next: Production Rework Chunk 2.5 or final review
+Production Rework Chunk 2.5 Brand identity, navigation, chart, and table polish completed.
+Production Rework Chunk 3.1 Pipeline latency optimization completed.
+Production Rework Chunk 4.1 Design system replacement (foundation) completed.
+Production Rework Chunk 4.2 Executive Summary rebuild completed.
+Public README and screenshot documentation completed.
+Publication and deployment readiness cleanup completed.
+Next: Final git hygiene, Vercel environment setup, and production deploy.
 
 ## Stage log
 
@@ -138,6 +144,35 @@ Next: Production Rework Chunk 2.5 or final review
   - Added Google-hosted Inter, shared typography tokens, app-scoped type scale normalization, shared tabular metric styles, and calmer body/metadata line-height treatment without changing product structure
   - Production Rework Chunk 2.1R reference-backed typography audit completed
   - Reference dashboard typography confirmed the compact label/body/title hierarchy, tabular metric treatment, and dense invoice/table readability; ProcureGuard now neutralizes negative tight letter-spacing inside the app shell without changing product structure
+  - Production Rework Chunk 4.1 Design system replacement foundation completed
+  - Full warm-white material tokens, OpenAI/SF-like sans stack, Geist Mono data font, quiet tabs, low-chroma severity colors, material shadows, and professional motion tokens now anchor the app shell
+  - Production Rework Chunk 4.2 Executive Summary rebuild completed
+  - Executive Summary now renders the Payment Run Command Center story: outcome headline, AI work ledger, release-to-pay decision, workflow/rhythm strip, Evidence Lens, AI Prepared Work, Supplier Risk Pattern, Audit Replay, and trust footer
+  - Draft and held-invoice CTAs route into the existing Exception Workbench without adding send capability or autonomous payment behavior
+  - Chunk 4.2 post-build hardening completed: dead Recharts imports were removed from the Executive Summary module, completed-run metadata now drives wall-clock and closed-time labels, and the AI ledger keeps autonomous actions at zero
+  - Final fundamentals audit completed: responsive tabs/icons verified, key color tokens pass AA contrast as text, provider branding is backgrounded in user-facing copy, and the AI ledger now says "AI checks" instead of "AI review"
+  - Final enterprise copy polish completed: visible wording now uses analysis workflow/local pattern review/service key language, Start-page copy is cleaner, workspace helpers are shorter, and DRAFT-only release language remains explicit
+  - Frost-white material polish completed: background tokens are cleaner white, glassmorphism is restrained to performant surfaces, tabs have smoother material transitions, and responsive short labels remain intact
+  - Tab interaction accent polish completed: selected workspace tabs keep ink text while the icon, bottom hairline, brand mark, and primary actions use restrained system-blue affordance; neutral text contrast was deepened and the upload button is now tonal/inline
+  - Professional icon system and premium metadata polish completed: custom muted full-color procurement icons, custom ProcureGuard mark, topbar run-status pill, responsive icon sizing, dark-mode icon treatment, professional DRAFT-only copy, and social metadata now align with the approved frost-white enterprise direction
+- Enterprise Apple-caliber final polish completed: frost-white/dark-mode tokens, calmer purple-blue action color, brand favicon, premium empty-state previews, token-normalized utility colors, and responsive visual smoke checks now support the final enterprise UI quality bar
+- Final visual hardening pass completed: readable metadata contrast, calmer purple-blue actions, reduced glass overuse, mobile topbar sizing, and professional full-color icon consistency were tightened without changing product logic or AI runtime
+- Launch-level frontend hardening completed: root/body dark mode sync, pre-render dark bootstrap, clean tab accessible labels, 44px mobile touch controls, simplified small-size brand mark/favicon, compact narrow-mobile status text, and semantic local-key form structure
+- Gemini migration completed: runtime provider switched to Gemini 2.5 Flash through the existing three-stage prompt chain, serverless/Vite proxy paths now target Gemini, token-cost estimates use Gemini 2.5 Flash pricing, and Anthropic SDK dependency was removed.
+- Gemini live-run hardening completed: Gemini calls are now serialized, spaced to avoid low-tier RPM failures, use explicit stage-level thinking budgets, use a higher structured-output token cap, apply slower retry backoff, and keep failed-run diagnostics readable.
+- Gemini analysis quality guard completed: prompt metadata now matches Gemini structured JSON output, provider-specific Claude/Anthropic wording was removed from active prompts, matching now keeps a small reasoning budget, and DECISIONS.md reflects the Gemini runtime.
+- Gemini quota-aware run hardening completed: default 25-invoice demo now uses one chunk, stage output caps use 65,536 tokens, 429 handling waits longer, detects daily quota exhaustion, and prevents unsafe retry when the provider says the quota is exhausted.
+- Desktop visual QA and launch-polish pass completed: dashboard surfaces now use tighter card radii, precision shadows, stronger table alignment, calmer supplier/audit spacing, normalized icon stroke geometry, restrained hover/reveal motion, and Vite chunk splitting for React/Lucide cacheability.
+- Post-run Audit Replay spacing polish completed: the lower Executive Summary grid no longer stretches the Audit Replay card to its neighboring panel height, and replay icon/type spacing was tightened for the populated completed-run state.
+- Populated desktop QA, data consistency, and Gemini reliability pass completed: duplicate-invoice draft alignment fixed, supplier exposure wording corrected, default Gemini chunks reduced to 10 invoices for safer structured JSON, output-limit failures are labeled clearly, and populated screenshots passed no-overflow checks across 1366, 1440, 1536, 1728, 1920, and 2560 desktop widths.
+- Professional brand/copy cleanup completed: removed the topbar `v1.0` badge, replaced visible local-development wording with session/workspace language, renamed local pattern review to batch pattern review, and kept prompt versioning only in audit-trace contexts.
+- Brand image/posting asset refresh completed: favicon source moved to a static SVG, the touch icon was renamed to a product-owned PNG, Open Graph/Twitter preview PNG added from an editable SVG source, and high-resolution posting images now use the cleaned ProcureGuard identity without the old `v1.0` badge.
+- Showcase image set completed: added 1600x2400 Executive, Workbench, Audit & Governance, and Executive Dark PNG/SVG assets plus 3200x4800 retina PNG exports with the approved warm-white/dark ProcureGuard visual language, cleaned brand mark, no old visible version badge, and verified image dimensions.
+- Killer feature public image completed: added 2400x1350 and 4800x2700 PNG assets focused on AI-prepared DRAFT-only communications, evidence lens, audit trace, and human approval control for GitHub/LinkedIn use.
+- Original live screenshot set completed: added a development-only deterministic golden-batch seed and captured live React screenshots for Executive, Workbench, Analytics, Audit & Governance, and dark Executive under `public/live-screenshots/`.
+- Expanded original live screenshot coverage completed: added Start, dark Workbench, dark Analytics, dark Audit & Governance, 1440px desktop captures, and focused live crops for hero, AI checks/evidence, drafts killer feature, Workbench queue, supplier scorecard, and audit governance.
+- Public README and screenshot documentation completed: README now uses original live screenshots, explains the product and architecture accurately, highlights the DRAFT-only workflow, and `public/live-screenshots/README.md` documents which assets to use for GitHub, LinkedIn, and portfolio posts.
+- Publication and deployment readiness cleanup completed: added `.env.example`, `DEPLOYMENT.md`, README-focused screenshot crops, and a current Gemini runtime snapshot in `docs/HANDOFF.md`. GitHub CI remains deferred because the current push token lacks workflow permission.
 
 ## Decisions pending
 

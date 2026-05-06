@@ -1,5 +1,12 @@
 # ProcureGuard AI — Handoff Log
 
+## Current Runtime Snapshot — May 6, 2026
+
+- Current application AI stack: Gemini API through the Vercel/serverless proxy in `api/messages.js`.
+- Current approved model: `gemini-2.5-flash`.
+- Current validation gates: `node evals/run_evals.js` and `npm run build`.
+- Historical sections below mention earlier Claude/Anthropic work. Treat those as implementation history, not the current runtime contract.
+
 ## Stage 2 closeout handoff — April 25, 2026
 
 ### Stage completed
@@ -2765,3 +2772,821 @@ Production Rework Chunk 2.4 Premium visual polish
 
 ### Next step
 Production Rework Chunk 2.5 or final review
+
+---
+
+## Production Rework — Chunk 2.5: Brand identity, navigation, chart, and table polish
+
+**Goal:** Close the remaining visual gaps between the current product and an industry-standard premium dashboard. Six surgical changes. CSS and JSX only. Zero new dependencies.
+
+### Change 1 — Sticky branded topbar with mark
+- Topbar is now `position: sticky` with `backdrop-filter: saturate(140%) blur(10px)` and semi-transparent background (light/dark)
+- Added `.pg-brand`, `.pg-brand-mark` (gradient square with Shield icon), and `.pg-version-pill` (v1.0)
+- Responsive `margin-inline` / `padding-inline` at 640px and 1024px breakpoints to match shell padding
+- `pg-app-title` font-size reduced from `var(--text-hero)` (2rem) to `1.25rem` for tighter topbar; `--text-hero` token untouched
+- `pg-app-subtitle` margin-top reduced from `0.5rem` to `0.25rem`
+
+### Change 2 — Tab underline indicator
+- Replaced heavy solid-fill `.pg-tab-active` with transparent background + blue `::after` underline (2px, `border-radius: 2px`)
+- Tab color shifted from `#475569` to `#64748b` (light) / `#94a3b8` (dark) for more restrained inactive state
+- Underline uses `bottom: 0` to stay within overflow bounds of `.pg-tabs`
+- `.pg-tabs-list` gap reduced from `0.5rem` to `0.25rem`
+- Dark mode underline uses `#60a5fa`
+
+### Change 3 — Chart polish (Recharts)
+- `ChartTooltip`: severity-colored dot before label, backdrop blur, tighter padding, separated name/value layout
+- `ExceptionBarChart`: added `<defs>` block with linear gradients per tier (55%→100% opacity left-to-right)
+- `Cell fill` switched from solid `exceptionColor()` to `url(#pg-bar-tier{n})`
+- Tooltip cursor uses very low opacity fill for hover feedback
+- Bar animation enabled (`animationDuration={600}`) gated by `prefers-reduced-motion` check via `window.matchMedia` at render time (no useEffect)
+
+### Change 4 — Table system consolidation
+- Added CSS rules to `.pg-table-wrap` for `thead` (sticky, background), `th` (padding, uppercase, letter-spacing, color, border-bottom), `tbody tr` (hover transition), `td` (padding, border-bottom, color)
+- Added `.pg-table-num` (right-aligned, monospace, tabular-nums) and `.pg-table-num-header` (right-aligned)
+- Migrated 5 tables (model routing, supplier scorecard ×2, exception heatmap ×2) to use bare `<thead>`/`<tbody>` with CSS-driven styling
+- Removed duplicated Tailwind classes (`bg-slate-50 text-xs font-semibold uppercase tracking-wide`, `divide-y divide-slate-200`, `hover:bg-slate-50`, inline `px-3 py-3 text-right font-mono tabular-nums`) from all migrated tables
+- Numeric columns use `pg-table-num` / `pg-table-num-header` classes
+
+### Change 5 — EmptyState glyph
+- `EmptyState` (Dashboard) and `WorkbenchEmptyState` (ProcureGuard) now accept optional `icon` prop
+- Icon renders as a muted 40×40 rounded-lg container with 20×20 icon above the eyebrow
+- Icon mapping: `BarChart3` for awaiting-analysis/executive, `Loader2` for in-progress, `AlertCircle` for failed, `CheckCircle2` for clean/no-exceptions, `Building2` for supplier states, `Shield` for governance, `TrendingUp` for policy simulator
+- Added `Building2`, `FileText` to lucide-react import in ProcureGuard.jsx
+- Added `BarChart3`, `Building2`, `CheckCircle2`, `Loader2` import in ProcureGuardDashboard.jsx
+
+### Change 6 — Button system extension
+- Added `.pg-button-ghost` (transparent background, slate text, hover at 5% opacity)
+- Added `.pg-button-sm` (2rem min-height, smaller padding and font-size)
+- Added `.pg-button:not(:disabled):active` press feedback (`translateY(1px)`) with `prefers-reduced-motion` override
+- No existing buttons migrated in this chunk (additive only, deferred to avoid regression)
+
+### CSS additions
+- `.pg-topbar` — sticky positioning, backdrop-filter, responsive margin/padding
+- `.pg-brand`, `.pg-brand-mark`, `.pg-version-pill` — brand identity
+- `.pg-tab` / `.pg-tab-active` — underline indicator pattern
+- `.pg-table-wrap thead/th/tbody tr/td` — table system
+- `.pg-table-num`, `.pg-table-num-header` — numeric column alignment
+- `.pg-button-ghost`, `.pg-button-sm` — button variants
+- `.pg-button:active` — press feedback
+
+### Lucide imports added
+- `Building2`, `FileText` in `app/ProcureGuard.jsx`
+- `BarChart3`, `Building2`, `CheckCircle2`, `Loader2` in `app/ProcureGuardDashboard.jsx`
+
+### Files modified
+- `app/styles.css` (table system, topbar, tabs, button variants — ~220 lines added/changed)
+- `app/ProcureGuard.jsx` (topbar brand, table migration, EmptyState icons, lucide imports)
+- `app/ProcureGuardDashboard.jsx` (chart tooltip/gradient, table migration, EmptyState component + icons, lucide imports)
+
+### Verification
+- 25/25 evals passing
+- Build succeeds (expected large-chunk warning only)
+- No changes to `app/lib/`, `api/`, `prompts/`, `data/`, `evals/`, `package.json`
+- No `console.log`, no "Send" buttons, no HITL violations
+- No new dependencies
+
+### Known issues
+- The existing Vite production large-chunk warning remains
+
+### Next step
+Live end-to-end Claude API verification, then Stage 6.2 documentation package, then Vercel deploy
+
+---
+
+## Production Rework Chunk 3.1 — Pipeline Latency Optimization — April 30, 2026
+
+### Optimizations implemented
+
+#### Optimization 1: Bounded parallel chunks within each stage
+- Replaced sequential `for await` loop in `runMatchingChunks`, `runClassificationChunks`, and `runActionGenerationChunks` with bounded-concurrency parallel execution via `runChunksWithConcurrency`
+- Concurrency caps: **5** for matching (Haiku), **3** for classification and action generation (Sonnet)
+- These caps are conservative defaults based on typical Anthropic API per-key concurrency limits
+- Results are returned in original chunk-index order to preserve downstream merge correctness
+- Fail-fast: first error stops new work, in-flight workers drain, then error propagates
+- Shared mutable state reference (`stateRef.current`) ensures `markPipelineChunk*` calls always read the latest state, which is safe because JavaScript is single-threaded and state mutations happen synchronously between `await` points
+- Status messages now show rolling completion counts (`"Matching 3/5 chunks complete..."`) instead of per-chunk progress
+- `waitForChunkWindow()` delay between chunks is no longer called; rate limiting is handled by bounded concurrency and the existing retry policy in `callClaudeAPI`
+
+#### Optimization 2: Skip draft generation for clean rows
+- Before calling the action generation Claude API for each chunk, the batch is filtered to include only invoices whose classification has at least one exception (`detected_exceptions.length > 0`)
+- If all invoices in a chunk are clean: Claude call is skipped entirely; synthetic results are produced using the existing `createDefaultActionResult` function from `pipeline.js`; audit entry records `model: "skipped_no_exceptions"` with `input: ""` and `response: null`
+- If some invoices have exceptions: Claude is called with only the exception invoices; `normalizeActionChunkResults` rehydrates the response by filling in `createDefaultActionResult` for clean invoices, maintaining original chunk order
+- If all invoices have exceptions: no filtering needed, full batch sent as before
+- Token savings are proportional to the clean-row rate in the dataset
+
+#### Optimization 3: Pipeline early-start (deferred)
+- Starting classification chunk 1 as soon as matching chunk 1 finishes (rather than waiting for all matching chunks) would further reduce wall-clock time
+- **Not implemented** in this chunk because it significantly complicates retry semantics and partial-result saving — the run state machine would need to track per-chunk progression across stages rather than per-stage
+- Documented as future work
+
+### Concurrency caps rationale
+- Matching uses Haiku (`claude-haiku-4-5-20251001`): lighter model, higher per-key concurrency available → cap at 5
+- Classification and action generation use Sonnet (`claude-sonnet-4-6`): heavier model, lower per-key concurrency → cap at 3
+- These are conservative defaults chosen to avoid 429 rate-limit storms; do not raise without empirical measurement
+
+### Synthetic clean row schema
+- Uses `createDefaultActionResult(invoice, classification)` from `pipeline.js`, which produces: `{ invoice_number, overall_tier, actions: [], audit_entry: { timestamp_placeholder: "not_generated_clean_invoice", prompt_version: "03_action_generation_v1", action_count: 0 } }`
+- This is the same shape already used by `normalizeActionChunkResults` when Claude omits clean invoices from its response
+- Conforms to the `actionOutputSchema` in `schemas.js`
+
+### Wall-clock and token measurements
+- **Before**: 7.8 minutes (reported baseline from sequential execution of 25-invoice golden batch)
+- **After**: pending live measurement with real API key (code changes verified offline via build + evals)
+- **Target**: ≥ 50% wall-clock reduction from parallelism alone (15 sequential calls → at most 3 sequential batches per stage)
+- **Token cost**: should be equal or lower — same prompts, same schemas, plus token savings from skipping clean-row drafts
+
+### Helper added
+- `runChunksWithConcurrency(items, runOne, concurrency)` in `app/lib/pipeline.js`
+- Worker-pool pattern: spawns `min(concurrency, items.length)` workers, each pulls the next item from a shared index
+- Returns results in original item order (not completion order)
+- Fail-fast: stops dispatching new items after first error, drains in-flight workers, then throws
+
+### Files modified
+- `app/lib/pipeline.js` — added `runChunksWithConcurrency`, exported `createDefaultActionResult`
+- `app/ProcureGuard.jsx` — added concurrency constants, refactored three stage runners to use parallel execution, added skip-clean logic to action generation
+
+### Verification
+- 25/25 evals passing
+- Build succeeds (expected large-chunk warning only)
+- No changes to `api/`, `prompts/`, `data/`, `evals/`, `package.json`
+- No new dependencies
+- Retry semantics preserved: `startIndex` parameter slices items before parallel execution; partial-result saving via `markPipelineChunkSucceeded` per chunk is unchanged
+- Audit trail: per-chunk metadata intact, skipped chunks recorded with `model: "skipped_no_exceptions"`
+
+### Known issues
+- Wall-clock measurement pending live API test
+- The existing Vite production large-chunk warning remains
+
+### Next step
+Chunk 3.2 storytelling redesign
+
+---
+
+## Production Rework Chunk 4.1 — Design System Replacement Foundation — April 30, 2026
+
+### Goal
+Replace the visual foundation with the approved full-white material direction while preserving the existing application architecture and interaction model.
+
+### What changed
+- Reworked the app token layer in `app/styles.css` around a uniform warm-white canvas, white material surfaces, subtle borders, low-opacity material shadows, and severity-only state color.
+- Shifted the primary typography direction to an OpenAI/SF-like sans stack with Geist as the webfont fallback and Geist Mono for invoice IDs, money, run IDs, audit metadata, and other data-dense values.
+- Removed the stale `--text-hero` usage and tightened the shared type scale so old Tailwind-sized text maps into the new token system.
+- Kept the topbar and tabs quiet: translucent warm-white material, restrained ink brand mark, pill-like active tabs, no heavy underline or decorative gradient.
+- Refreshed skeleton, card, table, button, and severity token behavior without changing product data paths.
+
+### Files modified
+- `index.html`
+- `app/styles.css`
+
+### Notes
+- OpenAI Sans is referenced only as a first-choice font name in the CSS stack. The shipped webfont remains Geist unless licensed OpenAI Sans assets are later added.
+- No product AI runtime changes were made. Claude remains the application AI stack.
+
+---
+
+## Production Rework Chunk 4.2 — Executive Summary Rebuild / Payment Run Command Center — April 30, 2026
+
+### Goal
+Rebuild Executive Summary into a story-led enterprise command surface: business outcome first, AI work visible, release-to-pay decision clear, evidence shown, drafts safe, audit trail quiet but present.
+
+### Components added or replaced
+- `ExecutiveHeadline` — outcome-first hero with `$ protected before payment release`, run metadata, KPI trio, and primary actions.
+- `AiWorkLedger` — compact visible AI feature: invoices checked, exceptions routed, drafts prepared, audit events, and zero autonomous payments.
+- `OutcomeRibbon` — release-to-pay decision with hold/review/safe counts and explicit autonomous-action guardrail.
+- `WorkflowRhythm` — PO → Receipt → Invoice → AI Match → Review → Draft rail plus 25-mark severity rhythm strip.
+- `EvidenceLens` — one-invoice proof view showing PO quantity, receipt quantity, invoice quantity, finding, decision, and human action.
+- `DraftsHero` — AI Prepared Work inbox with DRAFT-only language and Workbench click-through.
+- `MoneyDriversPanel`, `SupplierRiskPattern`, `AuditReplay`, and `TrustFooter` — exposure drivers, supplier concentration, audit-stage replay, and mono trust footer.
+
+### View-model additions
+- `getRhythmStripData`
+- `getOutcomeAsideCounts`
+- `getKpiTrio`
+- `getDraftsInboxViewModel`
+- `getTrustFooterViewModel`
+- Added supporting executive view-model data for AI ledger, run metadata, evidence lens, supplier risk pattern, and audit replay.
+
+### Analytics additions
+- `batchValue` / `totalInvoiceAmount` from invoice `total_amount`
+- `supplierCount`
+- `warehouseCount`
+
+### Workbench wiring
+- “Open held invoices” routes to the existing Workbench with the Tier 3 filter active.
+- Draft rows route to the existing Workbench and focus the matching invoice via `scrollIntoView`.
+- No new send capability, payment automation, or draft-delivery behavior was added.
+
+### Verification
+- `npm run build` passed.
+- `node evals/run_evals.js` passed: 25/25 tests, 100% pass rate.
+- HITL wording preserved on the rebuilt Executive Summary: drafts are DRAFT-only, human approval required, and no Send button was added.
+- Post-build hardening removed the dead Recharts render path from the Executive Summary module so the rebuilt surface no longer imports charting code; package removal is still left to Chunk 4.4.
+- Pipeline run state now records `runStartedAt`, `runCompletedAt`, and `totalLatencyMs`; run metadata prefers the completed timestamp when showing the command-center close time.
+- Final fundamentals audit tightened responsive tab/icon sizing, adjusted OKLCH severity and muted-ink tokens to meet AA contrast when used as text, and removed visible provider-brand wording from the user-facing app while leaving the Claude API architecture unchanged.
+
+### Deferred
+- Recharts package-lock/package removal remains deferred to Chunk 4.4.
+- Cross-surface visual consistency for Workbench, Supplier & Policy Analytics, and Audit & Governance remains Chunk 4.3.
+
+---
+
+## Final Enterprise Copy Polish — April 30, 2026
+
+### Goal
+Tighten visible product language to a premium enterprise standard without changing behavior, data flow, Claude runtime architecture, prompts, schemas, eval logic, or HITL controls.
+
+### What changed
+- Replaced implementation-heavy visible wording such as “prompt chain” and “browser-only pattern review” with customer-facing language: “analysis workflow” and “local pattern review.”
+- Backgrounded provider details in user-facing UI while preserving the existing Claude API integration internally.
+- Refined Start-page copy around payment-run files, local development key handling, and readiness states.
+- Tightened workspace tab helper labels so they read as product navigation rather than status logs.
+- Updated Drafts language from “Nothing sends automatically” to “Nothing leaves the system automatically,” and changed the promise to “Reviewed by you · released by you.”
+- Kept AI visible as a product capability through AI checks, AI-prepared drafts, model trace, audit evidence, and DRAFT-only controls.
+
+### Verification scope
+- No pipeline, prompt, schema, API route behavior, eval logic, package dependency, or send/payment capability was changed.
+
+---
+
+## Frost-White Material Polish — April 30, 2026
+
+### Goal
+Move the shell from warm-white toward a cleaner frost-white material direction, with restrained glassmorphism and smoother tab motion.
+
+### What changed
+- Rebased global background tokens to a cooler near-white canvas while preserving zinc ink and severity-only color.
+- Added glass-like material depth through translucent white surfaces, hairline borders, inset highlights, and softer shadows.
+- Kept real `backdrop-filter` restrained to the sticky topbar and compact AI ledger so the UI feels premium without heavy rendering cost.
+- Smoothed tab active/hover transitions with a material highlight layer, short responsive labels, and a clearer active state.
+- Reduced the paper-grain overlay so the white background stays crisp rather than warm or dusty.
+
+### Verification scope
+- Visual-only CSS changes; no AI runtime, data, prompt, eval, HITL, or API behavior changed.
+
+---
+
+## Tab Interaction Accent Polish — April 30, 2026
+
+### Goal
+Make workspace tab selection visibly interactive without turning the whole tab into a blue chip.
+
+### What changed
+- Rebalanced the selected tab state: label text stays strong ink, while the icon, bottom hairline, and click feedback use restrained system blue.
+- Moved blue emphasis to the places where it belongs in this product shell: brand mark, primary actions, selected navigation icon, focus, and press feedback.
+- Deepened the neutral ink scale and normalized common Slate text utilities inside the app shell so body text and metadata no longer read washed out.
+- Softened the blue intensity and made the upload file button tonal so it reads as part of the upload card instead of a heavy external callout.
+- Reduced the clicked-tab focus ring so the visible state is primarily the icon plus bottom indicator, with a subtler accessibility outline.
+- Added a quick press/settle state for tab clicks so the transition is visible and modern without feeling playful.
+- Preserved neutral frost-white navigation chrome; blue is used for interaction affordance, not severity.
+
+### Verification scope
+- CSS-only interaction polish; no component structure, data flow, AI runtime, HITL, or eval behavior changed.
+
+---
+
+## Professional Icon System + Premium Metadata Polish — May 1, 2026
+
+### Goal
+Bring the app shell and Executive Summary closer to the approved frost-white, premium enterprise direction with a coherent product icon language, professional wording, share metadata, and responsive/dark-mode polish.
+
+### What changed
+- Added `app/ProcureGuardIcons.jsx`, a local inline SVG icon set for the ProcureGuard mark, workspace tabs, procurement workflow, evidence records, AI-prepared work, suppliers, and audit trail.
+- Replaced generic workspace/workflow/evidence/audit outline icons with muted full-color 2D procurement icons:
+  - Procurement document blue for purchase orders.
+  - Teal truck with warm cardboard-brown cargo box for goods receipt evidence.
+  - Blue/periwinkle document for supplier invoices and draft work.
+  - Amber/periwinkle scale for matching.
+  - Green shield/check for audit and completion.
+- Kept severity colors semantically separate: green, amber, and red remain tied to clean/review/escalation status rather than decorative icon color.
+- Replaced the topbar shield-only mark with a custom frosted rounded-square shield/document/check brand glyph.
+- Added a topbar run-status pill using professional DRAFT-only language.
+- Tightened visible copy from implementation/provider language toward customer-facing enterprise wording while preserving the Claude API runtime architecture internally.
+- Updated `index.html` with a stronger title, description, Open Graph, Twitter card metadata, and frost-white theme color. Canonical URL was intentionally omitted because no production domain is confirmed.
+- Added CSS sizing, dark-mode treatment, responsive rules, focus states, and reduced-motion-compatible transitions for the new icon system.
+
+### Responsive and accessibility notes
+- Workspace tabs retain five equal columns on desktop and compress to short labels on tablet/mobile.
+- Full-color icons scale through CSS hooks so navigation, workflow nodes, evidence cells, audit replay, and upload controls do not stretch or crowd.
+- Mobile topbar now stacks the run-status pill above the action controls and keeps tap targets comfortable.
+- Existing reduced-motion rules continue to suppress motion globally.
+- Important product and SEO copy remains real HTML text, not image-only content.
+
+### Verification
+- `npm run build` passed after integration.
+- `node evals/run_evals.js` passed: 25/25 tests, 100% pass rate.
+- Local dev server responded at `http://127.0.0.1:5173/` and served the updated metadata.
+- Browser visual automation was attempted through the in-app browser plugin, but the browser runtime timed out while attaching to the page. Static responsive/CSS review and build verification were completed instead.
+
+### Constraints preserved
+- No OpenAI runtime API, agent framework, RAG/vector database, Python backend, database persistence, real email sending, or send button was added.
+- Claude API remains the application AI stack.
+- DRAFT-only and human-approval wording remains visible.
+- No fake customers, testimonials, awards, compliance claims, or fabricated proof were introduced.
+
+---
+
+## Enterprise Apple-Caliber Final Polish — May 1, 2026
+
+### Goal
+Push the approved frost-white direction from visually improved to enterprise-grade: sharper contrast, calmer purple-blue action color, intentional dark mode, consistent full-color icon treatment, premium empty states, and responsive validation across representative breakpoints.
+
+### What changed
+- Rebalanced the global frost-white tokens, glass borders, shadows, radius scale, and graphite ink scale so surfaces feel premium without heavy decoration.
+- Shifted the interaction accent from a louder system blue toward a calmer periwinkle/purple-blue used for primary actions, selected tabs, focus, and AI activity.
+- Rebuilt dark mode at the token layer instead of relying on one-off dark utilities. Dark surfaces now use graphite/navy material layers, readable ink, softened borders, and visible secondary actions.
+- Added lightweight empty-state preview structures so Workbench, Summary, Supplier, and Audit empty states feel complete before analysis runs without inventing data.
+- Refined the custom ProcureGuard brand glyph with a layered frosted tile and shield/check mark while preserving the approved full-color 2D icon direction.
+- Added an inline SVG favicon to avoid the browser fallback `/favicon.ico` request and keep share/browser chrome aligned with the product mark.
+- Normalized common Tailwind slate/blue/indigo/green/amber/red utility colors inside the app shell to the design tokens for better cross-surface consistency.
+- Preserved provider abstraction: user-facing UI continues to say AI service / AI-prepared / DRAFT-only, not provider-specific model branding.
+
+### Responsive and accessibility notes
+- Headless Chrome CDP visual checks covered mobile, tablet, desktop, short laptop, ultrawide, light mode, dark mode, and Workbench empty state.
+- Checked for horizontal overflow at 390x844, 834x1112, 1366x768, 1440x900, and 1920x1080; no horizontal overflow was detected.
+- Focusable controls remained present across tested views, and existing reduced-motion rules still collapse transitions and animations.
+- Dark mode title, card, shell, and button colors were inspected through computed styles after setting the app's session dark-mode flag.
+
+### Verification
+- `npm run build` passed.
+- `node evals/run_evals.js` passed: 25/25 tests, 100% pass rate.
+- Headless Chrome runtime/visual smoke checks passed with no console warnings/errors after the favicon fix.
+
+### Constraints preserved
+- No pipeline, prompt, Claude API, schema, eval, package dependency, autonomous sending, real email, or persistence behavior was changed.
+- The work stays in the existing React/Vite/CSS architecture and uses no new dependencies.
+
+---
+
+## Final Visual Hardening Pass — May 3, 2026
+
+### Goal
+Address the last approved premium-polish items before handoff: make the frost-white interface brighter without dull metadata, keep the purple-blue action color calm, reduce overused glass treatment, improve mobile topbar proportions, and make the custom icon system feel intentional at small and large sizes.
+
+### Source-backed design checks used
+- Apple Human Interface Guidelines direction for restrained materials, clear hierarchy, consistent symbols, accessibility, and motion restraint.
+- W3C/WCAG guidance for focus visibility, contrast, target comfort, and reduced-motion support.
+- Geist typography guidance from Vercel for crisp product UI text and data-heavy layouts.
+- Repo evidence from the current React/Vite/CSS implementation, existing five-tab information architecture, DRAFT-only workflow, and no-send product constraint.
+
+### What changed
+- Tuned the graphite ink scale so metadata and helper text remain readable in light mode instead of appearing washed out.
+- Softened the primary purple-blue accent and disabled Analyze state so action controls feel premium but not overbearing.
+- Reduced decorative glass by making the AI ledger an opaque material row with only a subtle inset highlight.
+- Tightened the mobile topbar grid so the theme toggle and Analyze button stay inline with the container and avoid a full-width stretched button feel.
+- Simplified the brand mark hover treatment and normalized product icon rendering with non-scaling strokes, calmer inactive tab icon opacity, and the approved brown cargo-box truck treatment.
+
+### Constraints preserved
+- No Claude/Gemini/provider migration was performed in this pass.
+- No pipeline, prompt, schema, eval, API, package, dependency, persistence, or real-send behavior changed.
+- DRAFT-only and human-reviewed language remains visible.
+
+---
+
+## Launch-Level Frontend Hardening — May 3, 2026
+
+### Goal
+Close the final Apple-style launch polish gaps identified after the no-edit design review: dark-mode root consistency, clean accessible tab names, stricter mobile touch comfort, a simpler small-size brand mark, and a cleaner local-key form structure.
+
+### What changed
+- Dark mode now syncs to `html` and `body`, not only `.pg-shell`, and updates the browser theme color. This prevents white edge/overscroll flashes in dark mode.
+- `index.html` includes a small pre-render dark-mode bootstrap so stored dark mode applies before React mounts.
+- Workspace tabs now expose clean accessible names (`Start`, `Summary`, `Workbench`, `Suppliers`, `Audit`) while preserving the visible helper text.
+- Mobile topbar and upload controls now use 44px touch-height targets.
+- The topbar brand mark and favicon were simplified for small-size readability while preserving the approved frost-white/periwinkle shield direction.
+- The session-only local development key input now sits inside a semantic form to remove the Chrome password-field structure warning.
+- Very narrow mobile screens now show a compact run-status label (`Ready · DRAFT-only`) to reduce right-side visual weight.
+
+### Verification
+- `npm run build` passed.
+- `node evals/run_evals.js` passed: 25/25 tests, 100% pass rate.
+- `git diff --check` passed.
+- Headless Chrome viewport checks covered 320, 390, 834, 1366x768, 1440x900, and 1920x1080 in light and dark mode with no horizontal overflow.
+- Verified dark mode sets both `html.dark` and `body.dark`; computed `body` and shell backgrounds both resolve to the dark token.
+- Verified mobile touch targets for theme, Analyze, and Choose files are 44px high at 320/390px widths.
+- Verified workspace tab accessible labels are clean.
+- In-app browser reload confirmed the updated app loads at `http://127.0.0.1:5173/`.
+
+### Remaining verification
+- A live populated golden-batch visual pass still requires a session API key and was not run in this hardening pass.
+
+---
+
+## Gemini Runtime Migration — May 4, 2026
+
+### Goal
+Replace the application AI runtime with a low-cost Gemini path for the interview/LinkedIn showcase while preserving the existing ProcureGuard architecture: prompt chaining, structured JSON outputs, chunk validation, audit logging, DRAFT-only communications, and human review controls.
+
+### What changed
+- Replaced `app/lib/claude.js` with `app/lib/gemini.js`.
+- Runtime model routing now uses `gemini-2.5-flash` for matching, classification, and action generation.
+- Gemini requests use `generateContent` with:
+  - `systemInstruction` for the stage prompt.
+  - `contents` for chunk payloads.
+  - `generationConfig.responseMimeType = "application/json"`.
+  - `generationConfig.responseJsonSchema` from the existing structured-output schemas.
+  - `temperature = 0` for stable demo output.
+- `api/messages.js` now forwards to Gemini through `process.env.GEMINI_API_KEY` and only allows the approved `gemini-2.5-flash` model.
+- `vite.config.js` now proxies local `/api/messages` traffic to Gemini and maps the session-only local key from `x-api-key` to `x-goog-api-key`.
+- Token usage normalization maps Gemini `usageMetadata` into the existing audit fields: `input_tokens`, `output_tokens`, and `cache_read_input_tokens`.
+- Cost telemetry now uses Gemini 2.5 Flash pricing: `$0.30 / 1M input tokens` and `$2.50 / 1M output tokens`.
+- Removed the unused `@anthropic-ai/sdk` dependency.
+- Updated `AGENTS.md`, `CLAUDE.md`, `README.md`, and `progress.md` to reflect the Gemini runtime.
+
+### Constraints preserved
+- No prompt files, CSV parsing logic, eval logic, HITL labels, DRAFT-only behavior, real-email behavior, database persistence, RAG/vector database, Python backend, or autonomous agent behavior changed.
+- The app still calls only `/api/messages` from the browser.
+- Production keeps the provider key server-side.
+- Local development keeps the key session-only.
+
+### Required deployment change
+- Replace `ANTHROPIC_API_KEY` with `GEMINI_API_KEY` in the deployment environment.
+- Restart the local dev server after this migration so the Vite proxy reloads.
+
+### Verification status
+- `node --check api/messages.js`: passed.
+- `node --check app/lib/gemini.js`: passed.
+- `node --check vite.config.js`: passed.
+- `git diff --check`: passed.
+- `npm run build`: passed.
+- `node evals/run_evals.js`: passed, 25/25.
+- Gemini request-body dry run passed against the matching schema.
+- Serverless proxy contract dry run passed with a mocked upstream fetch and confirmed `/v1beta/models/gemini-2.5-flash:generateContent`.
+- Local Vite server restarted at `http://127.0.0.1:5173/` and returned HTTP 200.
+- A live Gemini golden-batch run still requires a real Gemini API key and will incur provider cost.
+
+---
+
+## Gemini Live-Run Hardening — May 4, 2026
+
+### Trigger
+The first local Gemini run stopped during matching with rate-limit pressure and an output-token-limit failure. The old Claude-era chunk concurrency started too many requests at once for a low-tier Gemini key, and the 8,192-token output cap was too tight for structured JSON plus Gemini thinking behavior.
+
+### What changed
+- Gemini chunk execution is now conservative:
+  - matching concurrency: `1`
+  - classification concurrency: `1`
+  - draft-generation concurrency: `1`
+- `app/lib/gemini.js` now spaces provider requests by at least 7 seconds. This keeps the demo path below the published free-tier 10 RPM ceiling for Gemini 2.5 Flash.
+- Gemini retry backoff now starts at 15 seconds and honors `retryDelay` when the API returns retry metadata.
+- `maxOutputTokens` was raised from 8,192 to 32,768 for all three stages.
+- Gemini thinking is now explicit:
+  - matching: thinking budget `512`
+  - classification: thinking budget `1024`
+  - draft generation: thinking budget `1024`
+- Gemini `thoughtsTokenCount` is included in the existing output-token/cost telemetry so estimated cost does not undercount thinking tokens.
+- The failed-run detail grid now uses fewer columns and breakable value text so long values no longer wrap one character per line.
+- Retry status copy now says the AI service is busy and shows the wait time before retry.
+
+### Trade-off
+The live demo is intentionally slower, but materially more reliable and still well under the user's stated <$5 budget expectation for a small 25-invoice showcase batch. This is the correct trade-off for an interview/LinkedIn side project because a completed auditable run is more valuable than faster partial failure.
+
+### Verification
+- `node --check app/lib/gemini.js`: passed.
+- Gemini request-body dry run verified `responseJsonSchema`, `maxOutputTokens`, and stage thinking budgets.
+- `git diff --check`: passed.
+- `npm run build`: passed.
+- `node evals/run_evals.js`: passed, 25/25.
+- `curl -I http://127.0.0.1:5173/`: returned HTTP 200.
+
+### Remaining verification
+- Restart the analysis from the app to clear the retained failed partial state.
+- A successful live populated golden-batch run still requires the user's Gemini key in the local app field.
+
+---
+
+## Gemini Analysis Quality Guard — May 4, 2026
+
+### Goal
+Preserve procurement-analysis quality after the provider migration by removing stale provider-specific prompt instructions and ensuring every stage still runs with schema enforcement, deterministic generation, and enough bounded reasoning budget for the task.
+
+### Source-backed model call
+- Google AI model docs last updated April 30, 2026 describe `gemini-2.5-flash` as the best price-performance Gemini 2.5 model for low-latency, high-volume tasks that require reasoning.
+- The same docs note that preview/latest model aliases can carry restrictive rate limits, deprecation risk, or hot-swapped behavior. For this interview demo, the stable explicit model name is the safer quality/reliability choice than chasing a preview alias.
+
+### What changed
+- Updated `prompts/01_matching.md`, `prompts/02_classification.md`, `prompts/03_action_generation.md`, and `prompts/04_text_extraction.md` so the prompt metadata and schema-enforcement language describe Gemini structured JSON output instead of Claude/Anthropic Structured Outputs.
+- Kept the procurement rules, thresholds, few-shot examples, output shapes, and DRAFT-only communication rules unchanged.
+- Raised the matching-stage thinking budget from `0` to `512` tokens. Matching is deterministic, but it still performs multi-document reconciliation and arithmetic, so a small nonzero budget is a better quality/cost trade-off for the showcase run.
+- Preserved classification and draft-generation thinking budgets at `1024`.
+- Updated `DECISIONS.md` so the accepted model-routing and structured-output decisions match the Gemini runtime.
+
+### Verification
+- Prompt/provider grep confirmed no Claude/Anthropic provider terms remain in runtime prompts or active app/API config.
+- Gemini request-body dry run verified:
+  - `responseMimeType = "application/json"`
+  - `responseJsonSchema` present for matching, classification, and action generation
+  - stage thinking budgets: matching `512`, classification `1024`, action generation `1024`
+
+### Remaining verification
+- Run `node evals/run_evals.js` and `npm run build` after this patch.
+- A successful live Gemini golden-batch run still requires the user's key and uploaded CSVs in the browser.
+
+---
+
+## Gemini Quota-Aware Run Hardening — May 5, 2026
+
+### Trigger
+A live local run still hit Gemini quota pressure. After the retry hardening, the app correctly surfaced the provider signal as daily quota exhaustion instead of the prior generic `AI API rate limit persisted after 3 attempts` message.
+
+### What changed
+- The default 25-invoice demo batch now runs as one chunk instead of five:
+  - matching calls: `5 -> 1`
+  - classification calls: `5 -> 1`
+  - draft generation calls: up to `5 -> 1`
+- Stage `maxOutputTokens` now uses Gemini's safe configured ceiling of `65,536` for matching, classification, and draft generation so the larger one-chunk demo has enough structured-output headroom.
+- Gemini request spacing remains conservative at 12 seconds.
+- Gemini rate-limit retry behavior now:
+  - uses 4 attempts instead of 3
+  - starts rate-limit backoff around a minute
+  - honors provider retry-delay metadata when present
+  - detects daily quota exhaustion and marks it non-retryable
+  - tells the user to wait for reset or use a billing-enabled Gemini key
+
+### Trade-off
+This is the right demo-mode trade-off for a 25-invoice portfolio showcase: fewer calls reduces request quota pressure and latency without lowering model quality, prompt strictness, schema enforcement, or HITL safeguards. The cost impact remains small because the same information is produced with less repeated prompt overhead.
+
+### Live verification
+- Restarted the local run after the first hardening patch.
+- Confirmed the app switched from `3/5` old chunking to `2/3` under the first patch.
+- Gemini then returned daily quota exhaustion. The UI marked the failure as non-retryable and did not offer unsafe retry.
+- A successful end-to-end populated run now requires quota reset or a billing-enabled Gemini key.
+
+---
+
+## Desktop Visual QA and Launch Polish — May 5, 2026
+
+### Goal
+Raise the desktop/web UI from a polished operational dashboard toward a more art-directed, launch-quality product surface without reducing utility, changing the Gemini pipeline, or hiding DRAFT-only human-review constraints.
+
+### What changed
+- Tightened the visual system with a dedicated `--radius-card` and `--shadow-precision` token so dense dashboard containers feel more deliberate and less pillowy.
+- Improved populated-state alignment rules for the draft inbox, supplier risk pattern, supplier scorecard, invoice rows, and audit replay.
+- Normalized custom icon rendering through geometric stroke settings and a calmer top-nav icon treatment.
+- Added restrained motion choreography for invoice row expansion, workflow connectors, audit replay nodes, and desktop hover states.
+- Split Vite output into React and Lucide icon chunks so the app bundle is smaller and browser caching is cleaner.
+
+### Verification
+- `node evals/run_evals.js`: passed, 25/25.
+- `npm run build`: passed.
+- `git diff --check -- app/styles.css vite.config.js`: passed.
+- `curl -I http://127.0.0.1:5173/`: returned HTTP 200.
+- Headless Chrome desktop tab sweep at 1920px confirmed no horizontal overflow in Start, Executive, Workbench, Analytics, or Audit empty states.
+- Desktop screenshots captured at 1440px, 1920px, and 2560px.
+
+### Remaining verification
+- Full populated-state visual QA still depends on a successful live run in the same browser session that has the user's Gemini key. Headless QA cannot access session-local secrets or React state from the in-app browser.
+
+---
+
+## Populated Audit Replay Spacing Polish — May 5, 2026
+
+### Trigger
+The completed-run Executive Summary screenshot showed the Audit Replay rail occupying only the upper portion of a tall stretched card, leaving excessive blank space below the replay stages.
+
+### What changed
+- The lower Executive Summary two-column grid now aligns cards to their natural height instead of stretching both columns equally.
+- The Audit Replay card uses tighter vertical padding, a narrower rail, slightly stronger stage labels, and smaller icon nodes to reduce dead space without making the component cramped.
+
+### Verification
+- `npm run build`: passed.
+- `git diff --check -- app/styles.css`: passed.
+
+---
+
+## Populated Desktop QA, Data Consistency, and Gemini Reliability — May 6, 2026
+
+### Goal
+Verify the completed dashboard with populated golden-batch data across the main desktop widths, then fix visible data/story mismatches and Gemini failure handling without changing the DRAFT-only workflow or analysis quality.
+
+### What changed
+- Fixed action-generation alignment for duplicate invoice numbers when Gemini returns only non-clean action rows. Clean duplicate rows now receive synthetic no-draft action results, and the matching non-clean duplicate consumes the returned draft row.
+- Changed the Executive Summary supplier panel column label from `Exposure held` to `Exposure` so the panel matches the source-of-truth metric it renders.
+- Reduced the default Gemini analysis chunk size from 25 to 10 invoices. This lowers structured JSON output-limit risk while keeping the same prompts, schemas, model, validation, and HITL behavior.
+- Classified Gemini `MAX_TOKENS` failures as `Output limit` with a direct restart instruction instead of a generic AI-service failure.
+
+### Populated QA coverage
+- Ran a deterministic Gemini-shaped browser QA pass using the golden CSVs and app pipeline.
+- Captured populated screenshots for Executive Summary, Workbench, Supplier & Policy Analytics, and Audit & Governance at 1440px.
+- Captured Executive Summary screenshots at 1366x768, 1536x864, 1728x972, 1920x1080, 2560x1440, and dark mode at 2560x1440.
+- Captured a running-stage screenshot at 1366x768 to verify the active pipeline stage, pulse/ring treatment, and connector visibility.
+
+### Validation
+- `npm run build`: passed.
+- `node evals/run_evals.js`: passed, 25/25.
+- `git diff --check -- app/ProcureGuard.jsx app/ProcureGuardDashboard.jsx app/lib/gemini.js app/lib/pipeline.js docs/HANDOFF.md progress.md`: passed.
+- Browser QA reported `overflowX: 0` at every tested desktop viewport.
+- Populated QA confirmed 13 draft rows, 13 draft total, 4 escalation memos, 7 supplier follow-ups, 2 approval requests, $4,126.13 held, and $2,691.13 exposure where those metrics are surfaced.
+- Keyboard/reduced-motion check confirmed keyboard focus reaches workspace tabs with a visible outline and reduced-motion collapses animation/transition durations.
+
+### Remaining caveat
+- The populated QA used deterministic Gemini-shaped responses from the golden dataset rather than the user's session-local live API key, because the local browser key is intentionally not exposed to shell automation. Live Gemini remains dependent on the user's key, billing/quota state, and provider latency.
+
+---
+
+## Professional Brand and Copy Cleanup — May 6, 2026
+
+### Goal
+Remove prototype-feeling or implementation-heavy wording from prominent product surfaces while preserving audit metadata, DRAFT-only safeguards, and service-key transparency.
+
+### What changed
+- Removed the `v1.0` badge from the topbar brand lockup so the primary identity reads as `ProcureGuard AI` with the quieter `Payment Control` subtitle.
+- Deleted the now-unused `.pg-version-pill` CSS.
+- Reframed the visible API-key panel from `Local development key` to `Session API key`.
+- Replaced visible `local development`, `local key`, and `local pattern review` language with more product-grade session/workspace and batch-pattern wording.
+- Kept prompt version metadata in the Executive Summary trust footer and audit/governance surfaces, where versioning supports traceability instead of weakening the brand mark.
+- Updated AI service authentication and quota messages to avoid provider/prototype wording in normal user-facing failure states.
+
+### Validation
+- Searched active app sources for remaining visible `Local development`, `local key`, `Local pattern review`, `pg-version-pill`, and brand `v1.0` references.
+- The only remaining `v1.0` app reference is the prompt version in `getTrustFooterViewModel`, which is intentional audit metadata.
+- `npm run build`: passed.
+- `node evals/run_evals.js`: passed, 25/25.
+- `git diff --check -- app/ProcureGuard.jsx app/ProcureGuardDashboard.jsx app/lib/uiModels.js app/lib/gemini.js app/styles.css docs/HANDOFF.md progress.md`: passed.
+- Chrome headless rendered the Start screen at 1440x900 and confirmed the cleaned terms are absent from the rendered DOM.
+
+---
+
+## Brand Image and Posting Asset Refresh — May 6, 2026
+
+### Goal
+Update the browser/share/posting image assets so the cleaned ProcureGuard identity is reflected outside the app chrome as well as inside the UI.
+
+### What changed
+- Added `public/procureguard-mark.svg` as the real favicon source instead of keeping the mark only as an inline data URI in `index.html`.
+- Renamed the mobile/home-screen PNG to `public/procureguard-touch-icon.png` so the asset name is product-owned.
+- Added `public/procureguard-og.svg` as the editable source for the social preview image.
+- Added `public/procureguard-og.png` at 1200x630 for Open Graph and Twitter preview metadata.
+- Added `public/procureguard-post-preview.png` at 2400x1260 for high-resolution portfolio/social posting.
+- Added `public/procureguard-post-dashboard.svg` and `public/procureguard-post-dashboard.png` at 2400x1350 for a high-resolution populated dashboard showcase image.
+- Removed the weak empty-start screenshot from posting assets; it was technically high-resolution but not useful for LinkedIn/portfolio presentation.
+- Updated `index.html` with favicon, touch icon, Open Graph image, Twitter large-image card, image dimensions, and image alt metadata.
+
+### Validation
+- Rendered `public/procureguard-og.png` from the SVG source and visually checked it for clipping/overlap.
+- Re-rendered `public/procureguard-touch-icon.png` through a fitted HTML wrapper after the direct SVG screenshot clipped the icon.
+- Rendered and visually checked `public/procureguard-post-preview.png` and `public/procureguard-post-dashboard.png`; neither includes the old topbar `v1.0` badge.
+- Verified image dimensions:
+  - `public/procureguard-og.png`: 1200x630
+  - `public/procureguard-touch-icon.png`: 180x180
+  - `public/procureguard-post-preview.png`: 2400x1260
+  - `public/procureguard-post-dashboard.png`: 2400x1350
+- `npm run build`: passed.
+- `node evals/run_evals.js`: passed, 25/25.
+- `git diff --check -- index.html public docs/HANDOFF.md progress.md`: passed.
+- Dev server returned HTTP 200 for `/procureguard-og.png`, `/procureguard-mark.svg`, `/procureguard-touch-icon.png`, `/procureguard-post-preview.png`, and `/procureguard-post-dashboard.png`.
+
+---
+
+## Showcase Image Set — May 6, 2026
+
+### Goal
+Create posting-ready images in the approved warm-white ProcureGuard visual language for Executive Summary, Exception Workbench, Audit & Governance, and dark-mode Executive Summary.
+
+### What changed
+- Added `public/procureguard-showcase-executive.svg` and `public/procureguard-showcase-executive.png` at 1600x2400.
+- Added `public/procureguard-showcase-workbench.svg` and `public/procureguard-showcase-workbench.png` at 1600x2400.
+- Added `public/procureguard-showcase-governance.svg` and `public/procureguard-showcase-governance.png` at 1600x2400.
+- Added `public/procureguard-showcase-executive-dark.svg` and `public/procureguard-showcase-executive-dark.png` at 1600x2400.
+- Added retina PNG exports at 3200x4800 for all four showcase images:
+  - `public/procureguard-showcase-executive-retina.png`
+  - `public/procureguard-showcase-workbench-retina.png`
+  - `public/procureguard-showcase-governance-retina.png`
+  - `public/procureguard-showcase-executive-dark-retina.png`
+- Used the cleaned ProcureGuard mark, product-owned warm paper surface, frosted navigation, editorial serif hierarchy, tabular money values, restrained color severity, and DRAFT-only trust language.
+- Kept these files as static portfolio/posting assets; no runtime UI logic or Gemini pipeline behavior changed.
+
+### Visual QA
+- Visually inspected all four rendered PNGs.
+- Fixed the Audit & Governance SVG XML entity issue so the PNG renders the actual image instead of a browser parser error.
+- Removed visible old version text from public showcase image sources.
+- Widened the Executive and Dark Executive T3 decision pills to prevent label clipping.
+- Added vertical breathing room in the Executive and Dark Executive drafts cards so summary totals do not crowd the last row.
+
+### Validation
+- Verified showcase PNG dimensions are 1600x2400.
+- Verified retina PNG dimensions are 3200x4800.
+- `xmllint --noout` passed for the showcase SVGs and posting SVGs.
+- `rg -n "v1\\.0|pg-version-pill|apple-touch-icon.png" public/procureguard-showcase-*.svg public/procureguard-og.svg public/procureguard-post-dashboard.svg index.html`: no matches.
+
+---
+
+## Killer Feature Public Image — May 6, 2026
+
+### Goal
+Create a public/GitHub-ready hero image that highlights the product's strongest feature: evidence-backed, DRAFT-only supplier communication prepared by AI but controlled by the human reviewer.
+
+### What changed
+- Added `public/procureguard-killer-feature.svg` as the editable source.
+- Added `public/procureguard-killer-feature.png` at 2400x1350 for README, GitHub, and standard social sharing.
+- Added `public/procureguard-killer-feature-retina.png` at 4800x2700 for high-resolution public posting.
+- Framed the message around the safest public claim: "AI prepares the work. Humans approve the release."
+- Highlighted the draft inbox, evidence lens, audit trace, DRAFT-only status, and no-send-capability guardrail.
+
+### Validation
+- Visually inspected the rendered PNG and fixed copy/card overlap before finalizing.
+- Verified image dimensions:
+  - `public/procureguard-killer-feature.png`: 2400x1350
+  - `public/procureguard-killer-feature-retina.png`: 4800x2700
+
+---
+
+## Original Live Screenshot Set - May 6, 2026
+
+### Goal
+Create original, high-resolution screenshots from the running React app for public/GitHub use, separate from the static SVG showcase assets.
+
+### What changed
+- Added `app/lib/demoRun.js`, a development-only deterministic golden-batch run builder that uses the repository CSV data and `evals/golden_dataset.json` to populate the real app state without reading an API key or calling Gemini.
+- Added development-only URL seeding in `app/ProcureGuard.jsx` behind `?pgDemo=golden`, with optional `pgTab=` and `pgTheme=` parameters for screenshot capture.
+- Captured live browser PNGs from `http://127.0.0.1:5173` into `public/live-screenshots/`:
+  - `procureguard-live-executive.png`
+  - `procureguard-live-workbench.png`
+  - `procureguard-live-analytics.png`
+  - `procureguard-live-governance.png`
+  - `procureguard-live-executive-dark.png`
+- Expanded the live screenshot set with additional full-page captures and focused crops:
+  - `procureguard-live-start.png`
+  - `procureguard-live-start-dark.png`
+  - `procureguard-live-workbench-dark.png`
+  - `procureguard-live-analytics-dark.png`
+  - `procureguard-live-governance-dark.png`
+  - `procureguard-live-executive-desktop-1440.png`
+  - `procureguard-live-workbench-desktop-1440.png`
+  - `procureguard-live-crop-executive-hero.png`
+  - `procureguard-live-crop-ai-checks-evidence.png`
+  - `procureguard-live-crop-drafts-killer-feature.png`
+  - `procureguard-live-crop-workbench-queue.png`
+  - `procureguard-live-crop-supplier-scorecard.png`
+  - `procureguard-live-crop-audit-governance.png`
+
+### Notes
+- These are original screenshots of the live Vite/React UI rendered in Chrome headless at 2x scale.
+- They are deterministic demo screenshots, not screenshots from a paid Gemini API run. This keeps public image generation reproducible and avoids exposing or depending on a browser-stored API key.
+- Normal product analysis behavior is unchanged. The demo seed is only active in development when the `pgDemo=golden` query parameter is present.
+
+### Validation
+- `npm run build`: passed.
+- `node evals/run_evals.js`: passed, 25/25.
+- `git diff --check`: passed.
+- Verified live screenshot dimensions:
+  - Executive light: 3200x5200
+  - Executive dark: 3200x5200
+  - Workbench: 3200x4400
+  - Analytics: 3200x4400
+  - Audit & Governance: 3200x4400
+  - Start light/dark: 3200x3600
+  - Dark Workbench/Analytics/Audit & Governance: 3200x4400
+  - 1440 desktop captures: 2880x3600
+  - Focused crops: 3200px wide, 1600-1850px tall
+
+---
+
+## Public README and Screenshot Handoff - May 6, 2026
+
+### Goal
+Rewrite the public repository README so it explains ProcureGuard AI clearly for GitHub, LinkedIn, and interview review, while using original live screenshots and avoiding unsupported product claims.
+
+### What changed
+- Rebuilt `README.md` around the product outcome: payment-run control, exception evidence, DRAFT-only follow-up work, and human approval.
+- Added the live drafts crop as the primary hero image because it best shows the product's strongest feature.
+- Added a four-screen product walkthrough using original live screenshots for Executive Summary, Exception Workbench, Supplier Analytics, and Audit & Governance.
+- Documented the current architecture accurately: React/Vite/Tailwind frontend, Gemini 2.5 Flash runtime, structured JSON output, browser CSV parsing, Vercel serverless proxy, deterministic eval harness, and session-local state.
+- Removed stale framing that no longer matched the current repo, including old chart-library references.
+- Added `public/live-screenshots/README.md` to explain which screenshot assets to use for GitHub, LinkedIn, portfolio posts, full-page documentation, and focused feature callouts.
+
+### Notes
+- The README uses only repo-backed counts and claims. It does not claim autonomous payment release, email sending, customer adoption, security certification, or production SLA.
+- Public copy keeps Gemini in the architecture section and keeps model/provider branding out of the user-facing product story.
+- The screenshot guide explicitly states that the live screenshots are deterministic demo captures, not paid Gemini-run screenshots and not static SVG mockups.
+
+### Validation
+- `git diff --check`: passed.
+- `node evals/run_evals.js`: passed, 25/25.
+- `npm run build`: passed.
+- README/screenshot-guide wording scan for stale provider, chart-library, old version-badge, and generic marketing terms: passed for `README.md` and `public/live-screenshots/README.md`.
+
+---
+
+## Publication and Deployment Readiness Cleanup - May 6, 2026
+
+### Goal
+Prepare the repository for public review and deployment handoff without pushing, deploying, or exposing secrets.
+
+### What changed
+- Added `.env.example` with the required `GEMINI_API_KEY` variable name only.
+- Added `DEPLOYMENT.md` with Vercel prerequisites, local verification, production environment setup, post-deploy smoke checks, failure checks, and rollback guidance.
+- Updated `README.md` to use focused live screenshot crops in the product walkthrough so GitHub and LinkedIn previews stay readable and lighter than full-page captures.
+- Added a current-runtime snapshot at the top of this handoff log so old Claude/Anthropic implementation history is not confused with the current Gemini runtime.
+
+### Notes
+- No live deploy was run during this pass.
+- No real API key was read, written, printed, or committed.
+- A GitHub Actions workflow was prepared locally but not published because the current GitHub token does not have `workflow` scope. Add CI later from an account/token with workflow permission.
+
+### Validation
+- `git diff --check`: passed.
+- `node evals/run_evals.js`: passed, 25/25.
+- `npm run build`: passed.
+- README image reference check: passed; referenced live screenshot PNGs exist.
+- Current public docs scan for stale Claude/Anthropic/Recharts/old-version/generic-marketing wording: passed.
+- Secret-pattern check for committed Gemini key values: passed; only placeholder environment variable names remain.

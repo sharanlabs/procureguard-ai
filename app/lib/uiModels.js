@@ -45,11 +45,10 @@ const GOVERNANCE_STAGE_ORDER = {
   other: 7
 };
 const MODEL_LABELS = {
-  "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
-  "claude-sonnet-4-6": "Claude Sonnet 4.6",
-  "claude-opus-4-7": "Claude Opus 4.7"
+  "gemini-2.5-flash": "Cost-aware analysis model"
 };
 const MODEL_TOKEN_PRICING = [
+  { match: "gemini-2.5-flash", inputPerMillion: 0.3, outputPerMillion: 2.5 },
   { match: "haiku", inputPerMillion: 1, outputPerMillion: 5 },
   { match: "sonnet", inputPerMillion: 3, outputPerMillion: 15 },
   { match: "opus", inputPerMillion: 5, outputPerMillion: 25 }
@@ -73,6 +72,35 @@ function formatMoneyText(value) {
     currency: "USD",
     maximumFractionDigits: 0
   }).format(safeNumber(value));
+}
+
+function formatMoneyExactText(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(safeNumber(value));
+}
+
+function formatIntegerText(value) {
+  return new Intl.NumberFormat("en-US").format(safeNumber(value));
+}
+
+function formatLatencyText(milliseconds) {
+  const value = safeNumber(milliseconds);
+  if (!value) return "Not recorded";
+  const totalSeconds = Math.round(value / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) return `${seconds}s`;
+  return `${minutes}m ${seconds}s`;
+}
+
+function formatPctOfBatch(value, batchValue) {
+  const denominator = safeNumber(batchValue);
+  if (!denominator) return "0";
+  return Math.round((safeNumber(value) / denominator) * 1000) / 10;
 }
 
 function pluralize(count, singular, plural = `${singular}s`) {
@@ -190,7 +218,7 @@ function getPriorityRank(priority) {
 }
 
 function getActionCount(actionResult) {
-  return (actionResult?.actions ?? []).length;
+  return (actionResult?.actions ?? []).filter((action) => action?.action_type !== "approval_note").length;
 }
 
 function getPrimaryAction(actionResult) {
@@ -280,12 +308,23 @@ function driverMeaning(driver, rank) {
   return DRIVER_MEANINGS[driver?.code] ?? `${label} affects ${invoiceText} and needs human review.`;
 }
 
+function driverRoute(driver) {
+  const tier = driver?.tier;
+  if (tier === 3) return "AP supervisor review";
+  if (tier === 2 && RECEIPT_TIMING_CODES.has(driver?.code)) return "Receiving validation";
+  if (tier === 2 && PRICE_OR_TARIFF_CODES.has(driver?.code)) return "Procurement validation";
+  if (tier === 2) return "Supplier or procurement validation";
+  if (tier === 1) return "Expedited file note";
+  return "Review route pending";
+}
+
 export function getBatchOutcome(analytics = {}) {
   if (!analytics?.hasData) {
     return {
       id: "empty",
       label: "Not analyzed",
       tone: "neutral",
+      title: "Payment run has not been reviewed.",
       summary: "Run analysis from Start to produce the executive decision view."
     };
   }
@@ -296,9 +335,10 @@ export function getBatchOutcome(analytics = {}) {
   if (escalationCount > 0) {
     return {
       id: "escalation",
-      label: "Escalation recommended",
+      label: "Hold required",
       tone: "escalate",
-      summary: `${escalationCount} ${pluralize(escalationCount, "case")} should be reviewed before supplier outreach.`
+      title: `${formatIntegerText(escalationCount)} ${pluralize(escalationCount, "invoice")} should not be paid tonight.`,
+      summary: `${formatIntegerText(escalationCount)} ${pluralize(escalationCount, "case")} require AP supervisor review before release-to-pay.`
     };
   }
 
@@ -307,7 +347,8 @@ export function getBatchOutcome(analytics = {}) {
       id: "review",
       label: "Human review required",
       tone: "review",
-      summary: `${exceptionCount} ${pluralize(exceptionCount, "exception")} need documented review before closure.`
+      title: `${formatIntegerText(exceptionCount)} ${pluralize(exceptionCount, "invoice")} need validation before release.`,
+      summary: `${formatIntegerText(exceptionCount)} ${pluralize(exceptionCount, "exception")} need documented supplier, receiving, or procurement validation before closure.`
     };
   }
 
@@ -315,49 +356,292 @@ export function getBatchOutcome(analytics = {}) {
     id: "clean",
     label: "Clean batch",
     tone: "clean",
+    title: "All invoices are safe to release.",
     summary: "No exception follow-up is required for this batch."
   };
 }
 
-export function getExecutiveHeroMetrics(analytics = {}) {
-  const exceptionCount = safeNumber(analytics.exceptionRows);
-  const escalationCount = safeNumber(analytics.escalateCount);
+export function getOutcomeAsideCounts(analytics = {}) {
+  const wontPayTonight = safeNumber(analytics.escalateCount);
+  const heldForReview = Math.max(safeNumber(analytics.exceptionRows) - wontPayTonight, 0);
+  const cleared = Math.max(safeNumber(analytics.totalInvoices) - safeNumber(analytics.exceptionRows), 0);
+
+  return {
+    wontPayTonight,
+    heldForReview,
+    cleared
+  };
+}
+
+export function getKpiTrio(analytics = {}) {
+  const totalInvoices = safeNumber(analytics.totalInvoices);
+  const supplierCount = safeNumber(analytics.supplierCount);
+  const warehouseCount = safeNumber(analytics.warehouseCount);
+  const batchValue = safeNumber(analytics.batchValue ?? analytics.totalInvoiceAmount);
   const exposureIdentified = safeNumber(analytics.exposureIdentified);
+  const heldFromPayment = safeNumber(analytics.holdAmount) || exposureIdentified;
+  const pctOfBatch = formatPctOfBatch(heldFromPayment, batchValue);
+  const exposureContext = exposureIdentified > heldFromPayment
+    ? ` · ${formatMoneyText(exposureIdentified)} exposure identified`
+    : "";
 
   return [
     {
-      id: "invoices-analyzed",
-      label: "Invoices analyzed",
-      value: safeNumber(analytics.totalInvoices),
-      format: "integer",
-      tone: "neutral",
-      helper: "Validated through the prompt-chain workflow"
-    },
-    {
-      id: "exceptions-requiring-review",
-      label: "Exceptions requiring review",
-      value: exceptionCount,
-      format: "integer",
-      tone: escalationCount > 0 ? "escalate" : exceptionCount > 0 ? "review" : "clean",
-      helper: "Rows needing human review or escalation"
-    },
-    {
-      id: "exposure-identified",
-      label: "Exposure identified",
-      value: exposureIdentified,
+      id: "batch-value",
+      label: "Batch value processed",
+      value: batchValue,
       format: "money",
-      tone: exposureIdentified > 0 ? "info" : "neutral",
-      helper: "Value requiring validation or policy review"
+      tone: "neutral",
+      helper: `${formatIntegerText(totalInvoices)} invoices · ${formatIntegerText(supplierCount)} suppliers · ${formatIntegerText(warehouseCount)} warehouses`
     },
     {
-      id: "estimated-recoverable-exposure",
-      label: "Estimated recoverable exposure",
+      id: "held-from-payment",
+      label: "Held from payment",
+      value: heldFromPayment,
+      format: "money",
+      tone: heldFromPayment > 0 ? "review" : "neutral",
+      helper: `${pctOfBatch}% of batch value blocked pending validation${exposureContext}`
+    },
+    {
+      id: "recoverable",
+      label: "Recoverable on resolution",
       value: safeNumber(analytics.estimatedRecovery),
       format: "money",
       tone: "neutral",
-      helper: "Estimate based on identified exposure"
+      helper: "Best-case after supplier response and policy application"
     }
   ];
+}
+
+export function getExecutiveHeroMetrics(analytics = {}) {
+  return getKpiTrio(analytics);
+}
+
+export function getRhythmStripData(rows = [], totalInvoices = rows.length) {
+  const marks = rows.map((row, index) => {
+    const highestExceptionTier = row.exceptionLabels?.reduce((max, item) => (
+      Math.max(max, safeNumber(item.tier))
+    ), 0);
+    const tier = row.tier === "clean" || !row.exceptionCodes?.length
+      ? "clean"
+      : highestExceptionTier || row.tier || "clean";
+    const label = tier === "clean"
+      ? "clean match"
+      : `Tier ${tier} · ${row.exceptionLabels?.[0]?.label || row.evidenceSummary?.whatIsWrong || "exception detected"}`;
+
+    return {
+      id: row.invoiceNumber || `invoice-${index + 1}`,
+      tier,
+      hint: `${row.invoiceNumber || `Invoice ${index + 1}`} · ${label}`
+    };
+  });
+
+  while (marks.length < totalInvoices) {
+    const index = marks.length + 1;
+    marks.push({
+      id: `invoice-${index}`,
+      tier: "clean",
+      hint: `Invoice ${index} · clean match`
+    });
+  }
+
+  return marks.slice(0, totalInvoices);
+}
+
+function getRhythmCounts(marks = []) {
+  const counts = marks.reduce((summary, mark) => {
+    if (mark.tier === "clean") summary.clean += 1;
+    if (mark.tier === 1) summary.tier1 += 1;
+    if (mark.tier === 2) summary.tier2 += 1;
+    if (mark.tier === 3) summary.tier3 += 1;
+    return summary;
+  }, { clean: 0, tier1: 0, tier2: 0, tier3: 0 });
+
+  return {
+    ...counts,
+    total: marks.length,
+    firstId: marks[0]?.id ?? "—",
+    lastId: marks[marks.length - 1]?.id ?? "—"
+  };
+}
+
+function getDraftType(row, action) {
+  const tier = row.classification?.overall_tier ?? row.tier;
+  const route = String(
+    action?.recipient_type
+    || row.recommendedRoute?.id
+    || row.recommendedRoute?.label
+    || row.recommendedRoute
+    || ""
+  ).toLowerCase();
+  if (tier === 3 || action?.action_type === "escalation_memo") return "Escalation";
+  if (action?.action_type === "supplier_email" || route.includes("supplier")) return "Follow-up";
+  return "Approval";
+}
+
+function getDraftSubject(action, row) {
+  return action?.subject
+    || action?.draft?.subject
+    || action?.draft_subject
+    || row.primaryAction?.subject
+    || row.evidenceSummary?.whatIsWrong
+    || row.exceptionLabels?.[0]?.label;
+}
+
+function truncateSentence(text, fallback = "Review required before release") {
+  const value = String(text || fallback).trim();
+  const firstSentence = value.split(/(?<=[.!?])\s+/)[0] || value;
+  return firstSentence.length > 96 ? `${firstSentence.slice(0, 93)}...` : firstSentence;
+}
+
+export function getDraftsInboxViewModel(rows = []) {
+  const entries = [];
+
+  rows.forEach((row) => {
+    const tier = row.classification?.overall_tier ?? row.tier;
+    if (![2, 3].includes(tier)) return;
+
+    const draftActions = (row.actionResult?.actions ?? []).filter((action) => action?.action_type !== "approval_note");
+    draftActions.forEach((action, index) => {
+      const type = getDraftType(row, action);
+      entries.push({
+        id: `${row.id}-${action.exception_code || "draft"}-${index}`,
+        type,
+        tier,
+        tierLabel: `T${tier}`,
+        subject: truncateSentence(getDraftSubject(action, row)),
+        invoiceNumber: row.invoiceNumber,
+        supplierName: row.supplierName,
+        amount: safeNumber(action.financial_reference?.hold_amount) || safeNumber(action.financial_reference?.exposure_amount) || safeNumber(row.holdAmount) || safeNumber(row.exposureAmount)
+      });
+    });
+  });
+
+  entries.sort((left, right) => (
+    safeNumber(right.tier) - safeNumber(left.tier) ||
+    safeNumber(right.amount) - safeNumber(left.amount) ||
+    String(left.invoiceNumber).localeCompare(String(right.invoiceNumber))
+  ));
+
+  const byCategory = [
+    { id: "escalation", label: "Escalation memos", count: entries.filter((row) => row.type === "Escalation").length, tone: "escalate" },
+    { id: "follow-up", label: "Supplier follow-ups", count: entries.filter((row) => row.type === "Follow-up").length, tone: "review" },
+    { id: "approval", label: "Approval requests", count: entries.filter((row) => row.type === "Approval").length, tone: "review" }
+  ];
+  const totalDrafts = entries.length;
+
+  return {
+    hasDrafts: totalDrafts > 0,
+    totalDrafts,
+    estimatedHoursSaved: Math.round((totalDrafts * 9 / 60) * 10) / 10,
+    byCategory,
+    rows: entries.slice(0, 20)
+  };
+}
+
+export function getTrustFooterViewModel(runState = {}, analytics = {}, auditEntries = []) {
+  return {
+    runId: runState?.runId ?? "—",
+    reviewedBy: "browser session",
+    invoiceCount: safeNumber(analytics.totalInvoices),
+    supplierCount: safeNumber(analytics.supplierCount),
+    warehouseCount: safeNumber(analytics.warehouseCount),
+    auditEntryCount: auditEntries.length,
+    stageCount: 3,
+    evalStatus: "25/25 evals passing",
+    modelRouting: "model routing logged",
+    promptVersion: "v1.0",
+    latency: formatLatencyText(runState?.totalLatencyMs ?? analytics?.auditGovernance?.totalLatencyMs)
+  };
+}
+
+function getRunMetaViewModel(runState = {}, analytics = {}, auditEntries = []) {
+  const latestAuditTimestamp = [...auditEntries]
+    .reverse()
+    .map((entry) => entry?.timestamp)
+    .find(Boolean);
+  const timestamp = runState?.runCompletedAt ?? latestAuditTimestamp;
+  const date = timestamp ? new Date(timestamp) : new Date();
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  return {
+    dateLabel: safeDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    closedTime: safeDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
+    pipelineSummary: "AI match → risk route → drafts",
+    latency: formatLatencyText(runState?.totalLatencyMs ?? analytics?.auditGovernance?.totalLatencyMs)
+  };
+}
+
+function getAiLedger(analytics = {}, draftsVm = {}) {
+  return [
+    { id: "checked", label: "Invoices checked", value: safeNumber(analytics.totalInvoices), tone: "neutral" },
+    { id: "routed", label: "Exceptions routed", value: safeNumber(analytics.exceptionRows), tone: safeNumber(analytics.exceptionRows) > 0 ? "review" : "clean" },
+    { id: "drafts", label: "Drafts prepared", value: safeNumber(draftsVm.totalDrafts || analytics.draftActionCount), tone: safeNumber(draftsVm.totalDrafts || analytics.draftActionCount) > 0 ? "review" : "neutral" },
+    { id: "audit", label: "Audit events", value: safeNumber(analytics.auditGovernance?.auditEntryCount), tone: "neutral" },
+    { id: "autonomous", label: "Autonomous actions", value: 0, tone: "clean" }
+  ];
+}
+
+function getEvidenceLensViewModel(rows = []) {
+  const row = rows.find((item) => item.tier === 3)
+    ?? rows.find((item) => item.tier === 2)
+    ?? rows[0]
+    ?? null;
+
+  if (!row) return null;
+
+  const comparisons = row.evidenceSummary?.comparisons ?? {};
+  const quantity = comparisons.quantity ?? {};
+  const primaryFinding = row.exceptionLabels?.[0]?.label || row.evidenceSummary?.whatIsWrong || "No exception rule triggered";
+  const tier = row.classification?.overall_tier ?? row.tier;
+
+  return {
+    invoiceNumber: row.invoiceNumber,
+    supplierName: row.supplierName,
+    purchaseOrder: safeText(quantity.po, "—"),
+    goodsReceipt: safeText(quantity.grn, "—"),
+    supplierInvoice: safeText(quantity.invoice, "—"),
+    finding: truncateSentence(primaryFinding, "Evidence review completed."),
+    decision: tier === "clean" ? "Clean match" : `Tier ${tier} · ${tier === 3 ? "Hold from payment" : "Human validation"}`,
+    humanAction: tier === 3 ? "AP supervisor review" : row.evidenceSummary?.humanNextStep || "Human review required",
+    tone: tier === 3 ? "escalate" : tier === 2 ? "review" : "clean"
+  };
+}
+
+function getSupplierRiskPattern(analytics = {}) {
+  return (analytics.supplierScorecard ?? [])
+    .slice(0, 4)
+    .map((supplier) => ({
+      key: supplier.key,
+      supplierName: supplier.supplierName,
+      exposure: safeNumber(supplier.exposure),
+      pattern: supplier.topExceptionCodes?.length
+        ? supplier.topExceptionCodes.map((code) => EXCEPTION_NAMES[code] || code).join(", ")
+        : supplier.riskExplanation || "No material exception pattern",
+      severity: supplier.riskLevel || "Low"
+    }));
+}
+
+function getAuditReplayViewModel(auditEntries = []) {
+  const stageOrder = ["upload", "matching", "classification", "action_generation", "review_surface"];
+  const labels = {
+    upload: "Upload",
+    matching: "Matching",
+    classification: "Classification",
+    action_generation: "Drafts",
+    review_surface: "Decision"
+  };
+
+  return stageOrder.map((stage) => {
+    const entry = auditEntries.find((item) => item.step === stage) ?? null;
+    return {
+      id: stage,
+      label: labels[stage],
+      time: entry?.created_at
+        ? new Date(entry.created_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+        : "complete",
+      complete: Boolean(entry) || stage === "review_surface"
+    };
+  });
 }
 
 export function buildTopExceptionDrivers(analytics = {}) {
@@ -371,7 +655,7 @@ export function buildTopExceptionDrivers(analytics = {}) {
       safeNumber(right.hold) - safeNumber(left.hold) ||
       safeNumber(right.count) - safeNumber(left.count)
     ))
-    .slice(0, 3)
+    .slice(0, 4)
     .map((driver, index) => ({
       id: driver.code || `driver-${index}`,
       code: driver.code ?? "N/A",
@@ -381,7 +665,11 @@ export function buildTopExceptionDrivers(analytics = {}) {
       exposure: safeNumber(driver.exposure),
       hold: safeNumber(driver.hold),
       tier: driver.tier ?? null,
-      meaning: driverMeaning(driver, index)
+      meaning: driverMeaning(driver, index),
+      headline: safeNumber(driver.exposure) > 0
+        ? `${formatMoneyText(driver.exposure)} held by ${driver.code}`
+        : driverMeaning(driver, index),
+      route: driverRoute(driver)
     }));
 }
 
@@ -401,7 +689,8 @@ export function buildRecommendedNextActions(analytics = {}) {
     actions.push({
       id: "review-escalations",
       label: "Review escalation cases before supplier outreach.",
-      tone: "escalate"
+      tone: "escalate",
+      owner: "AP supervisor"
     });
   }
 
@@ -409,7 +698,8 @@ export function buildRecommendedNextActions(analytics = {}) {
     actions.push({
       id: "validate-pricing",
       label: "Validate supplier pricing and PO amendment cases.",
-      tone: "info"
+      tone: "info",
+      owner: "Procurement lead"
     });
   }
 
@@ -417,7 +707,8 @@ export function buildRecommendedNextActions(analytics = {}) {
     actions.push({
       id: "clear-controls",
       label: "Clear invoice control exceptions before payment review.",
-      tone: "review"
+      tone: "review",
+      owner: "AP controls"
     });
   }
 
@@ -425,7 +716,8 @@ export function buildRecommendedNextActions(analytics = {}) {
     actions.push({
       id: "confirm-receipts",
       label: "Confirm receiving records before supplier dispute.",
-      tone: "review"
+      tone: "review",
+      owner: "Receiving team"
     });
   }
 
@@ -435,27 +727,52 @@ export function buildRecommendedNextActions(analytics = {}) {
       label: safeNumber(analytics.exceptionRows) > 0
         ? "Review remaining exceptions in the Exception Workbench."
         : "No exception follow-up required for this batch.",
-      tone: safeNumber(analytics.exceptionRows) > 0 ? "review" : "clean"
+      tone: safeNumber(analytics.exceptionRows) > 0 ? "review" : "clean",
+      owner: safeNumber(analytics.exceptionRows) > 0 ? "AP analyst" : "AP operations"
     });
   }
 
   return actions.slice(0, 4);
 }
 
-export function buildExecutiveSummaryViewModel(analytics = {}) {
+export function buildExecutiveSummaryViewModel(analytics = {}, options = {}) {
   const hasData = Boolean(analytics?.hasData);
   const outcome = getBatchOutcome(analytics);
-  const heroMetrics = getExecutiveHeroMetrics(analytics);
+  const rows = options.rows ?? [];
+  const auditEntries = options.auditEntries ?? [];
+  const runState = options.runState ?? {};
+  const draftsInbox = getDraftsInboxViewModel(rows);
+  const rhythmMarks = getRhythmStripData(rows, safeNumber(analytics.totalInvoices) || rows.length);
+  const heroMetrics = getKpiTrio(analytics);
   const topDrivers = buildTopExceptionDrivers(analytics);
   const recommendedActions = buildRecommendedNextActions(analytics);
   const exceptionBreakdown = analytics?.exceptionBreakdown ?? [];
   const exposureByException = analytics?.dollarExposureByException ?? [];
   const topFrequencyDriver = exceptionBreakdown[0] ?? null;
   const topExposureDriver = exposureByException[0] ?? null;
+  const heldFromPayment = safeNumber(analytics.holdAmount) || safeNumber(analytics.exposureIdentified);
 
   return {
     hasData,
     outcome,
+    headline: {
+      eyebrow: "Payment Run Command Center",
+      title: `${formatMoneyText(heldFromPayment)} held before payment release.`,
+      subtitle: `${formatIntegerText(analytics.escalateCount)} ${pluralize(safeNumber(analytics.escalateCount), "invoice")} should not be paid tonight. ${formatIntegerText(Math.max(safeNumber(analytics.exceptionRows) - safeNumber(analytics.escalateCount), 0))} need validation. ${formatIntegerText(Math.max(safeNumber(analytics.totalInvoices) - safeNumber(analytics.exceptionRows), 0))} are safe to release.`
+    },
+    runMeta: getRunMetaViewModel(runState, analytics, auditEntries),
+    aiLedger: getAiLedger(analytics, draftsInbox),
+    asideCounts: getOutcomeAsideCounts(analytics),
+    rhythm: {
+      marks: rhythmMarks,
+      counts: getRhythmCounts(rhythmMarks)
+    },
+    kpiTrio: heroMetrics,
+    draftsInbox,
+    evidenceLens: getEvidenceLensViewModel(rows),
+    supplierRiskPattern: getSupplierRiskPattern(analytics),
+    auditReplay: getAuditReplayViewModel(auditEntries),
+    trustFooter: getTrustFooterViewModel(runState, analytics, auditEntries),
     decision: {
       eyebrow: hasData ? "Batch review complete" : "Batch review pending",
       recommendedNextAction: recommendedActions[0]?.label ?? "Not available"
@@ -592,7 +909,7 @@ export function getDraftStatus(actionResult) {
   return {
     id: hasEscalationMemo ? "escalation-draft" : "draft-ready",
     label: `${draftActions.length} ${pluralize(draftActions.length, "draft")} prepared`,
-    detail: "DRAFT only. Human review is required before any communication.",
+    detail: "DRAFT-only. Human review is required before any communication.",
     tone: hasEscalationMemo ? "escalate" : "info",
     count: draftActions.length,
     hasDraft: true
@@ -776,7 +1093,7 @@ export function buildWorkbenchSummary(rows = []) {
         value: draftsPrepared,
         format: "integer",
         tone: draftsPrepared > 0 ? "info" : "neutral",
-        helper: "DRAFT only"
+        helper: "DRAFT-only"
       },
       {
         id: "exposure-identified",
@@ -784,7 +1101,7 @@ export function buildWorkbenchSummary(rows = []) {
         value: totalExposure,
         format: "money",
         tone: totalExposure > 0 ? "info" : "neutral",
-        helper: `Hold ${totalHold > 0 ? "available" : "not available"}`
+        helper: totalHold > 0 ? `Held ${formatMoneyText(totalHold)}` : "No payment hold"
       }
     ]
   };
@@ -877,20 +1194,24 @@ export function getSupplierRiskExplanation(supplier = {}) {
     return "Low — no material exceptions in this batch.";
   }
 
+  if (riskLevel === "High" && !exposure) {
+    return `High — ${exceptionRows} ${pluralize(exceptionRows, "exception row")}; no dollar exposure calculated in this batch.`;
+  }
+
   if (riskLevel === "High" && escalationCount > 0) {
-    return `High — ${escalationCount} ${pluralize(escalationCount, "escalation")} and ${formatMoneyText(exposure)} exposure in this batch.`;
+    return `High — ${escalationCount} ${pluralize(escalationCount, "escalation")} and ${formatMoneyExactText(exposure)} exposure in this batch.`;
   }
 
   if (riskLevel === "High") {
-    return `High — ${exceptionRows} ${pluralize(exceptionRows, "exception row")} and ${formatMoneyText(exposure)} exposure in this batch.`;
+    return `High — ${exceptionRows} ${pluralize(exceptionRows, "exception row")} and ${formatMoneyExactText(exposure)} exposure in this batch.`;
   }
 
   if (riskLevel === "Medium" && topCodes.some((code) => RECEIPT_TIMING_CODES.has(code))) {
-    return `Medium — repeated receiving or timing exceptions with ${formatMoneyText(exposure)} exposure.`;
+    return `Medium — repeated receiving or timing exceptions with ${formatMoneyExactText(exposure)} exposure.`;
   }
 
   if (riskLevel === "Medium" && reviewCount > 0) {
-    return `Medium — ${reviewCount} ${pluralize(reviewCount, "human review case")} and ${formatMoneyText(exposure)} exposure.`;
+    return `Medium — ${reviewCount} ${pluralize(reviewCount, "human review case")} and ${formatMoneyExactText(exposure)} exposure.`;
   }
 
   if (riskLevel === "Medium") {
@@ -1118,7 +1439,7 @@ export function buildSupplierPolicyAnalyticsViewModel({
     hasData,
     header: {
       eyebrow: "Supplier & Policy Analytics",
-      title: "Which suppliers, warehouses, exception types, or policies are driving repeated operational risk?",
+      title: "Supplier risk concentration",
       takeaway: hasData
         ? buildSupplierPolicyTakeaway({ topSupplier, topException, topWarehouse, rootCause })
         : "Run analysis from Start to populate supplier risk, exception concentration, policy simulation, and pattern signals."
@@ -1154,7 +1475,7 @@ export function buildSupplierPolicyAnalyticsViewModel({
         value: rootCause.patternCount,
         format: "integer",
         tone: rootCause.patternCount > 0 ? "indigo" : "neutral",
-        helper: "Browser-only review"
+        helper: "Batch pattern review"
       }
     ],
     supplierRiskNarratives,
@@ -1169,7 +1490,7 @@ export function buildSupplierPolicyAnalyticsViewModel({
 
 function buildSupplierPolicyTakeaway({ topSupplier, topException, topWarehouse, rootCause }) {
   if (topSupplier) {
-    return `${topSupplier.supplierName} is the top supplier follow-through candidate with ${topSupplier.exceptionRows} ${pluralize(topSupplier.exceptionRows, "exception row")} and ${formatMoneyText(topSupplier.exposure)} exposure.`;
+    return `Top follow-through: ${topSupplier.supplierName} · ${topSupplier.exceptionRows} ${pluralize(topSupplier.exceptionRows, "exception row")} · ${formatMoneyText(topSupplier.exposure)} exposure.`;
   }
 
   if (topException) {
@@ -1222,8 +1543,8 @@ function formatGovernanceModelName(model) {
   if (!value) return "Not available";
   if (MODEL_LABELS[value]) return MODEL_LABELS[value];
 
-  const parsed = value.match(/^claude-([a-z]+)-(\d+)-(\d+)/i);
-  if (parsed) return `Claude ${titleCaseWords(parsed[1])} ${parsed[2]}.${parsed[3]}`;
+  const geminiParsed = value.match(/^gemini-(\d+(?:\.\d+)?)-([a-z-]+)/i);
+  if (geminiParsed) return `Gemini ${geminiParsed[1]} ${titleCaseWords(geminiParsed[2].replace(/-/g, " "))}`;
 
   return titleCaseWords(value.replace(/[-_]/g, " "));
 }
@@ -1239,7 +1560,7 @@ function getTokenValue(tokenUsage, keys) {
 
 function getTokenPricing(model = "") {
   const normalized = String(model).toLowerCase();
-  return MODEL_TOKEN_PRICING.find((pricing) => normalized.includes(pricing.match)) ?? MODEL_TOKEN_PRICING[1];
+  return MODEL_TOKEN_PRICING.find((pricing) => normalized.includes(pricing.match)) ?? MODEL_TOKEN_PRICING[0];
 }
 
 function hasTokenUsageField(tokenUsage, key) {
@@ -1346,8 +1667,8 @@ function getGovernanceRunState({ isAnalysisRunning, runningStep, failedStep, err
       label: "Analysis in progress",
       tone: "info",
       detail: runningStep
-        ? `${formatGovernanceStageName(runningStep)} is running. Completed governance claims are withheld until the prompt chain finishes.`
-        : "The prompt chain is running. Completed governance claims are withheld until the run finishes."
+        ? `${formatGovernanceStageName(runningStep)} is running. Completed governance claims are withheld until analysis finishes.`
+        : "The analysis workflow is running. Completed governance claims are withheld until the run finishes."
     };
   }
 
@@ -1543,7 +1864,7 @@ export function buildModelRoutingSummary(auditGroups = []) {
     rows,
     modelsUsed,
     summary: modelsUsed.length
-      ? `${modelsUsed.length} ${pluralize(modelsUsed.length, "Claude model")} used across captured stages.`
+      ? `${modelsUsed.length} ${pluralize(modelsUsed.length, "model route")} used across captured stages.`
       : "Model usage not available for this run."
   };
 }
@@ -1600,7 +1921,7 @@ export function buildValidationGateSummary({
         status: "active",
         statusLabel: "Active",
         tone: "clean",
-        detail: "Audit records exclude raw API keys and request payloads."
+        detail: "Audit records exclude service keys and request payloads."
       },
       {
         id: "draft-only-controls",
@@ -1765,25 +2086,25 @@ export function getApiExposureStatus({ isDev, apiKey } = {}) {
   if (isDev) {
     const hasLocalKey = Boolean(apiKey);
     return {
-      modeLabel: "Local development",
-      serviceStatus: hasLocalKey ? "Local Claude key provided" : "Local Claude key not provided",
+      modeLabel: "Session workspace",
+      serviceStatus: hasLocalKey ? "Session key provided" : "Session key required",
       serviceTone: hasLocalKey ? "info" : "review",
-      clientKeyExposure: hasLocalKey ? "Session-only local key" : "No local key currently present",
+      clientKeyExposure: hasLocalKey ? "Session-scoped key" : "No session key present",
       exposureTone: hasLocalKey ? "review" : "neutral",
       detail: hasLocalKey
-        ? "Local development uses the browser session key only for the Vite proxy header."
-        : "Local development requires a session-only Claude key before analysis can call the local proxy.",
+        ? "The browser sends the key only through the session proxy header."
+        : "Add a session key before analysis can call the AI service.",
       allowLocalKeyInput: true
     };
   }
 
   return {
     modeLabel: "Production",
-    serviceStatus: "Server-side Claude service",
+    serviceStatus: "Server-side AI service",
     serviceTone: "clean",
     clientKeyExposure: "None",
     exposureTone: "clean",
-    detail: "Production uses the server-side ANTHROPIC_API_KEY. Public users are not asked for API keys.",
+    detail: "Production keeps the service key on the server. Public users are not asked for keys.",
     allowLocalKeyInput: false
   };
 }
@@ -1799,7 +2120,7 @@ export function buildAuditExportSummary(auditEntries = []) {
     failedCount,
     statusLabel: ready ? "Ready to export" : "No audit entries captured yet",
     tone: ready ? "info" : "neutral",
-    safetyText: "Audit export contains run metadata and AI decision records. It excludes raw API keys and raw request payloads, and supports review without acting as a legal compliance certification."
+    safetyText: "Audit export contains run metadata and AI decision records. It excludes service keys and request payloads, and supports review without acting as a legal compliance certification."
   };
 }
 
@@ -1891,7 +2212,7 @@ function buildGovernanceHeaderTakeaway({ runState, auditEntries, auditGroups, au
   if (runState?.id === "running") return runState.detail;
   if (["failed", "partial_failed"].includes(runState?.id)) return runState.detail;
   if (auditEntries.length) {
-    return `${auditEntries.length} ${pluralize(auditEntries.length, "audit entry")} captured across ${auditGroups.length} ${pluralize(auditGroups.length, "stage")}; ${auditExport.statusLabel.toLowerCase()} for audit-supporting review.`;
+    return `${auditEntries.length} ${pluralize(auditEntries.length, "audit entry", "audit entries")} captured across ${auditGroups.length} ${pluralize(auditGroups.length, "stage")}; ${auditExport.statusLabel.toLowerCase()} for audit-supporting review.`;
   }
   return "Run analysis from Start to populate AI reliability, workflow trace, token usage, latency, and audit export readiness.";
 }

@@ -1,7 +1,7 @@
 # System Prompt — Step 1: Intelligent 3-Way Matching
 
-**Model:** Claude Haiku 4.5
-**API Feature:** Structured Outputs (`anthropic-beta: structured-outputs-2025-11-13`)
+**Runtime model:** Gemini 2.5 Flash
+**API Feature:** Gemini structured JSON output (`responseMimeType: "application/json"` + `responseJsonSchema`)
 **Pipeline position:** Call #1 of 3 — raw documents → match results with exception flags
 
 ---
@@ -334,7 +334,7 @@ Each example shows the relevant input subset and the expected output object. Use
 
 ## OUTPUT JSON SCHEMA
 
-This schema is enforced by Structured Outputs (`anthropic-beta: structured-outputs-2025-11-13`). Every field is required. Produce exactly one result object per invoice in the input, in the same array order.
+This schema is enforced by the Gemini structured JSON response schema at runtime. Every field is required. Produce exactly one result object per invoice in the input, in the same array order.
 
 ```json
 {

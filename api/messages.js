@@ -16,133 +16,34 @@ async function readRequestBody(req) {
   return rawBody ? JSON.parse(rawBody) : {};
 }
 
-const LEGACY_OUTPUT_FORMAT_KEY = ["output", "format"].join("_");
+const ALLOWED_GEMINI_MODELS = new Set(["gemini-2.5-flash"]);
 
 function sendJson(res, status, payload) {
   res.status(status).setHeader("content-type", "application/json");
   res.end(JSON.stringify(payload));
 }
 
-function cloneJson(value) {
-  if (value === undefined) return undefined;
-  return JSON.parse(JSON.stringify(value));
+function getHeader(req, name) {
+  const value = req.headers?.[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : value;
 }
 
-const UNSUPPORTED_SCHEMA_KEYWORDS = [
-  "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
-  "minLength", "maxLength", "maxItems", "uniqueItems", "pattern", "patternProperties",
-  "unevaluatedProperties", "propertyNames", "minProperties", "maxProperties",
-  "contains", "minContains", "maxContains", "unevaluatedItems",
-];
-
-function enforceNoAdditionalProperties(schema) {
-  const strictSchema = cloneJson(schema);
-
-  function walk(node) {
-    if (!node || typeof node !== "object") return;
-
-    const hints = [];
-    if (node.type === "integer") {
-      node.type = "number";
-      hints.push("integer-like value expected");
-    } else if (Array.isArray(node.type) && node.type.includes("integer")) {
-      node.type = [...new Set(node.type.map((type) => (type === "integer" ? "number" : type)))];
-      hints.push("integer-like value expected");
-    }
-
-    for (const key of UNSUPPORTED_SCHEMA_KEYWORDS) {
-      if (Object.prototype.hasOwnProperty.call(node, key)) {
-        hints.push(`${key} ${node[key]}`);
-        delete node[key];
-      }
-    }
-    if (Object.prototype.hasOwnProperty.call(node, "minItems")) {
-      if (node.minItems !== 0 && node.minItems !== 1) {
-        hints.push(`minItems ${node.minItems}`);
-        delete node.minItems;
-      }
-    }
-    if (hints.length > 0) {
-      const hint = `Constraint hint: ${hints.join(", ")}.`;
-      node.description = node.description ? `${node.description} ${hint}` : hint;
-    }
-
-    if (node.type === "object") {
-      node.additionalProperties = false;
-      if (node.properties) {
-        Object.values(node.properties).forEach(walk);
-      }
-    }
-
-    if (node.type === "array" && node.items) {
-      walk(node.items);
-    }
-
-    ["anyOf", "oneOf", "allOf"].forEach((key) => {
-      if (Array.isArray(node[key])) {
-        node[key].forEach(walk);
-      }
-    });
-
-    ["$defs", "definitions"].forEach((key) => {
-      if (node[key] && typeof node[key] === "object") {
-        Object.values(node[key]).forEach(walk);
-      }
-    });
-  }
-
-  walk(strictSchema);
-  return strictSchema;
-}
-
-function normalizeStructuredOutputBody(body) {
-  const normalized = { ...body };
-  const outputConfig =
-    normalized.output_config && typeof normalized.output_config === "object"
-      ? normalized.output_config
-      : null;
-
-  if (outputConfig?.format) {
-    normalized.output_config = { format: cloneJson(outputConfig.format) };
-  } else if (outputConfig?.type && outputConfig?.schema) {
-    normalized.output_config = {
-      format: {
-        type: outputConfig.type,
-        schema: outputConfig.schema
-      }
-    };
-  } else if (normalized[LEGACY_OUTPUT_FORMAT_KEY]) {
-    normalized.output_config = {
-      format: cloneJson(normalized[LEGACY_OUTPUT_FORMAT_KEY])
-    };
-  }
-
-  delete normalized[LEGACY_OUTPUT_FORMAT_KEY];
-
-  if (normalized.output_config?.format?.schema) {
-    normalized.output_config = {
-      format: {
-        ...normalized.output_config.format,
-        schema: enforceNoAdditionalProperties(normalized.output_config.format.schema)
-      }
-    };
-  }
-
-  return normalized;
+function getRequestedModel(req) {
+  const model = String(getHeader(req, "x-gemini-model") ?? "").trim();
+  return ALLOWED_GEMINI_MODELS.has(model) ? model : "";
 }
 
 function validateBody(body) {
   if (!body || typeof body !== "object") return "Request body must be a JSON object";
-  if (!body.model || typeof body.model !== "string") return "Request body must include model";
-  if (!Array.isArray(body.messages)) return "Request body must include messages array";
-  if (typeof body.max_tokens !== "number") return "Request body must include numeric max_tokens";
-  if (body.output_config) {
-    if (body.output_config?.format?.type !== "json_schema") {
-      return "Request body output_config.format.type must be json_schema";
-    }
-    if (!body.output_config?.format?.schema || typeof body.output_config.format.schema !== "object") {
-      return "Request body output_config.format.schema must be an object";
-    }
+  if (!Array.isArray(body.contents)) return "Request body must include contents array";
+  if (!body.generationConfig || typeof body.generationConfig !== "object") {
+    return "Request body must include generationConfig";
+  }
+  if (body.generationConfig.responseMimeType !== "application/json") {
+    return "Request body generationConfig.responseMimeType must be application/json";
+  }
+  if (!body.generationConfig.responseJsonSchema || typeof body.generationConfig.responseJsonSchema !== "object") {
+    return "Request body generationConfig.responseJsonSchema must be an object";
   }
   return null;
 }
@@ -151,7 +52,7 @@ export default async function handler(req, res) {
   res.setHeader("access-control-allow-methods", "POST, OPTIONS");
   res.setHeader(
     "access-control-allow-headers",
-    "content-type, anthropic-version, x-api-key, anthropic-dangerous-direct-browser-access"
+    "content-type, x-api-key, x-gemini-model"
   );
 
   if (req.method === "OPTIONS") {
@@ -164,8 +65,14 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    sendJson(res, 500, { error: "ANTHROPIC_API_KEY is not configured" });
+  if (!process.env.GEMINI_API_KEY) {
+    sendJson(res, 500, { error: "Server-side AI service key is not configured" });
+    return;
+  }
+
+  const model = getRequestedModel(req);
+  if (!model) {
+    sendJson(res, 400, { error: "Unsupported or missing Gemini model" });
     return;
   }
 
@@ -177,8 +84,6 @@ export default async function handler(req, res) {
     return;
   }
 
-  body = normalizeStructuredOutputBody(body);
-
   const validationError = validateBody(body);
   if (validationError) {
     sendJson(res, 400, { error: validationError });
@@ -186,13 +91,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+    const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-        "x-api-key": process.env.ANTHROPIC_API_KEY
+        "x-goog-api-key": process.env.GEMINI_API_KEY
       },
       body: JSON.stringify(body)
     });
@@ -203,6 +106,6 @@ export default async function handler(req, res) {
       .setHeader("content-type", upstream.headers.get("content-type") || "application/json");
     res.end(responseBody);
   } catch {
-    sendJson(res, 502, { error: "Unable to reach Claude API" });
+    sendJson(res, 502, { error: "Unable to reach AI API" });
   }
 }

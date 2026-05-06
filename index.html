@@ -4,9 +4,51 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#f8fafc" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <title>ProcureGuard AI</title>
+    <meta name="theme-color" content="#faf8f3" />
+    <script>
+      (() => {
+        try {
+          if (sessionStorage.getItem("procureguard_dark_mode") === "dark") {
+            document.documentElement.classList.add("dark");
+            document.documentElement.style.colorScheme = "dark";
+            const theme = document.querySelector('meta[name="theme-color"]');
+            if (theme) theme.setAttribute("content", "#080a12");
+          }
+        } catch {
+          /* Session storage can be unavailable in hardened browser modes. */
+        }
+      })();
+    </script>
+    <meta
+      name="description"
+      content="ProcureGuard AI helps procurement and accounts payable teams identify invoices to hold, review evidence, prepare DRAFT-only follow-up work, and preserve an audit trail before payment release."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ProcureGuard AI — Payment Control for Procurement Teams" />
+    <meta
+      property="og:description"
+      content="Identify payment exceptions, review receipt evidence, prepare DRAFT-only follow-up work, and keep the audit trail intact before invoices are released."
+    />
+    <meta property="og:site_name" content="ProcureGuard AI" />
+    <meta property="og:image" content="/procureguard-og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ProcureGuard AI payment control dashboard preview" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ProcureGuard AI — Payment Control for Procurement Teams" />
+    <meta
+      name="twitter:description"
+      content="A payment-run command center for invoice holds, evidence review, AI-prepared draft work, and audit-ready decisions."
+    />
+    <meta name="twitter:image" content="/procureguard-og.png" />
+    <meta name="twitter:image:alt" content="ProcureGuard AI payment control dashboard preview" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/procureguard-mark.svg" />
+    <link rel="apple-touch-icon" href="/procureguard-touch-icon.png" />
+    <title>ProcureGuard AI — Payment Control for Procurement Teams</title>
   </head>
   <body>
     <div id="root"></div>

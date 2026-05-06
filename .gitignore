@@ -9,3 +9,5 @@ build/
 npm-debug.log*
 *.log
 .claude/settings.local.json
+.codex/config.toml
+evals/results/*.json

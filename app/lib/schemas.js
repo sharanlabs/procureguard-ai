@@ -357,19 +357,19 @@ function normalizeNode(node) {
   });
 }
 
-export function normalizeAnthropicSchema(schema) {
+export function normalizeStructuredOutputSchema(schema) {
   const clone = JSON.parse(JSON.stringify(schema));
   normalizeNode(clone);
   return clone;
 }
 
-export const enforceNoAdditionalProperties = normalizeAnthropicSchema;
+export const enforceNoAdditionalProperties = normalizeStructuredOutputSchema;
 
 export function buildStructuredOutputConfig(schema) {
   return {
     format: {
       type: "json_schema",
-      schema: normalizeAnthropicSchema(schema)
+      schema: normalizeStructuredOutputSchema(schema)
     }
   };
 }

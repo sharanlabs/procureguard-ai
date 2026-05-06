@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="ProcureGuard AI payment control preview">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="0" x2="1080" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFEFB"/>
+      <stop offset="1" stop-color="#F5F1E8"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="88" y1="70" x2="176" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8D9AFF"/>
+      <stop offset="0.56" stop-color="#6571F2"/>
+      <stop offset="1" stop-color="#4E56D4"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#7181FF"/>
+      <stop offset="1" stop-color="#4F5CE2"/>
+    </linearGradient>
+    <filter id="cardShadow" x="-20%" y="-30%" width="140%" height="170%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#1D243A" flood-opacity="0.10"/>
+      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#1D243A" flood-opacity="0.08"/>
+    </filter>
+    <filter id="markShadow" x="38" y="38" width="188" height="188" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#5360D8" flood-opacity="0.20"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="42" y="42" width="1116" height="546" rx="34" fill="#FFFFFF" opacity="0.58" stroke="#DDD6C8"/>
+
+  <g filter="url(#markShadow)">
+    <rect x="78" y="82" width="86" height="86" rx="22" fill="#F5F6FF"/>
+    <rect x="90" y="94" width="62" height="62" rx="17" fill="url(#brand)"/>
+    <path d="M121 109 140 116v18c0 15-7 26-19 32-12-6-19-17-19-32v-18l19-7Z" fill="#FFFFFF"/>
+    <path d="m112 132 7 7 15-17" fill="none" stroke="#6571F2" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <text x="188" y="118" fill="#101217" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="34" font-weight="700" letter-spacing="-0.8">ProcureGuard AI</text>
+  <text x="190" y="150" fill="#515766" font-family="'Geist Mono', ui-monospace, Menlo, monospace" font-size="17" letter-spacing="2">PAYMENT CONTROL</text>
+
+  <text x="78" y="255" fill="#0F1011" font-family="Newsreader, Georgia, serif" font-size="70" font-weight="500" letter-spacing="-2.4">Hold risky invoices</text>
+  <text x="78" y="325" fill="#0F1011" font-family="Newsreader, Georgia, serif" font-size="70" font-weight="500" letter-spacing="-2.4">before release.</text>
+  <text x="82" y="374" fill="#3E4655" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="22">Evidence review, exception holds, AI-prepared drafts,</text>
+  <text x="82" y="404" fill="#3E4655" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="22">and audit-ready decisions before payment release.</text>
+
+  <g transform="translate(82 458)">
+    <rect width="188" height="46" rx="23" fill="url(#blue)"/>
+    <text x="28" y="30" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="650">DRAFT-only</text>
+    <circle cx="145" cy="23" r="6" fill="#BFF3D6"/>
+    <path d="m155 18 6 5-6 5" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g transform="translate(640 112)" filter="url(#cardShadow)">
+    <rect width="444" height="382" rx="24" fill="#FFFDF9" stroke="#DED7C9"/>
+    <rect x="24" y="24" width="396" height="64" rx="18" fill="#F8F6F1" stroke="#E4DED3"/>
+    <circle cx="54" cy="56" r="10" fill="#22A869"/>
+    <text x="78" y="62" fill="#1C2230" font-family="'Geist Mono', ui-monospace, Menlo, monospace" font-size="14" font-weight="600" letter-spacing="1">RUN READY</text>
+
+    <text x="28" y="136" fill="#0F1011" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="22" font-weight="700">Payment-run command center</text>
+    <text x="28" y="166" fill="#596171" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="15">Human review remains in control.</text>
+
+    <g transform="translate(28 208)">
+      <rect width="82" height="92" rx="14" fill="#F3F6FF" stroke="#DDE4FF"/>
+      <rect x="22" y="22" width="38" height="48" rx="8" fill="#6571F2" opacity="0.88"/>
+      <text x="41" y="80" text-anchor="middle" fill="#293045" font-family="'Geist Mono', ui-monospace, Menlo, monospace" font-size="10">PO</text>
+    </g>
+    <g transform="translate(133 208)">
+      <rect width="82" height="92" rx="14" fill="#EFFAF8" stroke="#CDEDEA"/>
+      <rect x="19" y="30" width="44" height="30" rx="8" fill="#38AFC3"/>
+      <text x="41" y="80" text-anchor="middle" fill="#293045" font-family="'Geist Mono', ui-monospace, Menlo, monospace" font-size="10">RCV</text>
+    </g>
+    <g transform="translate(238 208)">
+      <rect width="82" height="92" rx="14" fill="#F3F6FF" stroke="#DDE4FF"/>
+      <rect x="22" y="22" width="38" height="48" rx="8" fill="#4F8EDC"/>
+      <text x="41" y="80" text-anchor="middle" fill="#293045" font-family="'Geist Mono', ui-monospace, Menlo, monospace" font-size="10">INV</text>
+    </g>
+    <g transform="translate(343 208)">
+      <rect width="72" height="92" rx="14" fill="#FFF6E6" stroke="#F0DDBA"/>
+      <path d="M36 22v42M20 35h32" stroke="#6571F2" stroke-width="3" stroke-linecap="round"/>
+      <path d="M22 35 14 56h16L22 35ZM50 35l-8 21h16L50 35Z" fill="#F8D898" stroke="#D39A35" stroke-width="2"/>
+      <text x="36" y="80" text-anchor="middle" fill="#293045" font-family="'Geist Mono', ui-monospace, Menlo, monospace" font-size="10">AI</text>
+    </g>
+
+    <g transform="translate(28 326)">
+      <rect width="388" height="20" rx="10" fill="#F1EEE7"/>
+      <rect width="166" height="20" rx="10" fill="#22A869"/>
+      <rect x="184" width="120" height="20" rx="10" fill="#F2A21A"/>
+      <rect x="322" width="66" height="20" rx="10" fill="#D93A34"/>
+    </g>
+  </g>
+</svg>

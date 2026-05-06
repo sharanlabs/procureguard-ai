@@ -32,7 +32,7 @@ Decisions are logged as they are made. Later decisions may supersede earlier one
 
 **Context:** Matching, classification, and communications require different instructions, schemas, and failure handling.
 
-**Decision:** Use three separate Claude calls: matching, classification, and action generation.
+**Decision:** Use three separate Gemini prompt-chain calls: matching, classification, and action generation.
 
 **Alternatives considered:**
 - One prompt for all work: rejected because a single failure could corrupt the full batch.
@@ -52,15 +52,15 @@ Decisions are logged as they are made. Later decisions may supersede earlier one
 
 **Context:** Matching and extraction are structured tasks, while classification and communications require more judgment and writing quality.
 
-**Decision:** Route matching and text extraction to Claude Haiku 4.5, and classification and action generation to Claude Sonnet 4.6.
+**Decision:** Route matching, classification, action generation, and auxiliary text extraction through Gemini 2.5 Flash, with bounded runtime thinking budgets for analysis-heavy stages and strict structured JSON schemas for every output.
 
 **Alternatives considered:**
 - Use the same model for every call: rejected because it ignores cost and task complexity.
 - Use the largest model for every call: rejected because the portfolio demo does not need that cost profile.
 
-**Rationale:** Model routing keeps simple tasks efficient and reserves stronger reasoning for severity and drafting.
+**Rationale:** Gemini 2.5 Flash gives the side-project demo a lower operating cost while preserving the deterministic three-stage prompt chain, schema enforcement, audit trace, and human-review workflow. Runtime thinking budgets are kept small but nonzero for procurement reasoning so quality is not traded away for speed alone.
 
-**Consequences:** The app stays Claude-native while keeping cost and latency visible through the audit/token panels.
+**Consequences:** The app stays provider-light at the product layer, keeps model/cost/latency visible through the audit/token panels, and relies on evals plus live-run checks to validate that analysis quality remains stable after provider migration.
 
 ---
 
@@ -72,7 +72,7 @@ Decisions are logged as they are made. Later decisions may supersede earlier one
 
 **Context:** The UI needs predictable result shapes for matching, classification, action generation, and text extraction.
 
-**Decision:** Use Claude Structured Outputs with JSON schemas for all prompt-chain outputs.
+**Decision:** Use Gemini structured JSON output (`responseMimeType: "application/json"` with `responseJsonSchema`) for all prompt-chain outputs.
 
 **Alternatives considered:**
 - Free-form text parsing: rejected because it increases JSON parse failures and UI fragility.
@@ -124,23 +124,23 @@ Decisions are logged as they are made. Later decisions may supersede earlier one
 
 ---
 
-## DECISION-007: Vercel serverless proxy for production Claude API calls
+## DECISION-007: Vercel serverless proxy for production Gemini API calls
 
 **Date:** April 25, 2026
 **Stage:** Stage 3
 **Status:** Accepted
 
-**Context:** Production browser code must call Claude without exposing the deployment API key.
+**Context:** Production browser code must call Gemini without exposing the deployment API key.
 
-**Decision:** Use `api/messages.js` as a Vercel serverless proxy that forwards validated requests to Anthropic Messages API.
+**Decision:** Use `api/messages.js` as a Vercel serverless proxy that forwards validated requests to the Gemini `generateContent` API.
 
 **Alternatives considered:**
-- Call Claude directly from production browser code: rejected because it would expose secrets.
+- Call Gemini directly from production browser code: rejected because it would expose secrets.
 - Add a separate backend service: rejected as unnecessary for the demo scope.
 
 **Rationale:** The Vercel proxy fits the existing deployment target and keeps secret handling server-side.
 
-**Consequences:** Production requires `ANTHROPIC_API_KEY` in deployment config and rejects requests when it is missing.
+**Consequences:** Production requires `GEMINI_API_KEY` in deployment config and rejects requests when it is missing.
 
 ---
 
@@ -150,9 +150,9 @@ Decisions are logged as they are made. Later decisions may supersede earlier one
 **Stage:** Stage 3
 **Status:** Accepted
 
-**Context:** Local development needs a convenient Claude key path, while production must use server-side secrets.
+**Context:** Local development needs a convenient Gemini key path, while production must use server-side secrets.
 
-**Decision:** In local dev, allow a user-entered key stored only in `sessionStorage`; in production, use `ANTHROPIC_API_KEY` through the proxy.
+**Decision:** In local dev, allow a user-entered key stored only in `sessionStorage`; in production, use `GEMINI_API_KEY` through the proxy.
 
 **Alternatives considered:**
 - Store the key in `localStorage`: rejected because it persists beyond the browser session.
@@ -175,7 +175,7 @@ Decisions are logged as they are made. Later decisions may supersede earlier one
 **Decision:** Implement the tolerance simulator as a client-side derived view over existing matching and classification results.
 
 **Alternatives considered:**
-- Re-call Claude on every slider change: rejected because it adds cost, latency, and non-determinism.
+- Re-call the model on every slider change: rejected because it adds cost, latency, and non-determinism.
 - Mutate classification results directly: rejected because it would weaken audit integrity.
 
 **Rationale:** Simulation should be fast, explainable, and clearly separate from accepted classifications.
@@ -332,7 +332,7 @@ Decisions are logged as they are made. Later decisions may supersede earlier one
 
 **Context:** Local API keys and UI preferences should not persist indefinitely in the browser.
 
-**Decision:** Use `sessionStorage` for the local Claude API key and dark mode preference.
+**Decision:** Use `sessionStorage` for the local Gemini API key and dark mode preference.
 
 **Alternatives considered:**
 - `localStorage`: rejected because it persists after the browser session.
@@ -375,7 +375,7 @@ Decisions are logged as they are made. Later decisions may supersede earlier one
 **Decision:** Detect supplier, exception type, warehouse, pricing, and timing patterns in the browser from parsed data and AI outputs.
 
 **Alternatives considered:**
-- Use Claude for root cause analysis: rejected because the first version can derive patterns deterministically.
+- Use another model call for root cause analysis: rejected because the first version can derive patterns deterministically.
 - Use stronger accusatory language: rejected because the UI should suggest review, not assign blame.
 
 **Rationale:** Client-side patterns are transparent, fast, and consistent with the demo governance model.
