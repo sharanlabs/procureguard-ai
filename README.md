@@ -6,6 +6,14 @@ The system does not send emails, release payments, or execute supplier actions. 
 
 <img src="public/live-screenshots/procureguard-live-crop-followup-review.png" alt="ProcureGuard AI showing prepared follow-up work ready for human review" width="100%">
 
+## The problem
+
+Accounts payable teams manually compare invoices against purchase orders and goods receipts before every payment run. A mid-size company processes thousands of invoices per month, and each one needs to be checked for price variances, quantity mismatches, missing receipts, duplicate submissions, unauthorized charges, and timing discrepancies.
+
+This manual review is slow, error-prone, and inconsistent. Missed exceptions lead to overpayments, duplicate payments, and compliance gaps. Caught exceptions still require follow-up — supplier emails, escalation memos, PO amendments — that take time to draft and track.
+
+ProcureGuard automates the detection and evidence preparation so reviewers spend their time on judgment calls, not data comparison.
+
 ## How it works
 
 ProcureGuard runs a three-stage Gemini analysis pipeline:
@@ -64,13 +72,14 @@ Review dashboards
 Human approval only
 ```
 
-- **Frontend**: React 19, Vite 8, Tailwind CSS 4, Lucide icons.
-- **AI runtime**: Gemini 2.5 Flash with structured JSON output and per-stage thinking budgets.
-- **API proxy**: Vercel serverless function that gates requests and keeps the API key server-side.
-- **Data**: CSV parsing runs in the browser. No database, no server-side persistence.
-- **Validation**: Deterministic eval harness with a 25-invoice golden dataset covering all 17 exception types.
-
-Built directly on the Gemini API without framework abstractions — no LangChain, no vector search, no autonomous agents.
+| Layer | Choice | Why |
+|---|---|---|
+| **Frontend** | React 19, Vite 8, Tailwind CSS 4 | Component model fits five review surfaces. Vite gives instant HMR and production builds without SSR complexity — there's no database to render against. |
+| **AI runtime** | Gemini 2.5 Flash | Structured JSON output enforced at the API level, not just prompting. Per-stage thinking budgets for controlled reasoning. Low cost per call for the portfolio scope. |
+| **API proxy** | Vercel serverless function | Keeps the Gemini API key server-side in production. Zero-config deployment with automatic HTTPS. No backend framework needed for a single proxy route. |
+| **Data** | Browser-only, session-scoped | No database by design. CSV parsing runs client-side, data clears on refresh. Avoids accidental retention of procurement data. |
+| **Validation** | Deterministic eval harness | 25-invoice golden dataset with pure JavaScript exception detection — independent of the AI model. CI gate prevents regressions. |
+| **No framework** | Direct Gemini API | The pipeline is three fixed calls. LangChain, vector search, and agent frameworks add abstraction without adding capability for this use case. |
 
 ## Repository layout
 
