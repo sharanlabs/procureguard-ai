@@ -1,5 +1,9 @@
 # ProcureGuard AI
 
+[![CI](https://github.com/sharanlabs/procureguard-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/sharanlabs/procureguard-ai/actions/workflows/ci.yml)
+
+**[Live Demo](https://procureguard-ai.vercel.app/)** | [Methodology](docs/METHODOLOGY.md) | [AI Engineering Brief](docs/AI_ENGINEERING_BRIEF.md)
+
 A payment-run control desk for procurement teams. ProcureGuard compares purchase orders, supplier invoices, and goods receipts, identifies exceptions with evidence, and prepares review-ready follow-up work for human approval.
 
 The system does not send emails, release payments, or execute supplier actions. Every AI decision is logged, prepared communications require human review, and nothing leaves the system without explicit human approval.
@@ -22,7 +26,9 @@ ProcureGuard runs a three-stage Gemini analysis pipeline:
 2. **Classify** exceptions by severity tier and business impact.
 3. **Prepare** supplier follow-ups, approval requests, and escalation notes for human review.
 
-Each stage produces structured JSON validated against a schema. Results feed into five review surfaces.
+Each stage produces structured JSON validated against a schema. Results feed into five review surfaces: executive summary, exception workbench, follow-up review, supplier analytics, and audit trail.
+
+The pipeline detects 17 exception types across price, quantity, receipt, timing, and authorization categories — processing a 25-invoice batch in under 30 seconds with a 25/25 deterministic eval pass rate.
 
 ## Methodology and trust model
 
@@ -95,6 +101,19 @@ procureguard-ai/
 └── public/           App assets and live screenshots
 ```
 
+## Reference
+
+- [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — AI engineering methodology, anti-hallucination architecture, and evaluation
+- [docs/AI_ENGINEERING_BRIEF.md](docs/AI_ENGINEERING_BRIEF.md) — Reviewer-facing AI engineering assumptions, principles, tradeoffs, and gaps
+- [docs/DECISIONS.md](docs/DECISIONS.md) — Architecture decision log
+- [docs/PRD.md](docs/PRD.md) — Product requirements
+- [data/DATA_DICTIONARY.md](data/DATA_DICTIONARY.md) — Field definitions and exception catalog
+- [DEPLOYMENT.md](DEPLOYMENT.md) — Deployment and production verification
+
+## Development process
+
+Built with AI-assisted engineering workflows including prompt design, structured output pipelines, deterministic evaluation, and iterative UI review. See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for the full engineering approach.
+
 ## Run locally
 
 ```bash
@@ -120,20 +139,6 @@ npm run build
 ```
 
 Expected eval result: 25/25 passed, 100%.
-
-## Reference
-
-- [docs/DECISIONS.md](docs/DECISIONS.md) — Architecture decision log
-- [docs/AI_ENGINEERING_BRIEF.md](docs/AI_ENGINEERING_BRIEF.md) — Reviewer-facing AI engineering assumptions, principles, tradeoffs, and gaps
-- [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — AI engineering methodology, anti-hallucination architecture, and evaluation
-- [docs/PRD.md](docs/PRD.md) — Product requirements
-- [docs/HANDOFF.md](docs/HANDOFF.md) — Runtime snapshot and implementation notes
-- [data/DATA_DICTIONARY.md](data/DATA_DICTIONARY.md) — Field definitions and exception catalog
-- [DEPLOYMENT.md](DEPLOYMENT.md) — Deployment and production verification
-
-## Development process
-
-Built with AI-assisted engineering workflows including prompt design, structured output pipelines, deterministic evaluation, and iterative UI review. See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for the full engineering approach.
 
 ## License
 
