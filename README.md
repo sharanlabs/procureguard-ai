@@ -124,7 +124,7 @@ Expected eval result: 25/25 passed, 100%.
 
 ## Development process
 
-This project was developed with human-directed AI coding assistance. All architecture decisions, product direction, prompt design, UI review, and final acceptance were human-reviewed. The repository includes deterministic evals, build checks, and live screenshots to verify behavior independently.
+Built with AI-assisted engineering workflows including prompt design, structured output pipelines, deterministic evaluation, and iterative UI review. See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for the full engineering approach.
 
 ## License
 
