@@ -8,8 +8,7 @@ build/
 .DS_Store
 npm-debug.log*
 *.log
-.claude/settings.local.json
-.claude/worktrees/
-.codex/config.toml
+.claude/
+.codex/
 evals/results/*.json
 .vercel

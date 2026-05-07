@@ -116,7 +116,7 @@ Expected eval result: 25/25 passed, 100%.
 
 - [docs/DECISIONS.md](docs/DECISIONS.md) — Architecture decision log
 - [docs/AI_ENGINEERING_BRIEF.md](docs/AI_ENGINEERING_BRIEF.md) — Reviewer-facing AI engineering assumptions, principles, tradeoffs, and gaps
-- [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — Procedure, guardrails, validation model, and source basis
+- [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — AI engineering methodology, anti-hallucination architecture, and evaluation
 - [docs/PRD.md](docs/PRD.md) — Product requirements
 - [docs/HANDOFF.md](docs/HANDOFF.md) — Runtime snapshot and implementation notes
 - [data/DATA_DICTIONARY.md](data/DATA_DICTIONARY.md) — Field definitions and exception catalog
