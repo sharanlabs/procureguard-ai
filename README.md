@@ -63,7 +63,7 @@ See [docs/AI_ENGINEERING_BRIEF.md](docs/AI_ENGINEERING_BRIEF.md) for the reviewe
 ## Architecture
 
 ```text
-Procurement CSVs
+Procurement CSVs (purchase_orders.csv, invoices.csv, goods_receipts.csv)
       |
 React browser app
       |
