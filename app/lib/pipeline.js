@@ -2,9 +2,7 @@ export const DEFAULT_ANALYSIS_CHUNK_SIZE = 25;
 export const PIPELINE_STAGES = ["matching", "classification", "action_generation"];
 
 const SECRET_PATTERNS = [
-  /sk-ant-[A-Za-z0-9_-]+/i,
   /AIza[0-9A-Za-z_-]{20,}/i,
-  /ANTHROPIC_API_KEY/i,
   /GEMINI_API_KEY/i,
   /x-api-key/i
 ];

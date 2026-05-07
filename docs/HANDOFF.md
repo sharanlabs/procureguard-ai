@@ -39,8 +39,7 @@ An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but
 
 ## Notes
 
-- The project was originally built against the Claude/Anthropic API and migrated to Gemini 2.5 Flash. Git history reflects both phases.
-- All structured output uses `responseMimeType: "application/json"` with `responseJsonSchema`.
+- All structured output uses Gemini 2.5 Flash with `responseMimeType: "application/json"` and `responseJsonSchema`.
 - Invoice batches are chunked (default 10 per chunk) with per-chunk retry and partial-result preservation.
 - Token and cost telemetry is visible in the Audit & Governance workspace tab.
 - Before production verification, add `GEMINI_API_KEY` to the Vercel project environments. The key must remain server-side and must not use a `VITE_` prefix.
