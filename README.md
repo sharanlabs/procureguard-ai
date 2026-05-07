@@ -22,7 +22,7 @@ ProcureGuard uses a fixed prompt-chain workflow, not an autonomous agent. The st
 
 Accuracy is guarded by structured CSV inputs, Gemini structured JSON output, strict local schemas, row-count and invoice-alignment checks, deterministic exception guards, human-review-only actions, and a 25-case golden eval covering all 17 exception types. The system reduces hallucination risk but does not claim to eliminate it; outputs are review-supporting and require human validation before payment or supplier action.
 
-See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for the step-by-step procedure, framework choices, guardrails, validation gates, accuracy boundary, and source references.
+See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for the pipeline design, prompt engineering approach, five-layer anti-hallucination architecture, evaluation methodology, and failure handling.
 
 ## What this demonstrates
 
@@ -70,7 +70,7 @@ Human approval only
 - **Data**: CSV parsing runs in the browser. No database, no server-side persistence.
 - **Validation**: Deterministic eval harness with a 25-invoice golden dataset covering all 17 exception types.
 
-The app does not use LangChain, vector search, autonomous agents, or background execution.
+Built directly on the Gemini API without framework abstractions — no LangChain, no vector search, no autonomous agents.
 
 ## Repository layout
 
