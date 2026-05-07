@@ -3426,6 +3426,7 @@ export default function App() {
               hasClassificationResults={Boolean(classificationResults)}
               hasActionResults={Boolean(actionResults)}
             />
+            <MethodologyAndGuardrailsPanel />
             <PipelineRunStatusPanel
               runState={pipelineRunState}
               isRunning={Boolean(runningStep)}

@@ -47,5 +47,5 @@ An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but
 - The Start, Executive Summary, Exception Workbench, Supplier Analytics, and Audit & Governance tabs have been reviewed for professional payment-review language and mobile layout fit.
 - Dark mode has been checked against the golden demo path (`?pgDemo=golden&pgTheme=dark`) across all workspace tabs, including 390px and 320px mobile overflow assertions.
 - README screenshot assets under `public/live-screenshots/` were regenerated from the current UI after the copy polish pass.
-- Audit & Governance now includes an in-app methodology and guardrails panel so the live product explains the staged procedure and accuracy boundary.
+- Start and Audit & Governance now include an in-app methodology and guardrails panel so the live product explains the staged procedure and accuracy boundary before or after a run.
 - Production metadata, canonical URL, robots, and sitemap currently target `https://procureguard-ai.vercel.app/`; update them if a custom domain replaces the free Vercel URL.
