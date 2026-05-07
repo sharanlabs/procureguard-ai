@@ -16,6 +16,14 @@ ProcureGuard runs a three-stage Gemini analysis pipeline:
 
 Each stage produces structured JSON validated against a schema. Results feed into five review surfaces.
 
+## Methodology and trust model
+
+ProcureGuard uses a fixed prompt-chain workflow, not an autonomous agent. The stages are intentionally separated so reviewers can trace source data -> matching evidence -> severity classification -> prepared follow-up -> audit record.
+
+Accuracy is guarded by structured CSV inputs, Gemini structured JSON output, strict local schemas, row-count and invoice-alignment checks, deterministic exception guards, human-review-only actions, and a 25-case golden eval covering all 17 exception types. The system reduces hallucination risk but does not claim to eliminate it; outputs are review-supporting and require human validation before payment or supplier action.
+
+See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for the step-by-step procedure, framework choices, guardrails, validation gates, accuracy boundary, and source references.
+
 ## Product walkthrough
 
 | Executive Summary | Exception Workbench |
@@ -24,7 +32,7 @@ Each stage produces structured JSON validated against a schema. Results feed int
 
 | Supplier Analytics | Audit and Governance |
 |---|---|
-| <img src="public/live-screenshots/procureguard-live-crop-supplier-scorecard.png" alt="Supplier analytics showing concentration, exposure, and batch signal table"> | <img src="public/live-screenshots/procureguard-live-crop-audit-governance.png" alt="Audit and Governance showing run trace, AI service telemetry, and exportable evidence"> |
+| <img src="public/live-screenshots/procureguard-live-crop-supplier-scorecard.png" alt="Supplier analytics showing concentration, exposure, and batch signal table"> | <img src="public/live-screenshots/procureguard-live-crop-audit-governance.png" alt="Audit and Governance showing methodology stages, accuracy boundary, and guardrails"> |
 
 <img src="public/live-screenshots/procureguard-live-executive-dark.png" alt="Dark mode Executive Summary" width="100%">
 
@@ -97,6 +105,7 @@ Expected eval result: 25/25 passed, 100%.
 ## Reference
 
 - [docs/DECISIONS.md](docs/DECISIONS.md) — Architecture decision log
+- [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — Procedure, guardrails, validation model, and source basis
 - [docs/PRD.md](docs/PRD.md) — Product requirements
 - [docs/HANDOFF.md](docs/HANDOFF.md) — Runtime snapshot and implementation notes
 - [data/DATA_DICTIONARY.md](data/DATA_DICTIONARY.md) — Field definitions and exception catalog
