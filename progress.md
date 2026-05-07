@@ -15,3 +15,4 @@
 - Production metadata aligned with the Payment Review Console positioning, plus basic robots and sitemap files for the free Vercel URL.
 - README live screenshots refreshed from the current production-style UI so the repository page no longer shows the old draft/prototype presentation.
 - Methodology and validation documentation added, with Start and Audit & Governance panels explaining the staged procedure, AI guardrails, hallucination boundary, and source-backed validation model.
+- AI engineering brief added for GitHub reviewers, covering context, assumptions, principles, expert-practice mapping, risk controls, and ranked production gaps.

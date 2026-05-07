@@ -34,6 +34,7 @@ An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but
 - `evals/run_evals.js` — Deterministic eval harness with golden dataset.
 - `vercel.json` — Vercel build settings for the Vite app.
 - `.github/workflows/ci.yml` — CI gate for evals and build.
+- `docs/AI_ENGINEERING_BRIEF.md` — Reviewer-facing assumptions, principles, risk controls, expert-practice mapping, and ranked gaps.
 - `docs/METHODOLOGY.md` — Step-by-step procedure, AI guardrails, validation gates, hallucination boundary, and source basis.
 
 ## Notes
@@ -48,4 +49,5 @@ An auxiliary text extraction prompt (`prompts/04_text_extraction.md`) exists but
 - Dark mode has been checked against the golden demo path (`?pgDemo=golden&pgTheme=dark`) across all workspace tabs, including 390px and 320px mobile overflow assertions.
 - README screenshot assets under `public/live-screenshots/` were regenerated from the current UI after the copy polish pass.
 - Start and Audit & Governance now include an in-app methodology and guardrails panel so the live product explains the staged procedure and accuracy boundary before or after a run.
+- GitHub now includes an AI engineering brief so reviewers can see the context, assumptions, principles, tradeoffs, risk controls, and next production gaps.
 - Production metadata, canonical URL, robots, and sitemap currently target `https://procureguard-ai.vercel.app/`; update them if a custom domain replaces the free Vercel URL.

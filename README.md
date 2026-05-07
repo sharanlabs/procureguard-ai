@@ -24,6 +24,16 @@ Accuracy is guarded by structured CSV inputs, Gemini structured JSON output, str
 
 See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for the step-by-step procedure, framework choices, guardrails, validation gates, accuracy boundary, and source references.
 
+## What this demonstrates
+
+- **AI product judgment:** the app augments procurement review instead of automating payment release or supplier outreach.
+- **Reliability engineering:** model outputs are constrained with schemas, aligned to expected invoices, and checked by deterministic guards before rendering.
+- **Risk management:** the design addresses hallucination, overreliance, excessive agency, secret exposure, and review traceability explicitly.
+- **Evaluation discipline:** the repo includes a 25-case golden eval and CI gate rather than relying only on visual demos.
+- **Deployment awareness:** production uses a Vercel serverless proxy so the Gemini key stays server-side.
+
+See [docs/AI_ENGINEERING_BRIEF.md](docs/AI_ENGINEERING_BRIEF.md) for the reviewer-facing assumptions, principles, tradeoffs, expert-practice mapping, and suggested next improvements.
+
 ## Product walkthrough
 
 | Executive Summary | Exception Workbench |
@@ -70,7 +80,7 @@ procureguard-ai/
 ├── app/              React application
 │   └── lib/          Gemini client, schemas, CSV parsing, pipeline, view models
 ├── data/             Sample CSVs and data dictionary
-├── docs/             Architecture decisions, product requirements, handoff notes
+├── docs/             Engineering brief, methodology, decisions, requirements, handoff notes
 ├── evals/            Golden dataset and eval runner
 ├── prompts/          System prompts for the 3-stage pipeline
 └── public/           App assets and live screenshots
@@ -105,6 +115,7 @@ Expected eval result: 25/25 passed, 100%.
 ## Reference
 
 - [docs/DECISIONS.md](docs/DECISIONS.md) — Architecture decision log
+- [docs/AI_ENGINEERING_BRIEF.md](docs/AI_ENGINEERING_BRIEF.md) — Reviewer-facing AI engineering assumptions, principles, tradeoffs, and gaps
 - [docs/METHODOLOGY.md](docs/METHODOLOGY.md) — Procedure, guardrails, validation model, and source basis
 - [docs/PRD.md](docs/PRD.md) — Product requirements
 - [docs/HANDOFF.md](docs/HANDOFF.md) — Runtime snapshot and implementation notes
