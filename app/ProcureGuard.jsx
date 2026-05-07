@@ -1148,7 +1148,6 @@ function MethodologyAndGuardrailsPanel() {
             The workflow separates evidence matching, impact classification, follow-up preparation, and audit capture so each stage can be checked independently.
           </p>
         </div>
-        <Badge className={toneBadgeClass("info")}>Traceable procedure</Badge>
       </div>
 
       <div className="mt-5 grid gap-3 lg:grid-cols-3">
@@ -1213,9 +1212,6 @@ function AiReliabilityCenter({ viewModel }) {
             Assurance metadata for the current review process. Claims are based on captured run data only.
           </p>
         </div>
-        <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">
-          Audit-supporting
-        </Badge>
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -2226,9 +2222,6 @@ function RootCausePatternsSection({ rootCause }) {
           <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">Pattern signals</h3>
           <p className="mt-1 text-sm leading-6 text-indigo-900 dark:text-indigo-200">{rootCause.takeaway}</p>
         </div>
-        <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">
-          Batch pattern review
-        </Badge>
       </div>
 
       {rootCause.patterns.length ? (

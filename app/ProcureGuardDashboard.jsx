@@ -871,9 +871,6 @@ export function SessionGovernancePanel({ analytics }) {
             Governance metadata for processing route, workflow version, usage reporting, and response timing.
           </p>
         </div>
-        <Badge className="border-indigo-300 bg-white text-indigo-800 dark:border-indigo-700 dark:bg-slate-900 dark:text-indigo-200">
-          Audit evidence view
-        </Badge>
       </div>
 
       {governance.tokenDataReported ? (
