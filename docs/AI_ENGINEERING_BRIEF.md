@@ -74,7 +74,7 @@ This is how the implementation maps to public guidance from leading AI and secur
 | NIST AI RMF describes trustworthy AI characteristics including validity, reliability, safety, security, resilience, accountability, transparency, explainability, privacy, and fairness. | The app documents validity boundaries, reliability gates, security limits, explainability surfaces, audit records, and what remains unproven. |
 | OWASP LLM guidance calls out prompt injection, insecure output handling, excessive agency, sensitive disclosure, and overreliance. | The design avoids autonomous agency, validates outputs before rendering, avoids production browser keys, limits external actions, and states that human review is required. |
 | Amazon Bedrock Guardrails documents contextual grounding as a hallucination-control pattern when reference material is available. | ProcureGuard grounds analysis in structured PO, invoice, and goods-receipt records, then validates invoice alignment and source-record evidence before displaying results. |
-| Apple's machine-learning interface guidance emphasizes privacy, understandable correction, and clear behavior when results are imperfect. | The UI keeps data session scoped, shows evidence panels, avoids hidden sending behavior, and describes the accuracy boundary. |
+| Apple's machine-learning interface guidance emphasizes privacy, understandable correction, and clear behavior when results are imperfect. | The UI keeps data session scoped, shows evidence panels, avoids hidden sending behavior, and the GitHub docs describe the accuracy boundary. |
 
 ## Validation Strategy
 
@@ -91,7 +91,7 @@ The evals are intentionally narrow and auditable. They are not presented as a un
 | Risk | Control |
 |---|---|
 | Hallucinated exception or reasoning | Structured records, JSON schema, row alignment, deterministic duplicate and PO-reference guards, human review. |
-| Overreliance on model output | Accuracy boundary in app/docs, evidence panels, no autonomous release or sending. |
+| Overreliance on model output | Accuracy boundary in docs, evidence panels, no autonomous release or sending. |
 | Excessive agency | Fixed prompt chain, no tool-calling agent, no email dispatch, no ERP write, no payment action. |
 | Secret exposure | `GEMINI_API_KEY` remains server-side in production; local session key is not audited or exported. |
 | Silent partial failure | Pipeline state tracks failed chunks, retryability, failed stage, and preserved partial outputs. |

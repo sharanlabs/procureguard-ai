@@ -56,7 +56,7 @@ See [docs/AI_ENGINEERING_BRIEF.md](docs/AI_ENGINEERING_BRIEF.md) for the reviewe
 
 | Supplier Analytics | Audit and Governance |
 |---|---|
-| <img src="public/live-screenshots/procureguard-live-crop-supplier-scorecard.png" alt="Supplier analytics showing concentration, exposure, and batch signal table"> | <img src="public/live-screenshots/procureguard-live-crop-audit-governance.png" alt="Audit and Governance showing methodology stages, accuracy boundary, and guardrails"> |
+| <img src="public/live-screenshots/procureguard-live-crop-supplier-scorecard.png" alt="Supplier analytics showing concentration, exposure, and batch signal table"> | <img src="public/live-screenshots/procureguard-live-crop-audit-governance.png" alt="Audit and Governance showing run controls, validation gates, and audit telemetry"> |
 
 <img src="public/live-screenshots/procureguard-live-executive-dark.png" alt="Dark mode Executive Summary" width="100%">
 

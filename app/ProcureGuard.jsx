@@ -1089,42 +1089,6 @@ function governanceMetricValue(metric) {
   return formatInteger(metric.value);
 }
 
-const METHODOLOGY_STAGES = [
-  {
-    label: "1. Input contract",
-    detail: "Required PO, invoice, and goods-receipt CSV fields are parsed before any analysis request."
-  },
-  {
-    label: "2. Match evidence",
-    detail: "Invoice rows are compared with PO and receipt records across the exception catalog."
-  },
-  {
-    label: "3. Validate structure",
-    detail: "Structured JSON, row counts, invoice numbers, duplicate checks, and PO-reference guards must align."
-  },
-  {
-    label: "4. Classify impact",
-    detail: "Detected exceptions become severity tiers, financial exposure, hold amounts, and review routes."
-  },
-  {
-    label: "5. Prepare follow-up",
-    detail: "The system prepares review material only; it does not send messages or release payments."
-  },
-  {
-    label: "6. Record audit trail",
-    detail: "Stage, batch, timing, route, usage, failure, and export status remain visible for human review."
-  }
-];
-
-const GOVERNANCE_GUARDRAILS = [
-  "Fixed prompt-chain workflow, not autonomous agent execution.",
-  "Gemini structured JSON output plus local schema normalization.",
-  "Deterministic row alignment and exception guards before rendering.",
-  "Human approval required for communications and payment decisions.",
-  "Server-side production key handling through the Vercel function.",
-  "Golden evals and CI build gates before promotion."
-];
-
 function GovernanceMetric({ label, value, helper, tone = "neutral", isNumber = true }) {
   return (
     <article className={`pg-card-compact ${toneBorderClass(tone)}`}>
@@ -1134,51 +1098,6 @@ function GovernanceMetric({ label, value, helper, tone = "neutral", isNumber = t
       </p>
       {helper ? <p className="pg-governance-helper">{helper}</p> : null}
     </article>
-  );
-}
-
-function MethodologyAndGuardrailsPanel() {
-  return (
-    <section className="pg-card">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Methodology and guardrails</p>
-          <h3 className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-100">How the review result is produced</h3>
-          <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-            The workflow separates evidence matching, impact classification, follow-up preparation, and audit capture so each stage can be checked independently.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-3 lg:grid-cols-3">
-        {METHODOLOGY_STAGES.map((stage) => (
-          <article className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800" key={stage.label}>
-            <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{stage.label}</p>
-            <p className="mt-2 text-xs leading-5 text-slate-600 dark:text-slate-400">{stage.detail}</p>
-          </article>
-        ))}
-      </div>
-
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
-          <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">Accuracy boundary</p>
-          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
-            The system reduces hallucination risk through structured inputs, schemas, deterministic guards, evals, and audit traces. It does not certify correctness for every real supplier, tax, tariff, or ERP scenario. Human review remains the final control.
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
-          <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">Controls used</p>
-          <ul className="mt-3 space-y-2 text-xs leading-5 text-slate-600 dark:text-slate-400">
-            {GOVERNANCE_GUARDRAILS.map((guardrail) => (
-              <li className="flex gap-2" key={guardrail}>
-                <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
-                <span>{guardrail}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -1645,7 +1564,6 @@ function GovernancePanel({ viewModel, apiKey, onApiKeyChange, onExport, onStart 
     <section className="pg-page-stack">
       <GovernanceHeader viewModel={viewModel} />
       <AiReliabilityCenter viewModel={viewModel} />
-      <MethodologyAndGuardrailsPanel />
       <ApiServiceAndDataInputs viewModel={viewModel} apiKey={apiKey} onApiKeyChange={onApiKeyChange} />
       <WorkflowTraceSummary trace={viewModel.workflowTrace} />
       <RuntimeCostTelemetry viewModel={viewModel} />
@@ -3419,7 +3337,6 @@ export default function App() {
               hasClassificationResults={Boolean(classificationResults)}
               hasActionResults={Boolean(actionResults)}
             />
-            <MethodologyAndGuardrailsPanel />
             <PipelineRunStatusPanel
               runState={pipelineRunState}
               isRunning={Boolean(runningStep)}
